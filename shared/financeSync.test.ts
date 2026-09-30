@@ -4,7 +4,9 @@ import {
   buildHarvestRevenue,
   buildInventoryExpense,
   financeSyncDocumentId,
+  buildInventoryLedgerEntries,
 } from './financeSync.ts';
+import { reconcileFinanceSources } from './financeReconciliation.ts';
 
 test('finance sync uses one deterministic Firestore document per source record', () => {
   assert.equal(financeSyncDocumentId('HARVEST-harvest/1'), 'sync_HARVEST-harvest%2F1');
@@ -37,4 +39,67 @@ test('inventory stock-in expense is stable across web and mobile', () => {
   assert.equal(expense.reference, 'INVENTORY-feed-feed-1-stock-1');
   assert.equal(expense.amount, 100);
   assert.match(expense.item, /25 kg/);
+});
+
+test('filters voided stock entries out of finance sync ledger and reconciliation', () => {
+  const feed = {
+    id: 'feed-1',
+    feedName: 'Grower',
+    stockInHistory: [
+      { id: 's1', date: '2026-08-15', quantity: 10, price: 5, voided: true },
+      { id: 's2', date: '2026-08-16', quantity: 20, price: 5 },
+    ],
+  };
+  const entries = buildInventoryLedgerEntries('feed-1', feed, 'feed');
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].record.sourceLineId, 's2');
+
+  const activeExpense = {
+    id: 'sync_INVENTORY-feed-feed-1-s2',
+    reference: 'INVENTORY-feed-feed-1-s2',
+    amount: 100,
+    voided: false,
+  };
+  const voidedExpense = {
+    id: 'sync_INVENTORY-feed-feed-1-s1',
+    reference: 'INVENTORY-feed-feed-1-s1',
+    amount: 50,
+    voided: true,
+  };
+  const res = reconcileFinanceSources({
+    feeds: [feed],
+    additives: [],
+    harvests: [],
+    expenses: [activeExpense, voidedExpense],
+    revenues: [],
+  });
+  assert.equal(res.issues.length, 0);
+  assert.equal(res.expectedSourceCount, 1);
+
+  const unvoidedExpense = {
+    id: 'sync_INVENTORY-feed-feed-1-s1',
+    reference: 'INVENTORY-feed-feed-1-s1',
+    amount: 50,
+    voided: false,
+  };
+  const res2 = reconcileFinanceSources({
+    feeds: [feed],
+    additives: [],
+    harvests: [],
+    expenses: [activeExpense, unvoidedExpense],
+    revenues: [],
+  });
+  assert.equal(res2.issues.some((i: any) => i.kind === 'orphaned'), true);
+
+  // When all stock in history is voided, no active ledger entries are built
+  const allVoidedFeed = {
+    id: 'feed-all-void',
+    feedName: 'Starter',
+    stockInHistory: [
+      { id: 's1', date: '2026-08-15', quantity: 10, price: 5, voided: true },
+      { id: 's2', date: '2026-08-16', quantity: 20, price: 5, voided: true },
+    ],
+  };
+  const emptyEntries = buildInventoryLedgerEntries('feed-all-void', allVoidedFeed, 'feed');
+  assert.equal(emptyEntries.length, 0);
 });

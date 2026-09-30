@@ -12,7 +12,8 @@ import {
   X,
   Loader2,
   LayoutDashboard,
-  ArrowUpDown
+  ArrowUpDown,
+  Trash2
 } from 'lucide-react';
 import {
   collection,
@@ -23,7 +24,10 @@ import {
   arrayUnion,
   Timestamp
 } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { app, auth, db } from '@/lib/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import AgentCards from '@/components/orson/AgentCards';
+import { useAgentOperations } from '../../../../../../orson/useAgentOperations';
 import { useAuth } from '@/contexts/AuthContext';
 import { storedDate } from '@/lib/storedDate';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -47,6 +51,9 @@ interface StockHistory {
   expiry?: string;
   unit?: string;
   createdAt: unknown;
+  voided?: boolean;
+  voidedAt?: unknown;
+  voidedBy?: string;
 }
 
 interface UsageHistory {
@@ -93,6 +100,7 @@ export default function InventoryFeedsPage() {
   const copy = useDashboardCopy();
   const { formatCurrency, currencyConfig } = useCurrency();
   const { user, company } = useAuth();
+  const userUid = user?.uid ?? '';
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'feed' | 'additive'>('dashboard');
   const { feeds, additives: allAdditives, ponds, loading, companyId } = useInventoryFeeds<InventoryItem, InventoryItem, { id: string; pondName: string; cycleStatus?: string; cycleId?: string; cycleName?: string; pondCycleId?: string }>();
@@ -103,7 +111,7 @@ export default function InventoryFeedsPage() {
   const [stockFilter, setStockFilter] = useState<'in' | 'out' | 'all'>('in');
   const debouncedSearchTerm = useDebouncedValue(searchTerm);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
-  const [recentActivityFilter, setRecentActivityFilter] = useState<'all' | 'stockIn' | 'usage'>('all');
+  const [recentActivityFilter, setRecentActivityFilter] = useState<'all' | 'stockIn' | 'usage' | 'audit'>('all');
   const [showAllStockAlerts, setShowAllStockAlerts] = useState(false);
   const [isInputMenuOpen, setInputMenuOpen] = useState(false);
   const [isTransactionFilterOpen, setTransactionFilterOpen] = useState(false);
@@ -115,6 +123,19 @@ export default function InventoryFeedsPage() {
   );
   const hasPermission = useFarmPermissions();
   const canEditInventory = hasPermission('manageFeedInventory');
+  const canUseOrson = hasPermission('useOrson');
+  const agentTransport = useCallback(async (name: string, data: Record<string, unknown>) => {
+    if (!userUid || auth.currentUser?.uid !== userUid || !navigator.onLine) {
+      throw new Error('Reconnect and sign in to use farm actions.');
+    }
+    return (await httpsCallable(getFunctions(app), name, { timeout: 150000 })(data)).data;
+  }, [userUid]);
+  const agent = useAgentOperations(
+    companyId || '',
+    userUid,
+    agentTransport,
+    typeof window === 'undefined' ? undefined : window.localStorage,
+  );
 
   useEffect(() => {
     if (!isInputMenuOpen && !isTransactionFilterOpen) return;
@@ -149,6 +170,16 @@ export default function InventoryFeedsPage() {
   const [modalType, setModalType] = useState<'add' | 'stockIn' | 'usage' | 'history' | 'editReorder'>('add');
   const [itemType, setItemType] = useState<'feed' | 'additive'>('feed');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [pendingVoidOperationId, setPendingVoidOperationId] = useState<string | null>(null);
+  const [preparingVoidRecordId, setPreparingVoidRecordId] = useState<string | null>(null);
+  const [voidPreparationError, setVoidPreparationError] = useState('');
+  const pendingVoidOperation = agent.operations.find((operation) => operation.id === pendingVoidOperationId);
+  const hasOpenVoidOperation = pendingVoidOperation?.state === 'draft' || pendingVoidOperation?.state === 'partial';
+  const historyItem = useMemo(() => {
+    if (!selectedItem) return null;
+    const currentItems = itemType === 'feed' ? feeds : additives;
+    return currentItems.find((item) => item.id === selectedItem.id) || selectedItem;
+  }, [selectedItem, itemType, feeds, additives]);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -192,11 +223,12 @@ export default function InventoryFeedsPage() {
     };
   }, [additives, feeds, formatDate]);
 
-  const recentTransactions = useMemo(() => {
-    const txs: { id: string; type: string; itemType: string; name: string; date: string; quantity: number; unit: string; createdAt: number }[] = [];
+  const { activeRecentTransactions, voidedRecentTransactions } = useMemo(() => {
+    const activeTxs: { id: string; type: string; itemType: string; name: string; date: string; quantity: number; unit: string; createdAt: number; voided?: boolean }[] = [];
+    const voidedTxs: { id: string; type: string; itemType: string; name: string; date: string; quantity: number; unit: string; createdAt: number; voided?: boolean }[] = [];
     [...feeds.map(f => ({ ...f, type: 'feed' })), ...additives.map(a => ({ ...a, type: 'additive' }))].forEach(item => {
       (item.stockInHistory || []).forEach((h) => {
-        txs.push({
+        const tx = {
           id: h.id,
           type: 'Stock In',
           itemType: item.type,
@@ -204,11 +236,17 @@ export default function InventoryFeedsPage() {
           date: formatDate(h.date),
           quantity: h.quantity,
           unit: item.unit || 'kg',
-          createdAt: storedDate(h.createdAt)?.getTime() ?? storedDate(h.date)?.getTime() ?? 0
-        });
+          createdAt: storedDate(h.createdAt)?.getTime() ?? storedDate(h.date)?.getTime() ?? 0,
+          voided: Boolean(h.voided),
+        };
+        if (h.voided) {
+          voidedTxs.push(tx);
+        } else {
+          activeTxs.push(tx);
+        }
       });
       (item.usageHistory || []).forEach((h) => {
-        txs.push({
+        activeTxs.push({
           id: h.id,
           type: 'Usage',
           itemType: item.type,
@@ -216,12 +254,28 @@ export default function InventoryFeedsPage() {
           date: formatDate(h.date),
           quantity: h.quantity,
           unit: item.unit || 'kg',
-          createdAt: storedDate(h.createdAt)?.getTime() ?? storedDate(h.date)?.getTime() ?? 0
+          createdAt: storedDate(h.createdAt)?.getTime() ?? storedDate(h.date)?.getTime() ?? 0,
         });
       });
     });
-    return txs.sort((a, b) => b.createdAt - a.createdAt).slice(0, 10);
-  }, [feeds, additives]);
+    return {
+      activeRecentTransactions: activeTxs.sort((a, b) => b.createdAt - a.createdAt).slice(0, 10),
+      voidedRecentTransactions: voidedTxs.sort((a, b) => b.createdAt - a.createdAt).slice(0, 10),
+    };
+  }, [feeds, additives, formatDate]);
+
+  const displayedTransactions = useMemo(() => {
+    if (recentActivityFilter === 'audit') {
+      return voidedRecentTransactions;
+    }
+    if (recentActivityFilter === 'stockIn') {
+      return activeRecentTransactions.filter(tx => tx.type === 'Stock In');
+    }
+    if (recentActivityFilter === 'usage') {
+      return activeRecentTransactions.filter(tx => tx.type === 'Usage');
+    }
+    return activeRecentTransactions;
+  }, [recentActivityFilter, activeRecentTransactions, voidedRecentTransactions]);
 
   const filteredItems = useMemo(() => {
     const items = activeTab === 'feed' ? feeds : additives;
@@ -247,6 +301,9 @@ export default function InventoryFeedsPage() {
 
   const handleOpenModal = (type: typeof modalType, item?: InventoryItem, iType?: typeof itemType) => {
     if (!canEditInventory && type !== 'history') return;
+    setPendingVoidOperationId(null);
+    setPreparingVoidRecordId(null);
+    setVoidPreparationError('');
     const effectiveItemType = iType || itemType;
     setModalType(type);
     setItemType(effectiveItemType);
@@ -290,6 +347,44 @@ export default function InventoryFeedsPage() {
       });
     }
     setModalOpen(true);
+  };
+
+  const closeInventoryModal = () => {
+    if (agent.busy) return;
+    const pendingOperation = agent.operations.find((operation) => operation.id === pendingVoidOperationId);
+    if (pendingOperation && (pendingOperation.state === 'draft' || pendingOperation.state === 'partial')) {
+      void agent.discard(pendingOperation);
+    }
+    setPendingVoidOperationId(null);
+    setModalOpen(false);
+  };
+
+  const prepareVoidStockIn = async (record: StockHistory) => {
+    if (
+      !companyId || !selectedItem || itemType !== 'additive' ||
+      !canEditInventory || !canUseOrson || !record.id || !record.date || agent.busy
+    ) return;
+
+    setPreparingVoidRecordId(record.id);
+    setPendingVoidOperationId(null);
+    setVoidPreparationError('');
+    try {
+      const operation = await agent.prepare([{
+        id: crypto.randomUUID(),
+        type: 'void_inventory_purchase',
+        date: record.date,
+        itemType: 'additive',
+        itemId: selectedItem.id,
+        recordId: record.id,
+        values: {},
+      }]);
+      if (operation) setPendingVoidOperationId(operation.id);
+      else setVoidPreparationError(copy('Could not prepare the removal. Check your connection and try again.'));
+    } catch {
+      setVoidPreparationError(copy('Could not prepare the removal. Check your connection and try again.'));
+    } finally {
+      setPreparingVoidRecordId(null);
+    }
   };
 
   const handleAction = async (e: React.FormEvent) => {
@@ -680,9 +775,10 @@ export default function InventoryFeedsPage() {
                         style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, bottom: 'auto', left: 'auto', width: 'min(210px, calc(100vw - 24px))' }}
                       >
                         {([
-                          { id: 'all', label: 'All transactions', description: 'Show every stock movement' },
-                          { id: 'stockIn', label: 'Stock in', description: 'Show incoming stock only' },
+                          { id: 'all', label: 'All active transactions', description: 'Show active stock movements' },
+                          { id: 'stockIn', label: 'Stock in', description: 'Show active incoming stock' },
                           { id: 'usage', label: 'Stock out', description: 'Show inventory usage only' },
+                          { id: 'audit', label: 'Audit history', description: 'Show voided purchase history' },
                         ] as const).map((filter) => (
                           <button
                             key={filter.id}
@@ -703,17 +799,35 @@ export default function InventoryFeedsPage() {
                 </div>
 
                 <div>
-                  {!recentTransactions.some(tx => recentActivityFilter === 'all' || (recentActivityFilter === 'stockIn' ? tx.type === 'Stock In' : tx.type === 'Usage')) && <p className={styles.overviewEmpty}>{copy('No transactions to show')}</p>}
-                  {recentTransactions
-                    .filter(tx => recentActivityFilter === 'all' || (recentActivityFilter === 'stockIn' ? tx.type === 'Stock In' : tx.type === 'Usage'))
-                    .map(tx => (
+                  {displayedTransactions.length === 0 && <p className={styles.overviewEmpty}>{copy('No transactions to show')}</p>}
+                  {displayedTransactions.map(tx => (
                     <div key={tx.id} className={styles.overviewRow}>
                       <div className={styles.overviewIdentity}>
-                        <strong>{tx.name}</strong>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <strong>{tx.name}</strong>
+                          {tx.voided && (
+                            <span style={{
+                              backgroundColor: '#fde8e8',
+                              color: '#e74c3c',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                            }}>
+                              {copy('VOIDED')}
+                            </span>
+                          )}
+                        </div>
                         <small>{copy(tx.type)} · {tx.date}</small>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontWeight: 600, fontSize: '18px', color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+                        <div style={{
+                          fontWeight: 600,
+                          fontSize: '18px',
+                          color: tx.voided ? '#95a5a6' : 'var(--text-primary)',
+                          textDecoration: tx.voided ? 'line-through' : 'none',
+                          fontVariantNumeric: 'tabular-nums'
+                        }}>
                           {tx.type === 'Stock In' ? '+' : '-'}{formatQuantity(tx.quantity)}
                         </div>
                         <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>{tx.unit}</div>
@@ -822,7 +936,7 @@ export default function InventoryFeedsPage() {
                   );
                   const isLow = (item.reorderLevel || 0) > 0 && item.totalStock <= (item.reorderLevel || 0);
                   const averagePrice = item.totalStock > 0 ? item.totalCost / item.totalStock : 0;
-                  const totalIn = item.stockInHistory?.reduce((s, h) => s + (h.quantity || 0), 0) || 0;
+                  const totalIn = item.stockInHistory?.filter(h => !h.voided).reduce((s, h) => s + (h.quantity || 0), 0) || 0;
                   const totalOut = item.usageHistory?.reduce((s, h) => s + (h.quantity || 0), 0) || 0;
 
                   return (
@@ -941,7 +1055,7 @@ export default function InventoryFeedsPage() {
         <div
           className="responsive-modal-overlay inventory-modal-overlay"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setModalOpen(false);
+            if (event.target === event.currentTarget) closeInventoryModal();
           }}
           style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2000,
@@ -975,7 +1089,8 @@ export default function InventoryFeedsPage() {
                 </div>
               </div>
               <button
-                onClick={() => setModalOpen(false)}
+                onClick={closeInventoryModal}
+                disabled={agent.busy}
                 aria-label={copy('Close inventory dialog')}
                 style={{
                   width: '36px', height: '36px', background: 'var(--bg-mid)', border: '1px solid transparent', borderRadius: '10px',
@@ -987,40 +1102,116 @@ export default function InventoryFeedsPage() {
             </div>
 
             <div className="responsive-modal-body inventory-modal-body" style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-              {modalType === 'history' && selectedItem ? (
+              {modalType === 'history' && historyItem ? (
                 <div className={styles.historySections}>
+                  {(() => {
+                    const activeStockIn = (historyItem.stockInHistory || []).filter(h => !h.voided);
+                    const voidedStockIn = (historyItem.stockInHistory || []).filter(h => h.voided);
+                    return (
+                      <>
+                        <section className={styles.historySection}>
+                          <h3>{copy('Stock In Records')} <span>{activeStockIn.length}</span></h3>
+                          {activeStockIn.length === 0 && <p className={styles.overviewEmpty}>{copy('No stock intake recorded.')}</p>}
+                          {[...activeStockIn].reverse().map(h => (
+                            <div key={h.id} className={styles.historyRecord}>
+                              <div className={styles.overviewRow}>
+                                <div className={styles.overviewIdentity}>
+                                  <strong>{formatDate(h.date)}</strong>
+                                  <small>{copy('Unit Price')}: {Number.isFinite(h.price) && h.price > 0 ? formatCurrency(h.price) : '—'}</small>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                  <strong className={styles.historyQuantity}>
+                                    +{formatQuantity(h.quantity)} {historyItem.unit}
+                                  </strong>
+                                  {itemType === 'additive' && canEditInventory && canUseOrson && h.id && h.date && (
+                                    <button
+                                      type="button"
+                                      onClick={() => void prepareVoidStockIn(h)}
+                                      disabled={agent.busy || preparingVoidRecordId !== null || hasOpenVoidOperation}
+                                      aria-label={`${copy('Remove purchase')} ${formatDate(h.date)}`}
+                                      title={copy('Remove this stock-in purchase from active inventory and finance')}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        flexShrink: 0,
+                                        border: '1px solid #f2c7c7',
+                                        borderRadius: '8px',
+                                        background: '#fff',
+                                        color: '#b42318',
+                                        padding: '7px 9px',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: agent.busy || preparingVoidRecordId !== null || hasOpenVoidOperation ? 'not-allowed' : 'pointer',
+                                        opacity: agent.busy || preparingVoidRecordId !== null || hasOpenVoidOperation ? 0.55 : 1,
+                                      }}
+                                    >
+                                      {preparingVoidRecordId === h.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                                      {copy('Remove purchase')}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              {h.notes && <p className={styles.historyNote}>{h.notes}</p>}
+                            </div>
+                          ))}
+                        </section>
+                        {voidedStockIn.length > 0 && (
+                          <section className={styles.historySection}>
+                            <h3>{copy('Audit History')} <span>{voidedStockIn.length}</span></h3>
+                            {[...voidedStockIn].reverse().map(h => (
+                              <div key={h.id} className={styles.historyRecord}>
+                                <div className={styles.overviewRow}>
+                                  <div className={styles.overviewIdentity}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <strong>{formatDate(h.date)}</strong>
+                                      <span style={{
+                                        backgroundColor: '#fde8e8',
+                                        color: '#e74c3c',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        padding: '2px 6px',
+                                        borderRadius: '4px',
+                                        letterSpacing: '0.05em',
+                                      }}>
+                                        {copy('VOIDED')}
+                                      </span>
+                                    </div>
+                                    <small>{copy('Unit Price')}: {Number.isFinite(h.price) && h.price > 0 ? formatCurrency(h.price) : '—'}</small>
+                                  </div>
+                                  <strong className={styles.historyQuantity} style={{ textDecoration: 'line-through', color: '#95a5a6' }}>
+                                    +{formatQuantity(h.quantity)} {historyItem.unit}
+                                  </strong>
+                                </div>
+                                <p className={styles.historyNote} style={{ color: '#e74c3c', fontWeight: 600 }}>
+                                  {copy('Audited effect: Stock & cost reversed')} ({formatDate(h.voidedAt || h.date)})
+                                </p>
+                                {h.notes && <p className={styles.historyNote}>{h.notes}</p>}
+                              </div>
+                            ))}
+                          </section>
+                        )}
+                      </>
+                    );
+                  })()}
                   <section className={styles.historySection}>
-                    <h3>{copy('Stock In Records')} <span>{selectedItem.stockInHistory?.length || 0}</span></h3>
-                    {(selectedItem.stockInHistory || []).length === 0 && <p className={styles.overviewEmpty}>{copy('No stock intake recorded.')}</p>}
-                    {[...(selectedItem.stockInHistory || [])].reverse().map(h => (
-                      <div key={h.id} className={styles.historyRecord}>
-                        <div className={styles.overviewRow}>
-                          <div className={styles.overviewIdentity}>
-                            <strong>{formatDate(h.date)}</strong>
-                            <small>{copy('Unit Price')}: {Number.isFinite(h.price) && h.price > 0 ? formatCurrency(h.price) : '—'}</small>
-                          </div>
-                          <strong className={styles.historyQuantity}>+{formatQuantity(h.quantity)} {selectedItem.unit}</strong>
-                        </div>
-                        {h.notes && <p className={styles.historyNote}>{h.notes}</p>}
-                      </div>
-                    ))}
-                  </section>
-                  <section className={styles.historySection}>
-                    <h3>{copy('Usage History')} <span>{selectedItem.usageHistory?.length || 0}</span></h3>
-                    {(selectedItem.usageHistory || []).length === 0 && <p className={styles.overviewEmpty}>{copy('No usage logs found.')}</p>}
-                    {[...(selectedItem.usageHistory || [])].reverse().map(h => (
+                    <h3>{copy('Usage History')} <span>{historyItem.usageHistory?.length || 0}</span></h3>
+                    {(historyItem.usageHistory || []).length === 0 && <p className={styles.overviewEmpty}>{copy('No usage logs found.')}</p>}
+                    {[...(historyItem.usageHistory || [])].reverse().map(h => (
                       <div key={h.id} className={styles.historyRecord}>
                         <div className={styles.overviewRow}>
                           <div className={styles.overviewIdentity}>
                             <strong>{formatDate(h.date)}</strong>
                             <small>{copy('Applied to')}: {h.pondId ? (ponds.find(p => p.id === h.pondId)?.pondName || copy('Unknown Pond')) : copy('General Inventory Usage')}</small>
                           </div>
-                          <strong className={styles.historyQuantity}>−{formatQuantity(h.quantity)} {selectedItem.unit}</strong>
+                          <strong className={styles.historyQuantity}>−{formatQuantity(h.quantity)} {historyItem.unit}</strong>
                         </div>
                         {h.notes && <p className={styles.historyNote}>{h.notes}</p>}
                       </div>
                     ))}
                   </section>
+                  {voidPreparationError && <p role="alert" style={{ color: '#b42318', fontSize: '13px', margin: 0 }}>{voidPreparationError}</p>}
+                  {pendingVoidOperationId && <AgentCards agent={agent} operationIds={[pendingVoidOperationId]} showStatus />}
                 </div>
               ) : (
                 <form id="inventoryForm" className="inventory-form" onSubmit={handleAction} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

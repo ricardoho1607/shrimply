@@ -1,6 +1,6 @@
 export const ASSUMED_POND_DEPTH_METERS = 1;
 
-export type CostedStockEntry = { quantity?: number; price?: number; totalCost?: number };
+export type CostedStockEntry = { quantity?: number; price?: number; totalCost?: number; voided?: boolean };
 export type QuantityUsageEntry = { quantity?: number };
 
 const round = (value: number, decimals: number) => {
@@ -32,14 +32,16 @@ export const calculateFifoConsumption = (
   requestedQuantity: number,
 ) => {
   if (!Number.isFinite(requestedQuantity) || requestedQuantity <= 0) throw new Error('Quantity must be greater than zero');
-  const layers = stockEntries.map((entry) => {
-    const quantity = Number(entry.quantity) || 0;
-    const explicitTotalCost = Number(entry.totalCost);
-    return {
-      remaining: quantity,
-      price: Number.isFinite(explicitTotalCost) && quantity > 0 ? explicitTotalCost / quantity : Number(entry.price),
-    };
-  }).filter((entry) => entry.remaining > 0);
+  const layers = stockEntries
+    .filter((entry) => !entry.voided)
+    .map((entry) => {
+      const quantity = Number(entry.quantity) || 0;
+      const explicitTotalCost = Number(entry.totalCost);
+      return {
+        remaining: quantity,
+        price: Number.isFinite(explicitTotalCost) && quantity > 0 ? explicitTotalCost / quantity : Number(entry.price),
+      };
+    }).filter((entry) => entry.remaining > 0);
   if (layers.some((entry) => !Number.isFinite(entry.price) || entry.price < 0)) throw new Error('Inventory price history is incomplete');
 
   let historicalUsage = previousUsageEntries.reduce((sum, entry) => sum + Math.max(0, Number(entry.quantity) || 0), 0);

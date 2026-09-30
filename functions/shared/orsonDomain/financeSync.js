@@ -59,7 +59,7 @@ exports.financeSourceEntry = financeSourceEntry;
 function buildInventoryLedgerEntries(itemId, item, type) {
     if (item.inventoryKind === 'treatmentMix')
         return [];
-    return (item.stockInHistory || []).filter(stock => stock.source !== 'treatmentMixProduction').map(stock => {
+    return (item.stockInHistory || []).filter(stock => stock.source !== 'treatmentMixProduction' && !stock.voided).map(stock => {
         const value = stock.date;
         const date = typeof stock.date === 'string' ? stock.date.split('T')[0]
             : value?.toDate ? value.toDate().toISOString().slice(0, 10)

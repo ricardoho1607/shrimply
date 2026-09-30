@@ -33,7 +33,7 @@ export function reconcileFinanceSources(input: {
   for (const collection of ['expenses', 'revenues'] as const) {
     for (const entry of input[collection]) {
       if (!entry.voided && isSourceLinkedFinance(entry) && !entry.reference?.startsWith('ASSET-') && !expected.some(row => row.collection === collection && row.reference === entry.reference)) issues.push({ kind: 'orphaned', collection, reference: entry.reference || '', ids: [entry.id] });
-      if (monetaryValue(entry.amount) === null) issues.push({ kind: 'invalid-amount', collection, reference: entry.reference || '', ids: [entry.id] });
+      if (!entry.voided && monetaryValue(entry.amount) === null) issues.push({ kind: 'invalid-amount', collection, reference: entry.reference || '', ids: [entry.id] });
     }
   }
   return { generatedAt: new Date().toISOString(), issues, expectedSourceCount: expected.length, writesPerformed: 0 };

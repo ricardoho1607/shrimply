@@ -102,6 +102,7 @@ function Card({ op, agent }: { op: OrsonOperation; agent: AgentController }) {
     .filter((command) => selected.includes(command.id))
     .map((command) => command.type);
   const includesDelete = selectedTypes.includes("delete_inventory_item");
+  const includesVoid = selectedTypes.includes("void_inventory_purchase");
   const confirmLabel = `Confirm ${selected.length} selected`;
   const edit = (i: number, patch: Partial<OrsonCommand>) => {
     if (agent.busy) return;
@@ -121,7 +122,9 @@ function Card({ op, agent }: { op: OrsonOperation; agent: AgentController }) {
         <Text style={styles.text}>
           {includesDelete
             ? "Check the item and stock details. Deletion is permanent."
-            : "Check the target, date, and changes. Selected entries for each pond save together."}
+            : includesVoid
+              ? "Check the purchase and stock details. Voiding is auditable and permanent."
+              : "Check the target, date, and changes. Selected entries for each pond save together."}
         </Text>
       )}
       {op.receipts.map((r, i) => (
@@ -160,6 +163,36 @@ function Card({ op, agent }: { op: OrsonOperation; agent: AgentController }) {
               />}
               {row.error && <Text style={styles.error}>{row.error}</Text>}
               <Text style={styles.text}>Date: {c.date || "Not set"}</Text>
+              {c.type === "void_inventory_purchase" && (
+                <View style={{
+                  marginVertical: 8,
+                  padding: 10,
+                  backgroundColor: "#fef2f2",
+                  borderWidth: 1,
+                  borderColor: "#fecaca",
+                  borderRadius: 6,
+                }}>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <View style={{
+                      backgroundColor: "#ef4444",
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      borderRadius: 4,
+                    }}>
+                      <Text style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}>TO BE REMOVED</Text>
+                    </View>
+                    <Text style={{ color: "#991b1b", fontWeight: "700", fontSize: 13 }}>Remove from active stock and Finance on confirmation</Text>
+                  </View>
+                  <Text style={[styles.text, { fontSize: 12, color: "#4b5563" }]}>
+                    The purchase and linked expense will remain in audit history as voided records.
+                  </Text>
+                  {row.before?.purchaseId ? (
+                    <Text style={[styles.text, { fontSize: 12, color: "#4b5563" }]}>
+                      Purchase: {String(row.before.quantity ?? "")} {String(row.before.unit ?? "kg")} @ {String(row.before.price ?? "")} ({String(row.before.date ?? "")})
+                    </Text>
+                  ) : null}
+                </View>
+              )}
               {agentFields(c).map((field) => {
                 const hasPrevious = Object.hasOwn(row.before || {}, field);
                 const previous = row.before?.[field];

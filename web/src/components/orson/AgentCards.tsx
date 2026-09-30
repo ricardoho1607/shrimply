@@ -36,6 +36,7 @@ function OperationCard({
     .filter((command) => selected.includes(command.id))
     .map((command) => command.type);
   const includesDelete = selectedTypes.includes("delete_inventory_item");
+  const includesVoid = selectedTypes.includes("void_inventory_purchase");
   const confirmLabel = `Confirm ${selected.length} selected`;
   const edit = (index: number, patch: Partial<OrsonCommand>) => {
     setCommands((old) =>
@@ -56,7 +57,9 @@ function OperationCard({
         <p>
           {includesDelete
             ? "Check the item and stock details. Deletion is permanent."
-            : "Check the target, date, and changes. Selected entries for each pond save together."}
+            : includesVoid
+              ? "Check the purchase and stock details. Voiding is auditable and permanent."
+              : "Check the target, date, and changes. Selected entries for each pond save together."}
         </p>
       )}
       {op.receipts.map((receipt, i) => (
@@ -101,6 +104,39 @@ function OperationCard({
               </label>}
               {row.error && <p className={styles.error}>{row.error}</p>}
               <p>Date: {c.date || "Not set"}</p>
+              {c.type === "void_inventory_purchase" && (
+                <div style={{
+                  margin: "8px 0",
+                  padding: "10px 12px",
+                  backgroundColor: "#fef2f2",
+                  border: "1px solid #fecaca",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "4px" }}>
+                    <span style={{
+                      backgroundColor: "#ef4444",
+                      color: "#fff",
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                      letterSpacing: "0.05em",
+                    }}>
+                      TO BE REMOVED
+                    </span>
+                    <strong style={{ color: "#991b1b" }}>Remove from active stock and Finance on confirmation</strong>
+                  </div>
+                  <p style={{ margin: "2px 0 6px", color: "#4b5563", fontSize: "12px" }}>
+                    The purchase and linked expense will remain in audit history as voided records.
+                  </p>
+                  {typeof row.before?.purchaseId === "string" && (
+                    <p style={{ margin: "2px 0", color: "#4b5563", fontSize: "12px" }}>
+                      Purchase: {String(row.before.quantity ?? "")} {String(row.before.unit ?? "kg")} @ {String(row.before.price ?? "")} ({String(row.before.date ?? "")})
+                    </p>
+                  )}
+                </div>
+              )}
               {agentFields(c).map((field) => {
                 const hasPrevious = Object.hasOwn(row.before || {}, field);
                 const previous = row.before?.[field];

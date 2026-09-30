@@ -1,6 +1,6 @@
 const { isExplicitFarmAction } = require('./shared/orsonDomain/orsonAgentContract');
 const { randomUUID: orsonRequestId } = require('node:crypto');
-const { createAgentTools, AGENT_INSTRUCTION, DELETE_AGENT_INSTRUCTION, EDIT_AGENT_INSTRUCTION } = require('./orsonAgentTools');
+const { createAgentTools, AGENT_INSTRUCTION, DELETE_AGENT_INSTRUCTION, EDIT_AGENT_INSTRUCTION, INVENTORY_CATEGORY_INSTRUCTION } = require('./orsonAgentTools');
 const { authorizeAgent } = require('./shared/orsonActionAuth');
 const { createOrsonAppDataReader } = require('./shared/orsonAppData');
 const { fetchLabelPage } = require('./shared/orsonLabelEvidence');
@@ -773,7 +773,7 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
       deadlineMs: requestStartedAt + 125000,
       generate: (overrides) => generateMetaModelResponse({
         apiKey,
-        systemInstruction: `${systemInstruction}${agent ? `${AGENT_INSTRUCTION}${DELETE_AGENT_INSTRUCTION}${EDIT_AGENT_INSTRUCTION}\nCOMPANY MONETARY CURRENCY: ${company.currency || company.currencyCode || "unspecified"}. All stored monetary amounts use this company's numeric currency convention.` : ""}\nWEB VERIFICATION: ${withWebLookup ? "Search enabled; cite actual supporting sources before dosing." : "Unavailable for this response. Withhold numeric application doses; do not claim internet verification."}`,
+        systemInstruction: `${systemInstruction}${agent ? `${AGENT_INSTRUCTION}${DELETE_AGENT_INSTRUCTION}${EDIT_AGENT_INSTRUCTION}${INVENTORY_CATEGORY_INSTRUCTION}\nCOMPANY MONETARY CURRENCY: ${company.currency || company.currencyCode || "unspecified"}. All stored monetary amounts use this company's numeric currency convention.` : ""}\nWEB VERIFICATION: ${withWebLookup ? "Search enabled; cite actual supporting sources before dosing." : "Unavailable for this response. Withhold numeric application doses; do not claim internet verification."}`,
         prompt: groundedPrompt,
         maxOutputTokens,
         reasoningEffort,

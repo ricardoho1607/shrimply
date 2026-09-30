@@ -74,7 +74,7 @@ export default function FeedAdditivesScreen() {
   const [stockStatusFilter, setStockStatusFilter] = useState<'all' | 'inStock' | 'outOfStock'>('inStock');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
-  const [recentActivityFilter, setRecentActivityFilter] = useState<'all' | 'stockIn' | 'usage'>('all');
+  const [recentActivityFilter, setRecentActivityFilter] = useState<'all' | 'stockIn' | 'usage' | 'audit'>('all');
   const [formData, setFormData] = useState<FormData>(getEmptyFormData('feed', getFarmDateKey(new Date(), company?.timeZone)));
 
   useEffect(() => {
@@ -107,7 +107,42 @@ export default function FeedAdditivesScreen() {
     return { ...store.getMetrics(), totalFeedCost, totalAdditiveValue, feedStockValue };
   }, [store.feeds, store.additives]);
 
-  const recentTransactions = useMemo(() => store.getRecentTransactions(10).slice(0, 10), [store.feeds, store.additives]);
+  const activeRecentTransactions = useMemo(() => store.getRecentTransactions(10), [store.feeds, store.additives]);
+  const auditRecentTransactions = useMemo(() => {
+    const txs: any[] = [];
+    [...store.feeds, ...store.additives.filter((item) => item.inventoryKind !== 'treatmentMix')].forEach((item) => {
+      const name = 'feedName' in item ? item.feedName : item.additiveName;
+      const category = 'feedName' in item ? 'Feed' : 'Additive';
+      (item.stockInHistory || []).filter((h) => h.voided).forEach((h) => {
+        txs.push({
+          id: h.id,
+          type: 'Stock In',
+          item: name,
+          category,
+          date: h.date,
+          quantity: h.quantity,
+          price: h.price,
+          total: (h.quantity * h.price),
+          createdAt: h.createdAt,
+          voided: true,
+          voidedAt: h.voidedAt,
+          voidedBy: h.voidedBy,
+        });
+      });
+    });
+    return txs.sort((a, b) => {
+      const timeA = a.createdAt?.toMillis?.() || new Date(a.date).getTime();
+      const timeB = b.createdAt?.toMillis?.() || new Date(b.date).getTime();
+      return timeB - timeA;
+    }).slice(0, 10);
+  }, [store.feeds, store.additives]);
+
+  const displayedRecentTransactions = useMemo(() => {
+    if (recentActivityFilter === 'audit') return auditRecentTransactions;
+    if (recentActivityFilter === 'stockIn') return activeRecentTransactions.filter(tx => tx.type === 'Stock In');
+    if (recentActivityFilter === 'usage') return activeRecentTransactions.filter(tx => tx.type === 'Usage');
+    return activeRecentTransactions;
+  }, [recentActivityFilter, activeRecentTransactions, auditRecentTransactions]);
   const lowStockItems = useMemo(() => store.getLowStockItems(50), [store.feeds, store.additives]);
 
   const filterItems = useCallback((items: (Feed | Additive)[], categoryKey: 'feedType' | 'category') => {
@@ -300,9 +335,10 @@ export default function FeedAdditivesScreen() {
 
   const ItemCard = ({ item, type }: { item: Feed | Additive; type: ItemType }) => {
     const name = type === 'feed' ? (item as Feed).feedName : (item as Additive).additiveName;
-    const totalStockInQty = item.stockInHistory?.reduce((s, h) => s + (h.quantity || 0), 0) || 0;
-    const totalStockInCost = item.stockInHistory?.reduce((s, h) => s + ((h.quantity || 0) * (h.price || 0)), 0) || 0;
-    const lastPrice = item.stockInHistory?.[item.stockInHistory.length - 1]?.price ?? 0;
+    const activeStockHistory = item.stockInHistory?.filter(h => !h.voided) || [];
+    const totalStockInQty = activeStockHistory.reduce((s, h) => s + (h.quantity || 0), 0);
+    const totalStockInCost = activeStockHistory.reduce((s, h) => s + ((h.quantity || 0) * (h.price || 0)), 0);
+    const lastPrice = activeStockHistory[activeStockHistory.length - 1]?.price ?? 0;
     const avgPrice = totalStockInQty > 0 ? totalStockInCost / totalStockInQty : lastPrice;
     const totalOut = item.usageHistory?.reduce((s, h) => s + (h.quantity || 0), 0) || 0;
     const isLow = (item.reorderLevel ?? 0) > 0 && item.totalStock <= (item.reorderLevel ?? 0);
@@ -366,7 +402,8 @@ export default function FeedAdditivesScreen() {
 
   const renderHistoryModal = () => {
     if (!selectedItem) return null;
-    const stockHistory = [...(selectedItem.stockInHistory || [])].reverse();
+    const activeStockHistory = (selectedItem.stockInHistory || []).filter(h => !h.voided).reverse();
+    const voidedStockHistory = (selectedItem.stockInHistory || []).filter(h => h.voided).reverse();
     const usageHistory = [...(selectedItem.usageHistory || [])].reverse();
 
     const renderHistory = (history: any[], type: 'stock' | 'usage') => (
@@ -378,7 +415,10 @@ export default function FeedAdditivesScreen() {
               <Ionicons name={type === 'stock' ? 'arrow-down' : 'arrow-up'} size={16} color="#fff" />
             </View>
             <View style={styles.historyContent}>
-              <Text style={styles.historyQty}>{type === 'stock' ? '+' : '-'}{(h.quantity || 0).toFixed(1)} {getUnitLabel(h.unit || selectedItem.unit || 'kg')}{type === 'stock' ? ` @ Rp${(h.price || 0).toFixed(2)}${t.inventory.unitAbbrev}` : ''}</Text>
+              <Text style={styles.historyQty}>
+                {type === 'stock' ? '+' : '-'}{(h.quantity || 0).toFixed(1)} {getUnitLabel(h.unit || selectedItem.unit || 'kg')}
+                {type === 'stock' ? ` @ Rp${(h.price || 0).toFixed(2)}${t.inventory.unitAbbrev}` : ''}
+              </Text>
               <Text style={styles.historyDate}>{formatDate(h.date)}{type === 'stock' ? ` • ${t.inventory.total}: Rp${((h.quantity || 0) * (h.price || 0)).toFixed(2)}` : h.pondId ? ` • ${h.pondId}` : ''}</Text>
               {h.expiry && <Text style={styles.historyNotes}>{t.inventory.expiry}: {h.expiry}</Text>}
               {h.notes && <Text style={styles.historyNotes}>{h.notes}</Text>}
@@ -388,9 +428,43 @@ export default function FeedAdditivesScreen() {
       </>
     );
 
+    const renderAuditHistory = (history: any[]) => (
+      <>
+        <Text style={[styles.historyTitle, { color: '#991b1b' }]}>Audit History ({history.length})</Text>
+        {history.map((h: any) => (
+          <View key={h.id || `${h.date}_${h.quantity}`} style={styles.historyItem}>
+            <View style={[styles.historyIcon, { backgroundColor: '#95a5a6' }]}>
+              <Ionicons name="close-circle" size={16} color="#fff" />
+            </View>
+            <View style={styles.historyContent}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.historyQty, { textDecorationLine: 'line-through', color: '#95a5a6' }]}>
+                  +{(h.quantity || 0).toFixed(1)} {getUnitLabel(h.unit || selectedItem.unit || 'kg')} @ Rp{(h.price || 0).toFixed(2)}{t.inventory.unitAbbrev}
+                </Text>
+                <View style={{ backgroundColor: '#fde8e8', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                  <Text style={{ color: '#e74c3c', fontSize: 10, fontWeight: '700' }}>VOIDED</Text>
+                </View>
+              </View>
+              <Text style={styles.historyDate}>{formatDate(h.date)} • {t.inventory.total}: Rp{((h.quantity || 0) * (h.price || 0)).toFixed(2)}</Text>
+              <Text style={[styles.historyNotes, { color: '#e74c3c', fontWeight: '600' }]}>
+                Audited effect: Stock & cost reversed ({formatDate(h.voidedAt || h.date)})
+              </Text>
+              {h.notes && <Text style={styles.historyNotes}>{h.notes}</Text>}
+            </View>
+          </View>
+        ))}
+      </>
+    );
+
     return (
       <ScrollView style={styles.historyScroll}>
-        {renderHistory(stockHistory, 'stock')}
+        {renderHistory(activeStockHistory, 'stock')}
+        {voidedStockHistory.length > 0 && (
+          <>
+            <View style={{ marginTop: 20 }} />
+            {renderAuditHistory(voidedStockHistory)}
+          </>
+        )}
         <View style={{ marginTop: 20 }} />
         {renderHistory(usageHistory, 'usage')}
       </ScrollView>
@@ -611,26 +685,33 @@ export default function FeedAdditivesScreen() {
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>{t.inventory.recentActivity}</Text>
                   <View style={styles.activityToggle}>
-                    {(['all', 'stockIn', 'usage'] as const).map(filter => (
+                    {(['all', 'stockIn', 'usage', 'audit'] as const).map(filter => (
                       <TouchableOpacity key={filter} onPress={() => setRecentActivityFilter(filter)} style={[styles.toggleBtn, recentActivityFilter === filter && styles.toggleBtnActive]}>
                         <Text style={[styles.toggleText, recentActivityFilter === filter && styles.toggleTextActive]}>
-                          {filter === 'all' ? t.inventory.all : filter === 'stockIn' ? t.inventory.stockInFilter : t.inventory.usageFilter}
+                          {filter === 'all' ? t.inventory.all : filter === 'stockIn' ? t.inventory.stockInFilter : filter === 'usage' ? t.inventory.usageFilter : 'Audit'}
                         </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 </View>
                 <FlatList
-                  data={recentTransactions.filter(tx => recentActivityFilter === 'all' || (recentActivityFilter === 'stockIn' ? tx.type === 'Stock In' : tx.type === 'Usage'))}
+                  data={displayedRecentTransactions}
                   keyExtractor={(item) => item.id}
                   scrollEnabled={false}
                   renderItem={({ item: tx }) => (
                     <View style={styles.txCard}>
                       <View style={styles.txContent}>
-                        <Text style={styles.txName}>{tx.item}</Text>
-                        <Text style={styles.txMeta}>{tx.type} • {formatDate(tx.date)}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={styles.txName}>{tx.item}</Text>
+                          {tx.voided && (
+                            <View style={{ backgroundColor: '#fde8e8', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}>
+                              <Text style={{ color: '#e74c3c', fontSize: 9, fontWeight: '700' }}>VOIDED</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.txMeta}>{tx.type} • {formatDate(tx.date)}{tx.voided ? ' • Voided' : ''}</Text>
                       </View>
-                      <Text style={styles.txQty} numberOfLines={1}>{formatNumber(Math.round(tx.quantity))} kg</Text>
+                      <Text style={[styles.txQty, tx.voided && { textDecorationLine: 'line-through', color: '#95a5a6' }]} numberOfLines={1}>{formatNumber(Math.round(tx.quantity))} kg</Text>
                     </View>
                   )}
                 />

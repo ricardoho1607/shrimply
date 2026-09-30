@@ -21,3 +21,23 @@ test('uses oldest remaining stock layer first', () => {
   assert.equal(result.totalCost, 14_000);
   assert.equal(result.remainingCost, 15_000);
 });
+
+test('filters voided stock entries out of FIFO consumption', () => {
+  const result = calculateFifoConsumption(
+    [
+      { quantity: 10, price: 1000, voided: true },
+      { quantity: 5, price: 4000 },
+      { quantity: 5, price: 5000 },
+    ],
+    [{ quantity: 2 }],
+    3,
+  );
+  assert.equal(result.totalCost, 12_000);
+  assert.equal(result.remainingCost, 25_000);
+
+  // When only voided entries exist, requested quantity cannot be covered
+  assert.throws(
+    () => calculateFifoConsumption([{ quantity: 10, price: 1000, voided: true }], [], 1),
+    /Inventory cost history does not cover the requested quantity/,
+  );
+});

@@ -86,10 +86,10 @@ export const financeSourceEntry = (record: { amount: number; date: string; refer
 
 export function buildInventoryLedgerEntries(itemId: string, item: {
   feedName?: string; additiveName?: string; unit?: string; inventoryKind?: string;
-  stockInHistory?: { id: string; date: unknown; quantity: number; price: number; notes?: string; source?: string }[];
+  stockInHistory?: { id: string; date: unknown; quantity: number; price: number; notes?: string; source?: string; voided?: boolean }[];
 }, type: 'feed' | 'additive') {
   if (item.inventoryKind === 'treatmentMix') return [];
-  return (item.stockInHistory || []).filter(stock => stock.source !== 'treatmentMixProduction').map(stock => {
+  return (item.stockInHistory || []).filter(stock => stock.source !== 'treatmentMixProduction' && !stock.voided).map(stock => {
     const value = stock.date as { toDate?: () => Date; seconds?: number };
     const date = typeof stock.date === 'string' ? stock.date.split('T')[0]
       : value?.toDate ? value.toDate().toISOString().slice(0, 10)

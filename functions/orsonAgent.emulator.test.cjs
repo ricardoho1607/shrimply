@@ -258,6 +258,22 @@ test("effective permissions, block scoping, ownership and revocation are enforce
     /permission/i,
   );
 });
+test("legacy saved commands do not block access to a current valid draft", async () => {
+  const op = await prepare([
+    command("record_sampling", { mbw: 12, feed: 20 }),
+  ]);
+  await db
+    .doc(`companies/${companyId}/orsonOperations/${op.id}`)
+    .update({ savedCommands: [{ id: "legacy-row", type: "removed_legacy_action" }] });
+
+  assert.equal(
+    (await service.get({ uid, companyId, operationId: op.id })).id,
+    op.id,
+  );
+  const confirmed = await confirm(op);
+  assert.equal(confirmed.state, "completed");
+  assert.equal((await get("ponds/p1")).samplings.length, 1);
+});
 test("partial save reports per-group outcomes and retry cannot duplicate success", async () => {
   const op = await prepare([
     command(
@@ -658,4 +674,343 @@ test("ambiguous uploaded pond names stay editable while an explicit valid subset
   const partial = await confirm(op);
   assert.equal(partial.state, "partial");
   assert.equal((await get("ponds/p1")).samplings[0].doMorning, "5");
+});
+
+test("voiding an unused inventory purchase updates stock, cost, marks source row and expense as voided, and archives zero-stock item", async () => {
+  await confirm(await prepare([
+    command("stock_in_inventory", { quantity: 10, price: 3, unit: "kg" },
+      { pondId: undefined, itemId: "feed-a", itemType: "feed" })
+  ]));
+  let stock = await get("feeds/feed-a");
+  assert.equal(stock.totalStock, 110);
+  assert.equal(stock.totalCost, 230);
+  assert.equal(stock.stockInHistory.length, 1);
+  const purchaseId = stock.stockInHistory[0].id;
+
+  const op = await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId })
+  ]);
+  assert.equal(op.rows[0].valid, true);
+  assert.ok(op.rows[0].effects.some((e) => e.includes("Audited effect: Void purchase of 10 kg (30.00); remaining stock becomes 100 kg.")));
+  assert.ok(op.rows[0].effects.some((e) => e.includes("Audited effect: Void linked unconfirmed expense")));
+  const done = await confirm(op);
+  assert.equal(done.state, "completed");
+
+  stock = await get("feeds/feed-a");
+  assert.equal(stock.totalStock, 100);
+  assert.equal(stock.totalCost, 200);
+  assert.equal(stock.archived, false);
+  assert.equal(stock.stockInHistory[0].voided, true);
+  assert.equal(stock.stockInHistory[0].voidedBy, uid);
+  assert.ok(stock.stockInHistory[0].voidedAt);
+
+  const expenses = await db.collection(`companies/${companyId}/expenses`).get();
+  assert.equal(expenses.size, 1);
+  const expenseData = expenses.docs[0].data();
+  assert.equal(expenseData.voided, true);
+  assert.equal(expenseData.voidedBy, uid);
+  assert.ok(expenseData.voidedAt);
+
+  const financeEntry = Object.values(stock.financeEntries || {})[0];
+  assert.ok(financeEntry);
+  assert.equal(financeEntry.voided, true);
+  assert.equal(financeEntry.voidedBy, uid);
+
+  // Test archiving when remaining stock reaches zero
+  await db.doc(`companies/${companyId}/feeds/feed-empty`).set({
+    feedName: "Feed Empty",
+    unit: "kg",
+    totalStock: 0,
+    totalCost: 0,
+    stockInHistory: [],
+    usageHistory: [],
+  });
+  await confirm(await prepare([
+    command("stock_in_inventory", { quantity: 5, price: 10, unit: "kg" },
+      { pondId: undefined, itemId: "feed-empty", itemType: "feed" })
+  ]));
+  const emptyStockBefore = await get("feeds/feed-empty");
+  const emptyPurchaseId = emptyStockBefore.stockInHistory[0].id;
+  const voidEmptyOp = await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-empty", itemType: "feed", recordId: emptyPurchaseId })
+  ]);
+  assert.ok(voidEmptyOp.rows[0].effects.some((e) => e.includes("Audited effect: Archive inventory item as remaining stock is zero.")));
+  await confirm(voidEmptyOp);
+  const emptyStockAfter = await get("feeds/feed-empty");
+  assert.equal(emptyStockAfter.totalStock, 0);
+  assert.equal(emptyStockAfter.totalCost, 0);
+  assert.equal(emptyStockAfter.archived, true);
+});
+
+test("voiding cannot be repeated and voided purchase cannot be resurrected via stock_in_inventory", async () => {
+  await confirm(await prepare([
+    command("stock_in_inventory", { quantity: 10, price: 3, unit: "kg" },
+      { pondId: undefined, itemId: "feed-a", itemType: "feed" })
+  ]));
+  const stock = await get("feeds/feed-a");
+  const purchaseId = stock.stockInHistory[0].id;
+  await confirm(await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId })
+  ]));
+
+  // Repeated void attempt fails
+  const repeatVoid = await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId })
+  ]);
+  assert.equal(repeatVoid.rows[0].valid, false);
+  assert.equal(repeatVoid.rows[0].error, "This purchase is already voided.");
+
+  // Resurrect/correction attempt via stock_in_inventory fails
+  const resurrect = await prepare([
+    command("stock_in_inventory", { quantity: 10, price: 3, unit: "kg" },
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId })
+  ]);
+  assert.equal(resurrect.rows[0].valid, false);
+  assert.equal(resurrect.rows[0].error, "A voided purchase cannot be corrected or resurrected.");
+});
+
+test("rejects voiding if item has recorded usage", async () => {
+  await confirm(await prepare([
+    command("stock_in_inventory", { quantity: 10, price: 3, unit: "kg" },
+      { pondId: undefined, itemId: "feed-a", itemType: "feed" })
+  ]));
+  const stock = await get("feeds/feed-a");
+  const purchaseId = stock.stockInHistory[0].id;
+
+  // Add recorded usage
+  await db.doc(`companies/${companyId}/feeds/feed-a`).update({
+    usageHistory: [{ id: "u-1", date, quantity: 2 }],
+  });
+
+  const op = await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId })
+  ]);
+  assert.equal(op.rows[0].valid, false);
+  assert.equal(op.rows[0].error, "Items with recorded usage cannot have purchases voided.");
+});
+
+test("rejects voiding if expense has settlements or confirmed payment", async () => {
+  await confirm(await prepare([
+    command("stock_in_inventory", { quantity: 10, price: 3, unit: "kg" },
+      { pondId: undefined, itemId: "feed-a", itemType: "feed" })
+  ]));
+  const stock = await get("feeds/feed-a");
+  const purchaseId = stock.stockInHistory[0].id;
+  const expenseDocs = await db.collection(`companies/${companyId}/expenses`).get();
+  const expenseId = expenseDocs.docs[0].id;
+
+  // Case 1: Confirmed payment (not Unconfirmed)
+  await db.doc(`companies/${companyId}/expenses/${expenseId}`).update({
+    paymentType: "Cash",
+  });
+  let op = await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId })
+  ]);
+  assert.equal(op.rows[0].valid, false);
+  assert.equal(op.rows[0].error, "This purchase has confirmed payment and cannot be voided.");
+
+  // Case 2: Settlements exist
+  await db.doc(`companies/${companyId}/expenses/${expenseId}`).update({
+    paymentType: "Unconfirmed",
+    settlements: [{ id: "set-1", amount: 30 }],
+  });
+  op = await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId })
+  ]);
+  assert.equal(op.rows[0].valid, false);
+  assert.equal(op.rows[0].error, "This purchase has payment settlements and cannot be voided.");
+});
+
+test("rejects voiding if expense source metadata does not match purchase or totals are inconsistent", async () => {
+  await confirm(await prepare([
+    command("stock_in_inventory", { quantity: 10, price: 3, unit: "kg" },
+      { pondId: undefined, itemId: "feed-a", itemType: "feed" })
+  ]));
+  const stock = await get("feeds/feed-a");
+  const purchaseId = stock.stockInHistory[0].id;
+  const expenseDocs = await db.collection(`companies/${companyId}/expenses`).get();
+  const expenseId = expenseDocs.docs[0].id;
+
+  // Case 1: sourceId mismatch
+  await db.doc(`companies/${companyId}/expenses/${expenseId}`).update({
+    sourceId: "wrong-feed-id",
+  });
+  let op = await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId })
+  ]);
+  assert.equal(op.rows[0].valid, false);
+  assert.equal(op.rows[0].error, "Expense source metadata does not match this purchase.");
+
+  // Case 2: sourceLineId mismatch
+  await db.doc(`companies/${companyId}/expenses/${expenseId}`).update({
+    sourceId: "feed-a",
+    sourceLineId: "wrong-line-id",
+  });
+  op = await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId })
+  ]);
+  assert.equal(op.rows[0].valid, false);
+  assert.equal(op.rows[0].error, "Expense source metadata does not match this purchase.");
+
+  // Case 3: Expense amount mismatch
+  await db.doc(`companies/${companyId}/expenses/${expenseId}`).update({
+    sourceLineId: purchaseId,
+    amount: 999,
+  });
+  op = await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId })
+  ]);
+  assert.equal(op.rows[0].valid, false);
+  assert.equal(op.rows[0].error, "Expense amount does not match the purchase record.");
+
+  // Restore expense amount
+  await db.doc(`companies/${companyId}/expenses/${expenseId}`).update({
+    amount: 30,
+  });
+
+  // Case 4: Stock available less than purchase quantity
+  await db.doc(`companies/${companyId}/feeds/feed-a`).update({
+    totalStock: 5,
+  });
+  op = await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId })
+  ]);
+  assert.equal(op.rows[0].valid, false);
+  assert.equal(op.rows[0].error, "Available stock is less than the purchase quantity.");
+});
+
+test("stale draft confirmation fails if inventory item or expense changes between draft and save", async () => {
+  await confirm(await prepare([
+    command("stock_in_inventory", { quantity: 10, price: 3, unit: "kg" },
+      { pondId: undefined, itemId: "feed-a", itemType: "feed" })
+  ]));
+  const stock = await get("feeds/feed-a");
+  const purchaseId = stock.stockInHistory[0].id;
+
+  // Case 1: Change inventory record in Firestore
+  const draft1 = await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId })
+  ]);
+  assert.equal(draft1.rows[0].valid, true);
+
+  await db.doc(`companies/${companyId}/feeds/feed-a`).update({
+    totalStock: 115,
+  });
+
+  await assert.rejects(
+    confirm(draft1),
+    /Records changed\. Refresh and review the draft before saving\./,
+  );
+
+  // Restore totalStock to valid state for next draft
+  await db.doc(`companies/${companyId}/feeds/feed-a`).update({
+    totalStock: 110,
+  });
+
+  // Case 2: Change linked expense in Firestore
+  const draft2 = await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId })
+  ]);
+  assert.equal(draft2.rows[0].valid, true);
+
+  const expenseDocs = await db.collection(`companies/${companyId}/expenses`).where("sourceLineId", "==", purchaseId).get();
+  assert.equal(expenseDocs.size, 1);
+  const expDocId = expenseDocs.docs[0].id;
+
+  await db.doc(`companies/${companyId}/expenses/${expDocId}`).update({
+    notes: "altered after draft preparation",
+  });
+
+  await assert.rejects(
+    confirm(draft2),
+    /Records changed\. Refresh and review the draft before saving\./,
+  );
+});
+
+test("permanent deletion remains blocked on item with voided purchase history", async () => {
+  await confirm(await prepare([
+    command("stock_in_inventory", { quantity: 10, price: 3, unit: "kg" },
+      { pondId: undefined, itemId: "feed-a", itemType: "feed" })
+  ]));
+  const stock = await get("feeds/feed-a");
+  const purchaseId = stock.stockInHistory[0].id;
+  await confirm(await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId })
+  ]));
+
+  // Attempting permanent deletion of feed-a
+  const delOp = await prepare([
+    command("delete_inventory_item", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed" })
+  ]);
+  assert.equal(delOp.rows[0].valid, false);
+  assert.equal(delOp.rows[0].error, "This item has purchase, usage, or linked finance history. Keep it for audit and resolve its movements through inventory management.");
+});
+
+test("rejects voiding with multiple commands, missing record, treatment mix items, or inconsistent finance metadata", async () => {
+  await confirm(await prepare([
+    command("stock_in_inventory", { quantity: 10, price: 3, unit: "kg" },
+      { pondId: undefined, itemId: "feed-a", itemType: "feed" })
+  ]));
+  const stock = await get("feeds/feed-a");
+  const purchaseId = stock.stockInHistory[0].id;
+
+  // Case 1: Multiple commands in void operation
+  const multiOp = await prepare([
+    command("void_inventory_purchase", {},
+      { id: "row-1", pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId }),
+    command("stock_in_inventory", { quantity: 5, price: 3, unit: "kg" },
+      { id: "row-2", pondId: undefined, itemId: "feed-a", itemType: "feed" }),
+  ]);
+  assert.equal(multiOp.rows[0].valid, false);
+  assert.equal(multiOp.rows[0].error, "Void one inventory purchase per confirmed operation.");
+
+  // Case 2: Purchase record no longer exists
+  const missingOp = await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: "nonexistent-purchase" })
+  ]);
+  assert.equal(missingOp.rows[0].valid, false);
+  assert.equal(missingOp.rows[0].error, "The purchase record no longer exists.");
+
+  // Case 3: Treatment mix item
+  await db.doc(`companies/${companyId}/additives/mix-1`).set({
+    additiveName: "Mix 1",
+    inventoryKind: "treatmentMix",
+    unit: "L",
+    totalStock: 50,
+    totalCost: 100,
+    stockInHistory: [{ id: "p-mix", date, quantity: 50, price: 2 }],
+  });
+  const mixOp = await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "mix-1", itemType: "additive", recordId: "p-mix" })
+  ]);
+  assert.equal(mixOp.rows[0].valid, false);
+  assert.equal(mixOp.rows[0].error, "Treatment mixes cannot be voided through purchase voiding.");
+
+  // Case 4: Treatment mix production purchase source
+  await db.doc(`companies/${companyId}/feeds/feed-a`).update({
+    stockInHistory: [{ id: "p-prod", date, quantity: 10, price: 3, source: "treatmentMixProduction" }],
+  });
+  const prodOp = await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: "p-prod" })
+  ]);
+  assert.equal(prodOp.rows[0].valid, false);
+  assert.equal(prodOp.rows[0].error, "Treatment mix production cannot be voided through purchase voiding.");
 });

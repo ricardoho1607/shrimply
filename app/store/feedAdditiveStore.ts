@@ -70,6 +70,9 @@ export interface StockHistory {
   components?: TreatmentMixBatchComponent[];
   totalCost?: number;
   createdAt: Timestamp | any;
+  voided?: boolean;
+  voidedAt?: string;
+  voidedBy?: string;
 }
 
 export interface UsageHistory {
@@ -169,7 +172,7 @@ interface FeedAdditiveStore {
   deleteAdditive: (additiveId: string) => Promise<void>;
   updateAdditive: (additiveId: string, patch: Partial<Additive>) => Promise<void>;
   getMetrics: () => FeedAdditiveMetrics;
-  getRecentTransactions: (limit: number) => any[];
+  getRecentTransactions: (limit?: number, options?: { includeVoided?: boolean }) => any[];
   getLowStockItems: (threshold?: number) => any[];
   getItemsNearExpiry: (withinDays: number) => any[];
   getItemsBelowReorder: () => any[];
@@ -1210,7 +1213,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     let feedUnitSum = 0;
     let feedCostSum = 0;
     feeds.forEach((f) => {
-      const qty = (f.stockInHistory || []).reduce((s, h) => s + (h.quantity || 0), 0);
+      const qty = (f.stockInHistory || []).filter(h => !h.voided).reduce((s, h) => s + (h.quantity || 0), 0);
       if (qty > 0) {
         feedUnitSum += qty;
         feedCostSum += (f.totalCost || 0);
@@ -1221,7 +1224,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     let addUnitSum = 0;
     let addCostSum = 0;
     additives.forEach((a) => {
-      const qty = (a.stockInHistory || []).reduce((s, h) => s + (h.quantity || 0), 0);
+      const qty = (a.stockInHistory || []).filter(h => !h.voided).reduce((s, h) => s + (h.quantity || 0), 0);
       if (qty > 0) {
         addUnitSum += qty;
         addCostSum += (a.totalCost || 0);
@@ -1231,12 +1234,12 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
 
     const totalInventoryValue =
       feeds.reduce((sum, f) => {
-        const qtySum = (f.stockInHistory || []).reduce((s, h) => s + (h.quantity || 0), 0);
+        const qtySum = (f.stockInHistory || []).filter(h => !h.voided).reduce((s, h) => s + (h.quantity || 0), 0);
         const avg = qtySum > 0 ? (f.totalCost || 0) / qtySum : 0;
         return sum + (f.totalStock || 0) * avg;
       }, 0) +
       additives.reduce((sum, a) => {
-        const qtySum = (a.stockInHistory || []).reduce((s, h) => s + (h.quantity || 0), 0);
+        const qtySum = (a.stockInHistory || []).filter(h => !h.voided).reduce((s, h) => s + (h.quantity || 0), 0);
         const avg = qtySum > 0 ? (a.totalCost || 0) / qtySum : 0;
         return sum + (a.totalStock || 0) * avg;
       }, 0);
@@ -1248,7 +1251,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     const nearExpiryCount = (() => {
       let cnt = 0;
       const checkExpiry = (h?: StockHistory[]) => {
-        (h || []).forEach(s => {
+        (h || []).filter(s => !s.voided).forEach(s => {
           if (!s.expiry) return;
           const e = new Date(s.expiry);
           const diffDays = Math.ceil((+e - +now) / (1000 * 60 * 60 * 24));
@@ -1273,23 +1276,29 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     } as FeedAdditiveMetrics;
   },
 
-  getRecentTransactions: (limit) => {
+  getRecentTransactions: (limit = 10, options?: { includeVoided?: boolean }) => {
     const { feeds, additives } = get();
     const txs: any[] = [];
+    const includeVoided = Boolean(options?.includeVoided);
 
     feeds.forEach((f) => {
       (f.stockInHistory || []).forEach((h) => {
-        txs.push({
-          id: h.id,
-          type: 'Stock In',
-          item: f.feedName,
-          category: 'Feed',
-          date: h.date,
-          quantity: h.quantity,
-          price: h.price,
-          total: (h.quantity * h.price),
-          createdAt: h.createdAt,
-        });
+        if (!h.voided || includeVoided) {
+          txs.push({
+            id: h.id,
+            type: 'Stock In',
+            item: f.feedName,
+            category: 'Feed',
+            date: h.date,
+            quantity: h.quantity,
+            price: h.price,
+            total: (h.quantity * h.price),
+            createdAt: h.createdAt,
+            voided: Boolean(h.voided),
+            voidedAt: h.voidedAt,
+            voidedBy: h.voidedBy,
+          });
+        }
       });
       (f.usageHistory || []).forEach((h) => {
         txs.push({
@@ -1307,17 +1316,22 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
 
     additives.filter((item) => item.inventoryKind !== 'treatmentMix').forEach((a) => {
       (a.stockInHistory || []).forEach((h) => {
-        txs.push({
-          id: h.id,
-          type: 'Stock In',
-          item: a.additiveName,
-          category: 'Additive',
-          date: h.date,
-          quantity: h.quantity,
-          price: h.price,
-          total: (h.quantity * h.price),
-          createdAt: h.createdAt,
-        });
+        if (!h.voided || includeVoided) {
+          txs.push({
+            id: h.id,
+            type: 'Stock In',
+            item: a.additiveName,
+            category: 'Additive',
+            date: h.date,
+            quantity: h.quantity,
+            price: h.price,
+            total: (h.quantity * h.price),
+            createdAt: h.createdAt,
+            voided: Boolean(h.voided),
+            voidedAt: h.voidedAt,
+            voidedBy: h.voidedBy,
+          });
+        }
       });
       (a.usageHistory || []).forEach((h) => {
         txs.push({
@@ -1367,7 +1381,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     const items: any[] = [];
 
     const check = (item: any, typeLabel: string) => {
-      (item.stockInHistory || []).forEach((h: StockHistory) => {
+      (item.stockInHistory || []).filter((h: StockHistory) => !h.voided).forEach((h: StockHistory) => {
         if (!h.expiry) return;
         const e = new Date(h.expiry);
         const diffDays = Math.ceil((+e - +now) / (1000 * 60 * 60 * 24));

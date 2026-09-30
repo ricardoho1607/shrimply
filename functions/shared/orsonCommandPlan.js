@@ -1,5 +1,5 @@
 const { fail, validId } = require("./orsonActionAuth");
-const { normalizeCommand, ORSON_ACTIONS } = require("./orsonAgentContract");
+const { normalizeCommand, ORSON_ACTIONS } = require("./orsonDomain/orsonAgentContract");
 const {
   reconcileDailyFeedStock,
 } = require("./orsonDomain/dailyFeedTransaction");
@@ -31,6 +31,10 @@ const { resolvePhysicalPond } = require("./orsonDomain/physicalPondIdentity");
 const { farmDateKey } = require("../farmDate");
 const { createHash } = require("node:crypto");
 const clean = (value) => JSON.parse(JSON.stringify(value));
+const INVENTORY_CATEGORIES = {
+  feed: ["Starter", "Grower", "Finisher", "Other"],
+  additive: ["Water Conditioner", "Probiotic", "Mineral", "Vitamin", "Other"],
+};
 function canonical(value) {
   if (value === undefined) return null;
   if (Array.isArray(value)) return value.map(canonical);
@@ -118,7 +122,7 @@ async function planCommands({ auth, commands, operationId, transaction }) {
   const financeMeta = {
     companyId: auth.companyId,
     addedBy: auth.uid,
-    addedByName: auth.user.name || auth.user.email || "Orson",
+    addedByName: auth.user?.name || auth.user?.email || "Orson",
     timestamp: Date.now(),
     ...metadata,
   };
@@ -410,6 +414,7 @@ async function planCommands({ auth, commands, operationId, transaction }) {
     } else if (
       [
         "stock_in_inventory",
+        "void_inventory_purchase",
         "apply_pond_treatment",
         "update_inventory_details",
         "delete_inventory_item",
@@ -417,10 +422,14 @@ async function planCommands({ auth, commands, operationId, transaction }) {
     ) {
       if (!c.itemType) fail("Choose feed or additive.");
       const collection = c.itemType === "feed" ? "feeds" : "additives";
+      if (c.type === "stock_in_inventory" && c.itemId && v.category !== undefined)
+        fail("Existing inventory items keep their saved category; do not set a category on a stock-in purchase.");
       let stock;
       if (c.type === "stock_in_inventory" && !c.itemId && v.itemName) {
         if (!v.category || !v.unit)
           fail("New items require a category and unit.");
+        if (!INVENTORY_CATEGORIES[c.itemType].includes(v.category))
+          fail(`Choose a valid ${c.itemType} inventory category: ${INVENTORY_CATEGORIES[c.itemType].join(", ")}.`);
         const matches = (await list(collection)).filter(
           (item) =>
             String(item.feedName || item.additiveName || "")
@@ -476,6 +485,220 @@ async function planCommands({ auth, commands, operationId, transaction }) {
         basis.push(stock);
         row.effects.push(`Permanently delete ${row.target}, including ${remainingStock} ${stock.unit || "kg"} remaining stock and recorded cost ${remainingCost} ${auth.company.currency || auth.company.currencyCode || "company currency"}.`);
         remove(collection, stockId);
+      } else if (c.type === "void_inventory_purchase") {
+        if (commands.length !== 1)
+          fail("Void one inventory purchase per confirmed operation.");
+        if (!c.recordId)
+          fail("Select a purchase record to void.");
+        if (!stock || typeof stock !== "object")
+          fail("Select a valid inventory item.");
+        if (stock.inventoryKind === "treatmentMix")
+          fail("Treatment mixes cannot be voided through purchase voiding.");
+
+        if (!Array.isArray(stock.usageHistory))
+          fail("This item has incomplete usage history and cannot have purchases voided.");
+        if (stock.usageHistory.length > 0)
+          fail("Items with recorded usage cannot have purchases voided.");
+
+        if (!Array.isArray(stock.stockInHistory))
+          fail("This item has incomplete purchase history and cannot have purchases voided.");
+
+        const matchingIndices = stock.stockInHistory
+          .map((r, i) => (r && typeof r === "object" && r.id === c.recordId ? i : -1))
+          .filter((i) => i >= 0);
+        if (matchingIndices.length === 0)
+          fail("The purchase record no longer exists.");
+        if (matchingIndices.length > 1)
+          fail("Duplicate purchase records found; cannot safely void.");
+        const index = matchingIndices[0];
+        const purchase = stock.stockInHistory[index];
+        if (!purchase || typeof purchase !== "object")
+          fail("The purchase record is invalid.");
+        if (purchase.voided)
+          fail("This purchase is already voided.");
+        if (purchase.source === "treatmentMixProduction")
+          fail("Treatment mix production cannot be voided through purchase voiding.");
+
+        const purchaseQty = Number(purchase.quantity);
+        const purchasePrice = Number(purchase.price);
+        if (
+          !Number.isFinite(purchaseQty) ||
+          purchaseQty <= 0 ||
+          !Number.isFinite(purchasePrice) ||
+          purchasePrice <= 0
+        )
+          fail("The purchase record has invalid quantity or price.");
+
+        const available = Number(stock.totalStock);
+        const cost = Number(stock.totalCost);
+        if (
+          !Number.isFinite(available) ||
+          available < 0 ||
+          !Number.isFinite(cost) ||
+          cost < 0
+        )
+          fail("Inventory stock or cost totals are invalid.");
+
+        if (available < purchaseQty)
+          fail("Available stock is less than the purchase quantity.");
+
+        const purchaseCost = purchaseQty * purchasePrice;
+        if (!Number.isFinite(purchaseCost) || purchaseCost <= 0)
+          fail("The purchase record has invalid cost.");
+
+        if (cost < purchaseCost - 0.005)
+          fail("Inventory cost is less than the purchase cost.");
+
+        // Reconcile active purchase history to inventory totals conservatively; fail closed if active history cannot explain totals
+        let expectedActiveStock = 0;
+        let expectedActiveCost = 0;
+        for (const p of stock.stockInHistory) {
+          if (!p || typeof p !== "object")
+            fail("Purchase history contains invalid records.");
+          if (p.voided) continue;
+          const q = Number(p.quantity);
+          const pr = Number(p.price);
+          if (!Number.isFinite(q) || q <= 0 || !Number.isFinite(pr) || pr < 0)
+            fail("Active purchase history contains invalid quantity or price.");
+          expectedActiveStock += q;
+          expectedActiveCost += q * pr;
+        }
+        if (available < expectedActiveStock - 0.005)
+          fail("Active purchase history exceeds available stock; cannot safely void without usage reconciliation.");
+        if (cost < expectedActiveCost - 0.01)
+          fail("Active purchase history exceeds inventory cost; cannot safely void without usage reconciliation.");
+
+        const expectedCollection = c.itemType === "feed" ? "feeds" : "additives";
+        const expense = buildInventoryExpense({
+          ...purchase,
+          itemId: stockId,
+          itemName: stock.feedName || stock.additiveName,
+          type: c.itemType,
+          sourceStockIndex: index,
+        });
+        const expenseId = financeSyncDocumentId(expense.reference);
+        const ledger = await read("expenses", expenseId);
+        if (!ledger || typeof ledger !== "object")
+          fail("The linked finance expense does not exist.");
+        if (ledger.voided)
+          fail("The linked expense is already voided.");
+        if (
+          ledger.sourceKind !== "inventory" ||
+          ledger.sourceCollection !== expectedCollection ||
+          ledger.sourceId !== stockId ||
+          ledger.sourceLineId !== purchase.id ||
+          ledger.sourceStockIndex !== index
+        )
+          fail("Expense source metadata does not match this purchase.");
+        if (ledger.reference !== expense.reference)
+          fail("Expense reference does not match this purchase.");
+        if (ledger.date !== purchase.date)
+          fail("Expense date does not match this purchase.");
+        if (ledger.companyId !== auth.companyId)
+          fail("Expense company does not match this purchase.");
+
+        if (ledger.paymentType !== "Unconfirmed")
+          fail("This purchase has confirmed payment and cannot be voided.");
+        if (ledger.settlements !== undefined && !Array.isArray(ledger.settlements))
+          fail("Malformed settlements array on linked expense.");
+        if (Array.isArray(ledger.settlements) && ledger.settlements.length > 0)
+          fail("This purchase has payment settlements and cannot be voided.");
+
+        const ledgerAmount = Number(ledger.amount);
+        if (!Number.isFinite(ledgerAmount) || Math.abs(ledgerAmount - purchaseCost) >= 0.01)
+          fail("Expense amount does not match the purchase record.");
+
+        if (!stock.financeEntries || typeof stock.financeEntries !== "object")
+          fail("Inventory finance entries are missing for this item.");
+        const sourceEntry = stock.financeEntries[expenseId];
+        if (!sourceEntry || typeof sourceEntry !== "object")
+          fail("The linked finance entry on the inventory item does not exist.");
+        if (sourceEntry.voided)
+          fail("This purchase finance entry is already voided.");
+        const sourceAmount = Number(sourceEntry.amount);
+        if (
+          !Number.isFinite(sourceAmount) ||
+          Math.abs(sourceAmount - purchaseCost) >= 0.01
+        )
+          fail("Inventory finance entry metadata is inconsistent with the purchase.");
+
+        if (!sourceEntry.reference || sourceEntry.reference !== expense.reference)
+          fail("Inventory finance entry reference does not match the purchase.");
+
+        if (!sourceEntry.date || sourceEntry.date !== purchase.date)
+          fail("Inventory finance entry date does not match the purchase.");
+
+        if (sourceEntry.sourceKind !== undefined && sourceEntry.sourceKind !== "inventory")
+          fail("Inventory finance entry sourceKind is inconsistent.");
+        if (sourceEntry.sourceCollection !== undefined && sourceEntry.sourceCollection !== expectedCollection)
+          fail("Inventory finance entry sourceCollection is inconsistent.");
+        if (sourceEntry.sourceId !== undefined && sourceEntry.sourceId !== stockId)
+          fail("Inventory finance entry sourceId is inconsistent.");
+        if (sourceEntry.sourceLineId !== undefined && sourceEntry.sourceLineId !== purchase.id)
+          fail("Inventory finance entry sourceLineId is inconsistent.");
+        if (sourceEntry.sourceStockIndex !== undefined && sourceEntry.sourceStockIndex !== index)
+          fail("Inventory finance entry sourceStockIndex is inconsistent.");
+
+        basis.push(stock, ledger);
+        row.before = {
+          purchaseId: purchase.id,
+          date: purchase.date,
+          quantity: purchaseQty,
+          price: purchasePrice,
+          unit: purchase.unit || stock.unit || "kg",
+          totalCost: purchaseCost,
+          expenseId,
+        };
+        const roundQty = (val) => Math.round(val * 1000) / 1000;
+        const roundCost = (val) => Math.round(val * 100) / 100;
+        const remainingStock = roundQty(available - purchaseQty);
+        const remainingCost = roundCost(Math.max(0, cost - purchaseCost));
+        const updatedPurchase = {
+          ...purchase,
+          voided: true,
+          voidedAt: now,
+          voidedBy: auth.uid,
+        };
+        const history = [...stock.stockInHistory];
+        history[index] = updatedPurchase;
+        put(collection, stockId, {
+          totalStock: remainingStock,
+          totalCost: remainingCost,
+          stockInHistory: history,
+          archived: remainingStock === 0,
+          financeEntries: {
+            ...stock.financeEntries,
+            [expenseId]: {
+              ...financeSourceEntry(expense),
+              id: expenseId,
+              voided: true,
+              voidedAt: now,
+              voidedBy: auth.uid,
+            },
+          },
+          lastUpdated: now,
+        });
+        put("expenses", expenseId, {
+          voided: true,
+          voidedAt: now,
+          voidedBy: auth.uid,
+          updatedAt: now,
+          updatedBy: auth.uid,
+        });
+        links.push({
+          label: "Finance",
+          web: "/dashboard/finance",
+          mobile: "/finance",
+        });
+        row.effects.push(
+          `Audited effect: Void purchase of ${purchaseQty} ${purchase.unit || stock.unit || "kg"} (${purchaseCost.toFixed(2)}); remaining stock becomes ${remainingStock} ${stock.unit || "kg"}.`,
+        );
+        row.effects.push(
+          `Audited effect: Void linked unconfirmed expense ${expenseId} (${purchaseCost.toFixed(2)}).`,
+        );
+        if (remainingStock === 0) {
+          row.effects.push("Audited effect: Archive inventory item as remaining stock is zero.");
+        }
       } else if (c.type === "update_inventory_details") {
         row.before = Object.fromEntries(
           Object.keys(v).map((key) => [key, stock[key] ?? null]),
@@ -502,6 +725,8 @@ async function planCommands({ auth, commands, operationId, transaction }) {
           if (c.recordId && index < 0)
             fail("The purchase record no longer exists.");
           const previous = index >= 0 ? history[index] : null;
+          if (previous?.voided)
+            fail("A voided purchase cannot be corrected or resurrected.");
           if (previous && (stock.usageHistory || []).length)
             fail(
               "Consumed purchases require reconciliation in inventory before their quantity or price can be corrected.",

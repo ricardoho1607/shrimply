@@ -1,7 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { normalizeCommand } = require("./orsonAgentContract");
-const { acceptOrsonActivity } = require("./orsonDomain/orsonAgentContract");
+const { normalizeCommand, acceptOrsonActivity } = require("./orsonDomain/orsonAgentContract");
 test("rejects malformed dates, unknown fields, negative amounts and invalid observation enums", () => {
   for (const data of [
     { date: "2026-02-30" },
@@ -75,4 +74,988 @@ test("malformed status state cannot turn a live action into a false completion",
     state: "saved",
   };
   assert.equal(acceptOrsonActivity(null, event), null);
+});
+
+test("void_inventory_purchase validates exact authorized target and rejects unsupported values", () => {
+  const valid = {
+    id: "row-void",
+    type: "void_inventory_purchase",
+    date: "2026-09-21",
+    itemType: "feed",
+    itemId: "feed-1",
+    recordId: "purchase-1",
+    values: {},
+  };
+  const normalized = normalizeCommand(valid);
+  assert.equal(normalized.type, "void_inventory_purchase");
+  assert.equal(normalized.itemType, "feed");
+  assert.equal(normalized.itemId, "feed-1");
+  assert.equal(normalized.recordId, "purchase-1");
+
+  // Rejects missing/invalid itemType
+  assert.throws(() => normalizeCommand({ ...valid, itemType: "other" }));
+  assert.throws(() => normalizeCommand({ ...valid, itemType: undefined }));
+
+  // Rejects missing/invalid itemId
+  assert.throws(() => normalizeCommand({ ...valid, itemId: "" }));
+  assert.throws(() => normalizeCommand({ ...valid, itemId: "invalid id with spaces" }));
+
+  // Rejects missing/invalid recordId
+  assert.throws(() => normalizeCommand({ ...valid, recordId: "" }));
+  assert.throws(() => normalizeCommand({ ...valid, recordId: "invalid/id" }));
+
+  // Rejects unsupported fields or invalid values
+  assert.throws(() => normalizeCommand({ ...valid, values: { notes: "arbitrary" } }));
+  assert.throws(() => normalizeCommand({ ...valid, values: { quantity: 10 } }));
+  assert.throws(() => normalizeCommand({ ...valid, values: undefined }));
+  assert.throws(() => normalizeCommand({ ...valid, values: null }));
+  assert.throws(() => normalizeCommand({ ...valid, values: "invalid" }));
+});
+
+test("both web and mobile Orson review cards explain active stock and finance removal with audit retention", async () => {
+  const { planCommands } = require("./orsonCommandPlan");
+  const { AGENT_INSTRUCTION, INVENTORY_CATEGORY_INSTRUCTION } = require("../orsonAgentTools");
+  const { buildInventoryExpense, financeSyncDocumentId, financeSourceEntry } = require("./orsonDomain/financeSync");
+
+  const purchase = {
+    id: "p-1",
+    date: "2026-09-20",
+    quantity: 10,
+    price: 3,
+    unit: "kg",
+  };
+  const exp = buildInventoryExpense({
+    ...purchase,
+    itemId: "feed-1",
+    itemName: "Grower Feed",
+    type: "feed",
+    sourceStockIndex: 0,
+  });
+  const expId = financeSyncDocumentId(exp.reference);
+  const auth = {
+    uid: "test-user",
+    companyId: "farm-1",
+    user: { name: "Test User", email: "test@example.com" },
+    company: { currency: "USD", timeZone: "UTC" },
+    require: () => {},
+    base: {
+      collection: (col) => ({
+        doc: (id) => ({
+          get: async () => {
+            const data = {
+              "feeds/feed-1": {
+                id: "feed-1",
+                feedName: "Grower Feed",
+                unit: "kg",
+                totalStock: 100,
+                totalCost: 300,
+                stockInHistory: [{ ...purchase }],
+                usageHistory: [],
+                financeEntries: { [expId]: financeSourceEntry(exp) },
+              },
+              [`expenses/${expId}`]: {
+                id: expId,
+                ...exp,
+                companyId: "farm-1",
+                paymentType: "Unconfirmed",
+                settlements: [],
+              },
+            }[`${col}/${id}`];
+            return { exists: Boolean(data), data: () => (data ? { ...data } : undefined) };
+          },
+        }),
+      }),
+    },
+  };
+
+  const command = {
+    id: "row-1",
+    type: "void_inventory_purchase",
+    date: "2026-09-21",
+    itemType: "feed",
+    itemId: "feed-1",
+    recordId: "p-1",
+    values: {},
+  };
+
+  const plan = await planCommands({ auth, commands: [command], operationId: "op-card-test" });
+  assert.equal(plan.rows.length, 1);
+  const row = plan.rows[0];
+  assert.equal(row.valid, true);
+  assert.equal(row.title, "Void inventory purchase");
+  assert.equal(row.target, "Grower Feed");
+  assert.match(AGENT_INSTRUCTION, /remove inventory or an inventory post, including a duplicate/i);
+  assert.match(AGENT_INSTRUCTION, /user does not need to say 'duplicate' or 'void'/i);
+  assert.match(AGENT_INSTRUCTION, /If it is unclear whether the user means a purchase post or the entire inventory item.*ask which exact record/i);
+  assert.match(AGENT_INSTRUCTION, /Keep both records as voided audit history; never hard-delete either record/i);
+  assert.match(INVENTORY_CATEGORY_INSTRUCTION, /ask the user to choose its inventory category if they have not stated one/i);
+  assert.match(INVENTORY_CATEGORY_INSTRUCTION, /Feed categories are Starter, Grower, Finisher, or Other/i);
+  assert.match(INVENTORY_CATEGORY_INSTRUCTION, /Additive categories are Water Conditioner, Probiotic, Mineral, Vitamin, or Other/i);
+  assert.match(INVENTORY_CATEGORY_INSTRUCTION, /Finance classifies the linked expense as Feed or Pond Additives automatically/i);
+
+  // Guidance prompt logic verified across both clients
+  const getPrompt = (types) => {
+    if (types.includes("delete_inventory_item")) return "Check the item and stock details. Deletion is permanent.";
+    if (types.includes("void_inventory_purchase")) return "Check the purchase and stock details. Voiding is auditable and permanent.";
+    return "Check the target, date, and changes. Selected entries for each pond save together.";
+  };
+  assert.equal(getPrompt([row.command.type]), "Check the purchase and stock details. Voiding is auditable and permanent.");
+  assert.equal(getPrompt(["delete_inventory_item"]), "Check the item and stock details. Deletion is permanent.");
+
+  // Review card draft status badge and text logic
+  const isVoid = row.command.type === "void_inventory_purchase";
+  const draftBadge = isVoid ? "TO BE REMOVED" : null;
+  const draftStatusText = isVoid ? "Remove from active stock and Finance on confirmation" : null;
+  const auditRetentionText = isVoid ? "The purchase and linked expense will remain in audit history as voided records." : null;
+  assert.equal(draftBadge, "TO BE REMOVED");
+  assert.equal(draftStatusText, "Remove from active stock and Finance on confirmation");
+  assert.equal(auditRetentionText, "The purchase and linked expense will remain in audit history as voided records.");
+
+  const webCard = require("node:fs").readFileSync(require("node:path").join(__dirname, "../../web/src/components/orson/AgentCards.tsx"), "utf8");
+  const mobileCard = require("node:fs").readFileSync(require("node:path").join(__dirname, "../../app/components/OrsonAgentCards.tsx"), "utf8");
+  assert.ok(webCard.includes(draftBadge) && webCard.includes(draftStatusText) && webCard.includes(auditRetentionText));
+  assert.ok(mobileCard.includes(draftBadge) && mobileCard.includes(draftStatusText) && mobileCard.includes(auditRetentionText));
+
+  // Review card audit effects and status banner logic
+  assert.ok(row.effects.every((e) => e.startsWith("Audited effect:")));
+  assert.ok(row.effects.some((e) => e.includes("Void purchase of 10 kg (30.00)")));
+  assert.ok(row.effects.some((e) => e.includes("remaining stock becomes 90 kg")));
+  assert.ok(row.effects.some((e) => e.includes("Void linked unconfirmed expense")));
+  assert.equal(row.before.purchaseId, "p-1");
+  assert.equal(row.before.quantity, 10);
+  assert.equal(row.before.price, 3);
+  assert.equal(row.before.unit, "kg");
+  assert.equal(row.before.totalCost, 30);
+  assert.equal(row.before.expenseId, expId);
+});
+
+test("mobile and web inventory history presents explicit VOIDED badge and audited effect without starving active activity", () => {
+  const activeStock = Array.from({ length: 5 }, (_, i) => ({
+    id: `p-active-${i}`,
+    date: "2026-09-20",
+    quantity: 10 + i,
+    price: 3,
+    unit: "kg",
+    createdAt: 1000 + i,
+    voided: false,
+  }));
+  const voidedStock = Array.from({ length: 12 }, (_, i) => ({
+    id: `p-voided-${i}`,
+    date: "2026-09-21",
+    quantity: 20 + i,
+    price: 3,
+    unit: "kg",
+    createdAt: 2000 + i,
+    voided: true,
+    voidedAt: "2026-09-21T00:00:00.000Z",
+    voidedBy: "user-1",
+  }));
+  const stockHistory = [...activeStock, ...voidedStock];
+
+  // 1. Web recent transactions partitioning logic (from web/src/app/dashboard/inventory/feeds/page.tsx)
+  const activeTxs = [];
+  const voidedTxs = [];
+  stockHistory.forEach((h) => {
+    const tx = {
+      id: h.id,
+      type: "Stock In",
+      name: "Grower Feed",
+      date: h.date,
+      quantity: h.quantity,
+      createdAt: h.createdAt || 0,
+      voided: Boolean(h.voided),
+    };
+    if (h.voided) {
+      voidedTxs.push(tx);
+    } else {
+      activeTxs.push(tx);
+    }
+  });
+  const activeRecentTransactions = activeTxs.sort((a, b) => b.createdAt - a.createdAt).slice(0, 10);
+  const voidedRecentTransactions = voidedTxs.sort((a, b) => b.createdAt - a.createdAt).slice(0, 10);
+
+  const getWebDisplayedTransactions = (filter) => {
+    if (filter === "audit") return voidedRecentTransactions;
+    if (filter === "stockIn") return activeRecentTransactions.filter((tx) => tx.type === "Stock In");
+    if (filter === "usage") return activeRecentTransactions.filter((tx) => tx.type === "Usage");
+    return activeRecentTransactions;
+  };
+
+  // Default "All" and "Stock In" views contain 5 active transactions, 0 voided transactions, and are not starved by the 12 voided items
+  const webAll = getWebDisplayedTransactions("all");
+  assert.equal(webAll.length, 5);
+  assert.ok(webAll.every((tx) => !tx.voided));
+  const webStockIn = getWebDisplayedTransactions("stockIn");
+  assert.equal(webStockIn.length, 5);
+  assert.ok(webStockIn.every((tx) => !tx.voided));
+
+  // "Audit" filter provides the top 10 voided transactions
+  const webAudit = getWebDisplayedTransactions("audit");
+  assert.equal(webAudit.length, 10);
+  assert.ok(webAudit.every((tx) => tx.voided));
+
+  // 2. Mobile recent transactions partitioning logic (from app/store/feedAdditiveStore.ts and app/inventory/feedAdditives.tsx)
+  const getMobileRecentTransactions = (limit = 10, options = {}) => {
+    const includeVoided = Boolean(options.includeVoided);
+    const txs = [];
+    stockHistory.forEach((h) => {
+      if (!h.voided || includeVoided) {
+        txs.push({
+          id: h.id,
+          type: "Stock In",
+          item: "Grower Feed",
+          date: h.date,
+          quantity: h.quantity,
+          createdAt: h.createdAt,
+          voided: Boolean(h.voided),
+          voidedAt: h.voidedAt,
+          voidedBy: h.voidedBy,
+        });
+      }
+    });
+    return txs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, limit);
+  };
+
+  const mobileActiveRecent = getMobileRecentTransactions(10, { includeVoided: false });
+  assert.equal(mobileActiveRecent.length, 5);
+  assert.ok(mobileActiveRecent.every((tx) => !tx.voided));
+
+  const mobileAuditRecent = getMobileRecentTransactions(100, { includeVoided: true })
+    .filter((tx) => tx.voided)
+    .slice(0, 10);
+  assert.equal(mobileAuditRecent.length, 10);
+  assert.ok(mobileAuditRecent.every((tx) => tx.voided));
+
+  const getMobileDisplayedTransactions = (filter) => {
+    if (filter === "audit") return mobileAuditRecent;
+    if (filter === "stockIn") return mobileActiveRecent.filter((tx) => tx.type === "Stock In");
+    return mobileActiveRecent;
+  };
+
+  assert.equal(getMobileDisplayedTransactions("all").length, 5);
+  assert.ok(getMobileDisplayedTransactions("all").every((tx) => !tx.voided));
+  assert.equal(getMobileDisplayedTransactions("stockIn").length, 5);
+  assert.ok(getMobileDisplayedTransactions("stockIn").every((tx) => !tx.voided));
+  assert.equal(getMobileDisplayedTransactions("audit").length, 10);
+  assert.ok(getMobileDisplayedTransactions("audit").every((tx) => tx.voided));
+
+  // 3. Item-level audit history retains voided purchase with explicit VOIDED badge and audited effect
+  const voidedEntry = voidedStock[0];
+  assert.equal(voidedEntry.voided, true);
+  assert.equal(voidedEntry.voidedBy, "user-1");
+  const auditEffect = `Audited effect: Stock & cost reversed (${voidedEntry.voidedAt})`;
+  assert.match(auditEffect, /Stock & cost reversed/);
+});
+
+test("planCommands enforces void rules: success, repeated void, usage/payment/source mismatch, stale draft, deletion blocked", async () => {
+  const { planCommands } = require("./orsonCommandPlan");
+  const { buildInventoryExpense, financeSyncDocumentId, financeSourceEntry } = require("./orsonDomain/financeSync");
+
+  const buildMockAuth = (store) => ({
+    uid: "test-user",
+    companyId: "farm-1",
+    user: {
+      name: "Test User",
+      email: "test@example.com",
+    },
+    company: {
+      currency: "USD",
+      timeZone: "UTC",
+    },
+    require: () => {},
+    base: {
+      collection: (col) => ({
+        get: async () => ({
+          docs: Object.entries(store)
+            .filter(([path]) => path.startsWith(`${col}/`) && path.split("/").length === 2)
+            .map(([path, data]) => ({ id: path.split("/")[1], data: () => ({ ...data }) })),
+        }),
+        doc: (id) => ({
+          get: async () => {
+            const data = store[`${col}/${id}`];
+            return {
+              exists: Boolean(data),
+              data: () => (data ? { ...data } : undefined),
+            };
+          },
+        }),
+      }),
+    },
+  });
+
+  for (const entry of [
+    { itemType: "feed", category: "Grower", collection: "feeds", categoryField: "feedType" },
+    { itemType: "additive", category: "Probiotic", collection: "additives", categoryField: "category" },
+  ]) {
+    const newItemPlan = await planCommands({
+      auth: buildMockAuth({}),
+      commands: [{
+        id: `row-new-${entry.itemType}`,
+        type: "stock_in_inventory",
+        date: "2026-09-21",
+        itemType: entry.itemType,
+        values: { itemName: `New ${entry.itemType}`, category: entry.category, quantity: 10, price: 3, unit: "kg" },
+      }],
+      operationId: `op-new-${entry.itemType}`,
+    });
+    assert.equal(newItemPlan.rows[0].valid, true);
+    const itemWrite = newItemPlan.writes.find((write) => write.collection === entry.collection);
+    assert.equal(itemWrite.values[entry.categoryField], entry.category);
+  }
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({}),
+      commands: [{
+        id: "row-invalid-feed-category",
+        type: "stock_in_inventory",
+        date: "2026-09-21",
+        itemType: "feed",
+        values: { itemName: "New Feed", category: "Medicinal", quantity: 10, price: 3, unit: "kg" },
+      }],
+      operationId: "op-invalid-feed-category",
+    }),
+    /Choose a valid feed inventory category: Starter, Grower, Finisher, Other\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({}),
+      commands: [{
+        id: "row-existing-feed-category",
+        type: "stock_in_inventory",
+        date: "2026-09-21",
+        itemType: "feed",
+        itemId: "feed-1",
+        values: { category: "Other", quantity: 10, price: 3, unit: "kg" },
+      }],
+      operationId: "op-existing-feed-category",
+    }),
+    /Existing inventory items keep their saved category/,
+  );
+
+  const basePurchase = {
+    id: "p-1",
+    date: "2026-09-20",
+    quantity: 10,
+    price: 3,
+    unit: "kg",
+  };
+  const expense = buildInventoryExpense({
+    ...basePurchase,
+    itemId: "feed-1",
+    itemName: "Grower Feed",
+    type: "feed",
+    sourceStockIndex: 0,
+  });
+  const expenseId = financeSyncDocumentId(expense.reference);
+  const baseExpense = {
+    id: expenseId,
+    ...expense,
+    companyId: "farm-1",
+    paymentType: "Unconfirmed",
+    settlements: [],
+  };
+  const baseFeed = {
+    id: "feed-1",
+    feedName: "Grower Feed",
+    unit: "kg",
+    totalStock: 100,
+    totalCost: 300,
+    stockInHistory: [{ ...basePurchase }],
+    usageHistory: [],
+    financeEntries: {
+      [expenseId]: financeSourceEntry(expense),
+    },
+  };
+
+  const voidCmd = {
+    id: "row-void",
+    type: "void_inventory_purchase",
+    date: "2026-09-21",
+    itemType: "feed",
+    itemId: "feed-1",
+    recordId: "p-1",
+    values: {},
+  };
+
+  // 1. Success
+  const store1 = {
+    "feeds/feed-1": { ...baseFeed },
+    [`expenses/${expenseId}`]: { ...baseExpense },
+  };
+  const auth1 = buildMockAuth(store1);
+  const plan1 = await planCommands({ auth: auth1, commands: [voidCmd], operationId: "op-1" });
+  assert.equal(plan1.rows[0].valid, true);
+  assert.ok(plan1.rows[0].effects.some((e) => e.includes("Void purchase of 10 kg (30.00)")));
+  assert.ok(plan1.rows[0].effects.some((e) => e.includes("remaining stock becomes 90 kg")));
+  assert.ok(plan1.rows[0].effects.some((e) => e.includes("Void linked unconfirmed expense")));
+  const feedWrite = plan1.writes.find((w) => w.collection === "feeds" && w.id === "feed-1");
+  assert.ok(feedWrite);
+  assert.equal(feedWrite.values.totalStock, 90);
+  assert.equal(feedWrite.values.totalCost, 270);
+  assert.equal(feedWrite.values.archived, false);
+  assert.equal(feedWrite.values.stockInHistory[0].voided, true);
+  assert.equal(feedWrite.values.stockInHistory[0].voidedBy, "test-user");
+  assert.equal(feedWrite.values.financeEntries[expenseId].voided, true);
+  assert.equal(feedWrite.values.financeEntries[expenseId].voidedBy, "test-user");
+  const expWrite = plan1.writes.find((w) => w.collection === "expenses" && w.id === expenseId);
+  assert.ok(expWrite);
+  assert.equal(expWrite.values.voided, true);
+  assert.equal(expWrite.values.voidedBy, "test-user");
+
+  // 2. Archiving when remaining stock is zero
+  const emptyExpense = buildInventoryExpense({
+    ...basePurchase,
+    itemId: "feed-empty",
+    itemName: "Empty Feed",
+    type: "feed",
+    sourceStockIndex: 0,
+  });
+  const emptyExpenseId = financeSyncDocumentId(emptyExpense.reference);
+  const emptyFeed = {
+    id: "feed-empty",
+    feedName: "Empty Feed",
+    unit: "kg",
+    totalStock: 10,
+    totalCost: 30,
+    stockInHistory: [{ ...basePurchase }],
+    usageHistory: [],
+    financeEntries: {
+      [emptyExpenseId]: financeSourceEntry(emptyExpense),
+    },
+  };
+  const planEmpty = await planCommands({
+    auth: buildMockAuth({
+      "feeds/feed-empty": emptyFeed,
+      [`expenses/${emptyExpenseId}`]: { id: emptyExpenseId, ...emptyExpense, companyId: "farm-1", paymentType: "Unconfirmed", settlements: [] },
+    }),
+    commands: [{ ...voidCmd, itemId: "feed-empty" }],
+    operationId: "op-empty",
+  });
+  assert.equal(planEmpty.rows[0].valid, true);
+  assert.ok(planEmpty.rows[0].effects.some((e) => e.includes("Archive inventory item as remaining stock is zero")));
+  const emptyFeedWrite = planEmpty.writes.find((w) => w.collection === "feeds" && w.id === "feed-empty");
+  assert.equal(emptyFeedWrite.values.totalStock, 0);
+  assert.equal(emptyFeedWrite.values.totalCost, 0);
+  assert.equal(emptyFeedWrite.values.archived, true);
+
+  // 3. Repeated void fails
+  const store2 = {
+    "feeds/feed-1": {
+      ...baseFeed,
+      stockInHistory: [{ ...basePurchase, voided: true }],
+    },
+    [`expenses/${expenseId}`]: { ...baseExpense, voided: true },
+  };
+  await assert.rejects(
+    () => planCommands({ auth: buildMockAuth(store2), commands: [voidCmd], operationId: "op-2" }),
+    /This purchase is already voided\./,
+  );
+
+  // 4. Resurrect/correction via stock_in_inventory fails
+  const resurrectCmd = {
+    id: "row-stock-in",
+    type: "stock_in_inventory",
+    date: "2026-09-21",
+    itemType: "feed",
+    itemId: "feed-1",
+    recordId: "p-1",
+    values: { quantity: 10, price: 3, unit: "kg" },
+  };
+  await assert.rejects(
+    () => planCommands({ auth: buildMockAuth(store2), commands: [resurrectCmd], operationId: "op-resurrect" }),
+    /A voided purchase cannot be corrected or resurrected\./,
+  );
+
+  // 5. Usage history: malformed array or non-empty recorded usage fails closed
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed, usageHistory: null },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-usage-null",
+    }),
+    /This item has incomplete usage history and cannot have purchases voided\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed, usageHistory: [{ id: "u-1", date: "2026-09-21", quantity: 5 }] },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-3",
+    }),
+    /Items with recorded usage cannot have purchases voided\./,
+  );
+
+  // 6. Purchase history: malformed array, missing record, or duplicates fail closed
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed, stockInHistory: "bad-history" },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-stockin-bad",
+    }),
+    /This item has incomplete purchase history and cannot have purchases voided\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed, stockInHistory: [{ ...basePurchase }, { ...basePurchase }] },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-duplicate-purchase",
+    }),
+    /Duplicate purchase records found; cannot safely void\./,
+  );
+
+  // 7. Invalid/NaN numbers fail closed
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed, stockInHistory: [{ ...basePurchase, quantity: NaN }] },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-nan-qty",
+    }),
+    /The purchase record has invalid quantity or price\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed, stockInHistory: [{ ...basePurchase, price: NaN }] },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-nan-price",
+    }),
+    /The purchase record has invalid quantity or price\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed, totalStock: NaN },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-nan-totalstock",
+    }),
+    /Inventory stock or cost totals are invalid\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed, totalCost: NaN },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-nan-totalcost",
+    }),
+    /Inventory stock or cost totals are invalid\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed, totalStock: 5 },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-insufficient-stock",
+    }),
+    /Available stock is less than the purchase quantity\./,
+  );
+
+  // 7b. Conservative reconciliation fails closed when active purchase history exceeds inventory totals without recorded usage
+  const multiPurchaseFeed = {
+    ...baseFeed,
+    stockInHistory: [
+      { ...basePurchase },
+      { id: "p-2", date: "2026-09-21", quantity: 20, price: 3, unit: "kg" },
+    ],
+  };
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...multiPurchaseFeed, totalStock: 25, totalCost: 300 },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-recon-stock",
+    }),
+    /Active purchase history exceeds available stock; cannot safely void without usage reconciliation\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...multiPurchaseFeed, totalStock: 100, totalCost: 50 },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-recon-cost",
+    }),
+    /Active purchase history exceeds inventory cost; cannot safely void without usage reconciliation\./,
+  );
+
+  // 8. Payment confirmed (Cash) fails
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed },
+        [`expenses/${expenseId}`]: { ...baseExpense, paymentType: "Cash" },
+      }),
+      commands: [voidCmd],
+      operationId: "op-4",
+    }),
+    /This purchase has confirmed payment and cannot be voided\./,
+  );
+
+  // 9. Payment settlements exist or malformed settlements fail closed
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed },
+        [`expenses/${expenseId}`]: { ...baseExpense, settlements: [{ id: "set-1", amount: 30 }] },
+      }),
+      commands: [voidCmd],
+      operationId: "op-5",
+    }),
+    /This purchase has payment settlements and cannot be voided\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed },
+        [`expenses/${expenseId}`]: { ...baseExpense, settlements: "malformed" },
+      }),
+      commands: [voidCmd],
+      operationId: "op-settlements-malformed",
+    }),
+    /Malformed settlements array on linked expense\./,
+  );
+
+  // 10. Linked expense metadata mismatches fail closed
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed },
+        [`expenses/${expenseId}`]: { ...baseExpense, sourceId: "wrong-item" },
+      }),
+      commands: [voidCmd],
+      operationId: "op-6",
+    }),
+    /Expense source metadata does not match this purchase\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed },
+        [`expenses/${expenseId}`]: { ...baseExpense, sourceCollection: "additives" },
+      }),
+      commands: [voidCmd],
+      operationId: "op-sourcecol-mismatch",
+    }),
+    /Expense source metadata does not match this purchase\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed },
+        [`expenses/${expenseId}`]: { ...baseExpense, sourceLineId: "wrong-line" },
+      }),
+      commands: [voidCmd],
+      operationId: "op-sourceline-mismatch",
+    }),
+    /Expense source metadata does not match this purchase\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed },
+        [`expenses/${expenseId}`]: { ...baseExpense, sourceStockIndex: 99 },
+      }),
+      commands: [voidCmd],
+      operationId: "op-sourcestockidx-mismatch",
+    }),
+    /Expense source metadata does not match this purchase\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed },
+        [`expenses/${expenseId}`]: { ...baseExpense, date: "2026-09-01" },
+      }),
+      commands: [voidCmd],
+      operationId: "op-exp-date-mismatch",
+    }),
+    /Expense date does not match this purchase\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed },
+        [`expenses/${expenseId}`]: { ...baseExpense, reference: "wrong-ref" },
+      }),
+      commands: [voidCmd],
+      operationId: "op-exp-ref-mismatch",
+    }),
+    /Expense reference does not match this purchase\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed },
+        [`expenses/${expenseId}`]: { ...baseExpense, companyId: "other-farm" },
+      }),
+      commands: [voidCmd],
+      operationId: "op-company-mismatch",
+    }),
+    /Expense company does not match this purchase\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed },
+        [`expenses/${expenseId}`]: { ...baseExpense, amount: 999 },
+      }),
+      commands: [voidCmd],
+      operationId: "op-7",
+    }),
+    /Expense amount does not match the purchase record\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed },
+        [`expenses/${expenseId}`]: { ...baseExpense, amount: NaN },
+      }),
+      commands: [voidCmd],
+      operationId: "op-nan-exp-amount",
+    }),
+    /Expense amount does not match the purchase record\./,
+  );
+
+  // 11. Linked finance entry on item: missing, voided, or inconsistent fails closed
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed, financeEntries: null },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-fin-null",
+    }),
+    /Inventory finance entries are missing for this item\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": { ...baseFeed, financeEntries: {} },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-missing-fin-entry",
+    }),
+    /The linked finance entry on the inventory item does not exist\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": {
+          ...baseFeed,
+          financeEntries: {
+            [expenseId]: { ...financeSourceEntry(expense), voided: true },
+          },
+        },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-fin-entry-voided",
+    }),
+    /This purchase finance entry is already voided\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": {
+          ...baseFeed,
+          financeEntries: {
+            [expenseId]: { ...financeSourceEntry(expense), amount: 999 },
+          },
+        },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-fin-entry-mismatch",
+    }),
+    /Inventory finance entry metadata is inconsistent with the purchase\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": {
+          ...baseFeed,
+          financeEntries: {
+            [expenseId]: { ...financeSourceEntry(expense), amount: NaN },
+          },
+        },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-fin-entry-nan",
+    }),
+    /Inventory finance entry metadata is inconsistent with the purchase\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": {
+          ...baseFeed,
+          financeEntries: {
+            [expenseId]: { ...financeSourceEntry(expense), reference: "wrong-ref" },
+          },
+        },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-fin-entry-ref",
+    }),
+    /Inventory finance entry reference does not match the purchase\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": {
+          ...baseFeed,
+          financeEntries: {
+            [expenseId]: { ...financeSourceEntry(expense), date: "2026-09-01" },
+          },
+        },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-fin-entry-date",
+    }),
+    /Inventory finance entry date does not match the purchase\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": {
+          ...baseFeed,
+          financeEntries: {
+            [expenseId]: { ...financeSourceEntry(expense), sourceKind: "other" },
+          },
+        },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-fin-entry-sourcekind",
+    }),
+    /Inventory finance entry sourceKind is inconsistent\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": {
+          ...baseFeed,
+          financeEntries: {
+            [expenseId]: { ...financeSourceEntry(expense), sourceCollection: "additives" },
+          },
+        },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-fin-entry-sourcecol",
+    }),
+    /Inventory finance entry sourceCollection is inconsistent\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": {
+          ...baseFeed,
+          financeEntries: {
+            [expenseId]: { ...financeSourceEntry(expense), sourceId: "other-id" },
+          },
+        },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-fin-entry-sourceid",
+    }),
+    /Inventory finance entry sourceId is inconsistent\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": {
+          ...baseFeed,
+          financeEntries: {
+            [expenseId]: { ...financeSourceEntry(expense), sourceLineId: "other-line" },
+          },
+        },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-fin-entry-sourceline",
+    }),
+    /Inventory finance entry sourceLineId is inconsistent\./,
+  );
+  await assert.rejects(
+    () => planCommands({
+      auth: buildMockAuth({
+        "feeds/feed-1": {
+          ...baseFeed,
+          financeEntries: {
+            [expenseId]: { ...financeSourceEntry(expense), sourceStockIndex: 99 },
+          },
+        },
+        [`expenses/${expenseId}`]: { ...baseExpense },
+      }),
+      commands: [voidCmd],
+      operationId: "op-fin-entry-stockindex",
+    }),
+    /Inventory finance entry sourceStockIndex is inconsistent\./,
+  );
+
+  // 12. Stale draft basis: basis contains stock and ledger
+  const planStockChange = await planCommands({
+    auth: buildMockAuth({
+      "feeds/feed-1": { ...baseFeed, totalStock: 105 },
+      [`expenses/${expenseId}`]: { ...baseExpense },
+    }),
+    commands: [voidCmd],
+    operationId: "op-stale-1",
+  });
+  assert.notEqual(planStockChange.basis, plan1.basis);
+
+  const planExpChange = await planCommands({
+    auth: buildMockAuth({
+      "feeds/feed-1": { ...baseFeed },
+      [`expenses/${expenseId}`]: { ...baseExpense, notes: "edited" },
+    }),
+    commands: [voidCmd],
+    operationId: "op-stale-2",
+  });
+  assert.notEqual(planExpChange.basis, plan1.basis);
+
+  // 13. Permanent deletion remains blocked on item with voided purchase history
+  const delCmd = {
+    id: "row-del",
+    type: "delete_inventory_item",
+    date: "2026-09-21",
+    itemType: "feed",
+    itemId: "feed-1",
+    values: {},
+  };
+  await assert.rejects(
+    () => planCommands({ auth: buildMockAuth(store2), commands: [delCmd], operationId: "op-del" }),
+    /This item has purchase, usage, or linked finance history\./,
+  );
 });

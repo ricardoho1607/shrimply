@@ -40,11 +40,17 @@ const fieldLabels: Record<string, string> = {
 export const agentFieldLabel = (field: string) =>
   fieldLabels[field] ||
   field.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase());
-export const agentFields = (command: OrsonCommand): readonly string[] =>
-  ["upsert_water_quality", "update_pond_details", "update_inventory_details"].includes(command.type) &&
-  Object.keys(command.values || {}).length
-    ? Object.keys(command.values)
-    : ORSON_ACTIONS[command.type]?.fields || Object.keys(command.values || {});
+export const agentFields = (command: OrsonCommand): readonly string[] => {
+  if (command.type === "stock_in_inventory" && command.itemId) {
+    return (ORSON_ACTIONS[command.type]?.fields || []).filter(
+      (field) => field !== "itemName" && field !== "category",
+    );
+  }
+  return ["upsert_water_quality", "update_pond_details", "update_inventory_details"].includes(command.type) &&
+    Object.keys(command.values || {}).length
+      ? Object.keys(command.values)
+      : ORSON_ACTIONS[command.type]?.fields || Object.keys(command.values || {});
+};
 const ID_LABELS: Record<string, string> = {
   working: "Memproses permintaan Anda",
   pond_lookup: "Memeriksa kolam",

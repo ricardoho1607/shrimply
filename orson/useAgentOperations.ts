@@ -220,6 +220,8 @@ export function useAgentOperations(
     receive,
     onActivity,
     loadCatalog,
+    prepare: (commands: OrsonCommand[]) =>
+      run("executeOrsonAction", { commands }),
     clearActivity: () => {
       lastActivity.current = null;
       setActivityFinished(false);

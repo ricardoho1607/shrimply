@@ -36,14 +36,20 @@ function createOperationService(db) {
       fail("Operation unavailable.", "permission-denied");
   };
   async function checkAccess(auth, op, tx) {
-    for (const row of [
-      ...op.rows,
-      ...(op.savedCommands || []).map((command) => ({ command, valid: true })),
-    ]) {
+    // Saved commands describe already-committed history. Rechecking them can
+    // make an otherwise valid current draft inaccessible after an action is
+    // removed or renamed in a later contract version.
+    for (const row of Array.isArray(op.rows) ? op.rows : []) {
       if (!row.valid) continue;
       const command = row.command;
       const { ORSON_ACTIONS } = require("./orsonAgentContract");
-      auth.require(ORSON_ACTIONS[command.type].permission);
+      const action = command && ORSON_ACTIONS[command.type];
+      if (!action)
+        fail(
+          "This draft contains an unsupported action. Prepare it again before saving.",
+          "failed-precondition",
+        );
+      auth.require(action.permission);
       if (command.pondId) {
         const ref = auth.base.collection("ponds").doc(command.pondId);
         const snap = await (tx ? tx.get(ref) : ref.get());
@@ -131,6 +137,26 @@ function createOperationService(db) {
       }
       const rows = [];
       for (const command of commands) {
+        if (
+          commands.length !== 1 &&
+          ["void_inventory_purchase", "delete_inventory_item"].includes(
+            command.type,
+          )
+        ) {
+          rows.push({
+            command: clean(command),
+            title: "Review entry",
+            target: "",
+            valid: false,
+            error:
+              command.type === "void_inventory_purchase"
+                ? "Void one inventory purchase per confirmed operation."
+                : "Delete one inventory item per confirmed operation.",
+            warnings: [],
+            effects: [],
+          });
+          continue;
+        }
         try {
           const plan = await planCommands({
             auth,
