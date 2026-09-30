@@ -246,6 +246,14 @@ export function useAgentOperations(
         { operationId: op.id, revision: op.revision, selectedRowIds },
         op.id,
       ),
+    dismiss: (operationId: string) => {
+      if (!mounted.current) return;
+      setOperations((old) => old.filter((op) => op.id !== operationId));
+      operationIds.current = operationIds.current.filter((id) => id !== operationId);
+      void Promise.resolve(
+        storage?.setItem(storageKey, JSON.stringify(operationIds.current)),
+      ).catch(() => {});
+    },
     recover,
   };
 }

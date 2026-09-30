@@ -81,7 +81,7 @@ function Choice({
     </View>
   );
 }
-function Card({ op, agent }: { op: OrsonOperation; agent: AgentController }) {
+function Card({ op, agent, onDismiss }: { op: OrsonOperation; agent: AgentController; onDismiss?: (operationId: string) => void }) {
   const router = useRouter();
   const saved = new Set(
     op.receipts.filter((r) => r.status === "saved").flatMap((r) => r.rowIds),
@@ -141,6 +141,13 @@ function Card({ op, agent }: { op: OrsonOperation; agent: AgentController }) {
           ))}
         </View>
       ))}
+      {closed && onDismiss && (
+        <Button
+          title="Dismiss"
+          disabled={agent.busy}
+          onPress={() => onDismiss(op.id)}
+        />
+      )}
       {!closed &&
         commands.map((c, i) => {
           const row = remaining.find((r) => r.command.id === c.id)!;
@@ -191,6 +198,23 @@ function Card({ op, agent }: { op: OrsonOperation; agent: AgentController }) {
                       Purchase: {String(row.before.quantity ?? "")} {String(row.before.unit ?? "kg")} @ {String(row.before.price ?? "")} ({String(row.before.date ?? "")})
                     </Text>
                   ) : null}
+                  {row.before?.expenseId ? (
+                    <Text style={[styles.text, { fontSize: 12, color: "#4b5563" }]}>
+                      Linked expense: {String(row.before.expenseId)}
+                    </Text>
+                  ) : null}
+                  {row.effects && row.effects.length > 0 ? (
+                    <View style={{ marginTop: 8, borderTopWidth: 1, borderColor: '#fecaca', paddingTop: 6 }}>
+                      <Text style={{ color: '#991b1b', fontWeight: '700', fontSize: 12, marginBottom: 3 }}>
+                        Previewed inventory & finance changes:
+                      </Text>
+                      {row.effects.map((effect, idx) => (
+                        <Text key={idx} style={{ color: '#7f1d1d', fontSize: 12, lineHeight: 18 }}>
+                          • {effect}
+                        </Text>
+                      ))}
+                    </View>
+                  ) : null}
                 </View>
               )}
               {agentFields(c).map((field) => {
@@ -208,11 +232,13 @@ function Card({ op, agent }: { op: OrsonOperation; agent: AgentController }) {
                   Feed: {agent.catalog.feeds.find((feed) => feed.id === allocation.inventoryFeedId)?.name || allocation.inventoryFeedId || "Not selected"} · {allocation.quantityKg} kg/day
                 </Text>
               ))}
-              <Button
-                title={editingRows.includes(c.id) ? "Done editing" : "Edit details"}
-                disabled={agent.busy}
-                onPress={() => setEditingRows((old) => old.includes(c.id) ? old.filter((id) => id !== c.id) : [...old, c.id])}
-              />
+              {c.type !== "void_inventory_purchase" && c.type !== "delete_inventory_item" && (
+                <Button
+                  title={editingRows.includes(c.id) ? "Done editing" : "Edit details"}
+                  disabled={agent.busy}
+                  onPress={() => setEditingRows((old) => old.includes(c.id) ? old.filter((id) => id !== c.id) : [...old, c.id])}
+                />
+              )}
               {editingRows.includes(c.id) && <View>
               <Text style={styles.label}>Date (YYYY-MM-DD)</Text>
               <TextInput
@@ -362,7 +388,7 @@ function Card({ op, agent }: { op: OrsonOperation; agent: AgentController }) {
                   {w}
                 </Text>
               ))}
-              {row.effects.map((effect) => (
+              {c.type !== "void_inventory_purchase" && row.effects.map((effect) => (
                 <Text style={styles.text} key={effect}>
                   {effect}
                 </Text>
@@ -416,10 +442,11 @@ function Card({ op, agent }: { op: OrsonOperation; agent: AgentController }) {
     </View>
   );
 }
-export default function OrsonAgentCards({ agent, operationIds, showStatus = true }: {
+export default function OrsonAgentCards({ agent, operationIds, showStatus = true, onDismiss }: {
   agent: AgentController;
   operationIds: string[];
   showStatus?: boolean;
+  onDismiss?: (operationId: string) => void;
 }) {
   const operations = agent.operations.filter((op) => operationIds.includes(op.id));
   const draftOperationKey = operations
@@ -437,6 +464,7 @@ export default function OrsonAgentCards({ agent, operationIds, showStatus = true
           key={`${op.id}:${op.revision}:${JSON.stringify(op.receipts)}`}
           op={op}
           agent={agent}
+          onDismiss={onDismiss}
         />
       ))}
       {showStatus && agent.operationBusy && (

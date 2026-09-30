@@ -1,18 +1,27 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import app, { auth } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency } from '../../context/CurrencyContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { NotificationService } from '../services/notificationService';
 import AppDatePicker from '../components/forms/AppDatePicker';
 import { useFeedAdditiveStore, type Additive, type Feed } from './../store/feedAdditiveStore';
+import { createOfflineOperationId } from '../services/offlineWorkspace';
 import { isPondCycleActive, usePondStore } from './../store/pondStore';
 import TreatmentMixesScreen from './treatmentMixes';
 import { getFarmDateKey } from '../../shared/farmDate';
 import { buildInventoryProductLabel } from '../../shared/productLabel';
+import { useAgentOperations } from '../../orson/useAgentOperations';
+import OrsonAgentCards from '../components/OrsonAgentCards';
+import { hasFarmPermission } from '../../shared/permissions';
+import type { OrsonCommand } from '../../shared/orsonAgentContract';
 
 type FormData = {
   itemName: string;
@@ -53,14 +62,43 @@ const formatDate = (date: any): string => {
 };
 
 export default function FeedAdditivesScreen() {
+  const { user, company } = useAuth();
+  const identity = `${user?.uid || ''}:${company?.id || ''}`;
+  return <FeedAdditivesScreenContent key={identity} />;
+}
+
+function FeedAdditivesScreenContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { company } = useAuth();
+  const { user, company } = useAuth();
   const store = useFeedAdditiveStore();
   const { ponds } = usePondStore();
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
   const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
+
+  const canEditInventory = hasFarmPermission(user, 'manageFeedInventory', company?.ownerId);
+  const canUseOrson = hasFarmPermission(user, 'useOrson', company?.ownerId);
+
+  const agentTransport = useCallback(async (name: string, data: Record<string, unknown>) => {
+    const connection = await NetInfo.fetch();
+    if (auth.currentUser?.uid !== user?.uid || connection.isConnected === false) {
+      throw new Error('Reconnect and sign in to use farm actions.');
+    }
+    return (await httpsCallable(getFunctions(app), name, { timeout: 150000 })(data)).data;
+  }, [user?.uid]);
+
+  const agent = useAgentOperations(
+    company?.id || '',
+    user?.uid || '',
+    agentTransport,
+    AsyncStorage,
+    false,
+  );
+
+  const [activeVoidOpId, setActiveVoidOpId] = useState<string | null>(null);
+  const [preparingRecordId, setPreparingRecordId] = useState<string | null>(null);
+  const [voidError, setVoidError] = useState<string>('');
 
   const [activeTab, setActiveTab] = useState<'dashboard' | ItemType | 'mix'>('dashboard');
   const [modalVisible, setModalVisible] = useState(false);
@@ -145,6 +183,14 @@ export default function FeedAdditivesScreen() {
   }, [recentActivityFilter, activeRecentTransactions, auditRecentTransactions]);
   const lowStockItems = useMemo(() => store.getLowStockItems(50), [store.feeds, store.additives]);
 
+  const openTabVoidDrafts = useMemo(() => {
+    return agent.operations
+      .filter((op) => (op.state === 'draft' || op.state === 'partial') &&
+        op.rows.some((r) => r.command.type === 'void_inventory_purchase' &&
+          (activeTab === 'feed' ? r.command.itemType === 'feed' : r.command.itemType === 'additive')))
+      .map((op) => op.id);
+  }, [agent.operations, activeTab]);
+
   const filterItems = useCallback((items: (Feed | Additive)[], categoryKey: 'feedType' | 'category') => {
     const q = searchQuery.trim().toLowerCase();
     return items.filter(item => {
@@ -216,6 +262,8 @@ export default function FeedAdditivesScreen() {
     setModalVisible(false);
     setSelectedItem(null);
     setModalType('add');
+    setVoidError('');
+    setActiveVoidOpId(null);
   }, [resetForm]);
 
   const handleAction = useCallback(async (action: () => Promise<void>, successMsg: string) => {
@@ -307,6 +355,48 @@ export default function FeedAdditivesScreen() {
       { text: item?.archived ? 'Restore' : 'Archive', onPress: () => handleAction(() => type === 'feed' ? store.deleteFeed(id) : store.deleteAdditive(id), 'Inventory visibility updated') }
     ]);
   }, [store, handleAction, t]);
+
+  const handlePrepareVoid = async (record: any) => {
+    if (!canEditInventory || !canUseOrson) {
+      Alert.alert(t.inventory.error, 'You do not have permission to void inventory purchases.');
+      return;
+    }
+    if (!company?.id || !user?.uid || !selectedItem || !record.id || !record.date || agent.busy) {
+      return;
+    }
+    setPreparingRecordId(record.id);
+    setVoidError('');
+    try {
+      const command: OrsonCommand = {
+        id: createOfflineOperationId('inventory-void'),
+        type: 'void_inventory_purchase',
+        date: typeof record.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(record.date)
+          ? record.date
+          : getFarmDateKey(new Date(record.date), company?.timeZone),
+        itemType,
+        itemId: selectedItem.id,
+        recordId: record.id,
+        values: {},
+      };
+      const op = await agent.prepare([command]);
+      if (op) {
+        setActiveVoidOpId(op.id);
+        const rowErr = op.rows[0]?.error;
+        if (rowErr) {
+          setVoidError(rowErr);
+        }
+      } else {
+        const fallback = 'Could not prepare removal draft. Check your network connection and permissions, then try again.';
+        setVoidError(fallback);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not prepare removal draft.';
+      setVoidError(msg);
+      Alert.alert(t.inventory.error, msg);
+    } finally {
+      setPreparingRecordId(null);
+    }
+  };
 
   const openModal = useCallback((type: ModalType, item?: Feed | Additive, iType?: ItemType) => {
     setModalType(type);
@@ -402,9 +492,26 @@ export default function FeedAdditivesScreen() {
 
   const renderHistoryModal = () => {
     if (!selectedItem) return null;
-    const activeStockHistory = (selectedItem.stockInHistory || []).filter(h => !h.voided).reverse();
-    const voidedStockHistory = (selectedItem.stockInHistory || []).filter(h => h.voided).reverse();
-    const usageHistory = [...(selectedItem.usageHistory || [])].reverse();
+    const currentItem = (itemType === 'feed' ? store.feeds : store.additives).find(i => i.id === selectedItem.id) || selectedItem;
+    const activeStockHistory = (currentItem.stockInHistory || []).filter(h => !h.voided).reverse();
+    const voidedStockHistory = (currentItem.stockInHistory || []).filter(h => h.voided).reverse();
+    const usageHistory = [...(currentItem.usageHistory || [])].reverse();
+
+    const relevantOperationIds = Array.from(
+      new Set(
+        agent.operations
+          .filter((op) =>
+            op.rows.some(
+              (r) =>
+                r.command.type === 'void_inventory_purchase' &&
+                r.command.itemId === currentItem.id &&
+                r.command.itemType === itemType,
+            ),
+          )
+          .map((op) => op.id),
+      ),
+    );
+    const modalError = agent.error || voidError;
 
     const renderHistory = (history: any[], type: 'stock' | 'usage') => (
       <>
@@ -416,13 +523,29 @@ export default function FeedAdditivesScreen() {
             </View>
             <View style={styles.historyContent}>
               <Text style={styles.historyQty}>
-                {type === 'stock' ? '+' : '-'}{(h.quantity || 0).toFixed(1)} {getUnitLabel(h.unit || selectedItem.unit || 'kg')}
+                {type === 'stock' ? '+' : '-'}{(h.quantity || 0).toFixed(1)} {getUnitLabel(h.unit || currentItem.unit || 'kg')}
                 {type === 'stock' ? ` @ Rp${(h.price || 0).toFixed(2)}${t.inventory.unitAbbrev}` : ''}
               </Text>
               <Text style={styles.historyDate}>{formatDate(h.date)}{type === 'stock' ? ` • ${t.inventory.total}: Rp${((h.quantity || 0) * (h.price || 0)).toFixed(2)}` : h.pondId ? ` • ${h.pondId}` : ''}</Text>
               {h.expiry && <Text style={styles.historyNotes}>{t.inventory.expiry}: {h.expiry}</Text>}
               {h.notes && <Text style={styles.historyNotes}>{h.notes}</Text>}
             </View>
+            {type === 'stock' && canEditInventory && canUseOrson && h.id && h.date && (
+              <TouchableOpacity
+                style={styles.voidRecordBtn}
+                disabled={agent.busy || preparingRecordId === h.id}
+                onPress={() => void handlePrepareVoid(h)}
+                accessibilityRole="button"
+                accessibilityLabel={`Void purchase on ${formatDate(h.date)}`}
+              >
+                {preparingRecordId === h.id ? (
+                  <ActivityIndicator size="small" color="#e74c3c" />
+                ) : (
+                  <Ionicons name="trash-outline" size={16} color="#e74c3c" />
+                )}
+                <Text style={styles.voidRecordText}>Void</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ))}
       </>
@@ -439,7 +562,7 @@ export default function FeedAdditivesScreen() {
             <View style={styles.historyContent}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={[styles.historyQty, { textDecorationLine: 'line-through', color: '#95a5a6' }]}>
-                  +{(h.quantity || 0).toFixed(1)} {getUnitLabel(h.unit || selectedItem.unit || 'kg')} @ Rp{(h.price || 0).toFixed(2)}{t.inventory.unitAbbrev}
+                  +{(h.quantity || 0).toFixed(1)} {getUnitLabel(h.unit || currentItem.unit || 'kg')} @ Rp{(h.price || 0).toFixed(2)}{t.inventory.unitAbbrev}
                 </Text>
                 <View style={{ backgroundColor: '#fde8e8', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                   <Text style={{ color: '#e74c3c', fontSize: 10, fontWeight: '700' }}>VOIDED</Text>
@@ -458,6 +581,25 @@ export default function FeedAdditivesScreen() {
 
     return (
       <ScrollView style={styles.historyScroll}>
+        {modalError ? (
+          <View style={styles.voidErrorBox}>
+            <Ionicons name="alert-circle" size={16} color="#b3261e" />
+            <Text style={styles.voidErrorText}>{modalError}</Text>
+          </View>
+        ) : null}
+        {relevantOperationIds.length > 0 && (
+          <View style={{ marginBottom: 16 }}>
+            <OrsonAgentCards
+              agent={agent}
+              operationIds={relevantOperationIds}
+              showStatus={false}
+              onDismiss={(id) => {
+                if (id === activeVoidOpId) setActiveVoidOpId(null);
+                agent.dismiss(id);
+              }}
+            />
+          </View>
+        )}
         {renderHistory(activeStockHistory, 'stock')}
         {voidedStockHistory.length > 0 && (
           <>
@@ -739,37 +881,59 @@ export default function FeedAdditivesScreen() {
           )}
 
           {activeTab === 'feed' && (
-            filteredFeeds.length === 0 ? (
-              <View style={styles.empty}>
-                <Ionicons name="nutrition-outline" size={64} color="#dce8f2" />
-                <Text style={styles.emptyTitle}>{t.inventory.noFeedItems}</Text>
-                <Text style={styles.emptySub}>{t.inventory.addFeedToStart}</Text>
-              </View>
-            ) : (
-              <FlatList
-                data={filteredFeeds}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-                renderItem={({ item }) => <ItemCard item={item} type="feed" />}
-              />
-            )
+            <>
+              {openTabVoidDrafts.length > 0 && (
+                <View style={{ marginBottom: 12 }}>
+                  <OrsonAgentCards
+                    agent={agent}
+                    operationIds={openTabVoidDrafts}
+                    onDismiss={(id) => agent.dismiss(id)}
+                  />
+                </View>
+              )}
+              {filteredFeeds.length === 0 ? (
+                <View style={styles.empty}>
+                  <Ionicons name="nutrition-outline" size={64} color="#dce8f2" />
+                  <Text style={styles.emptyTitle}>{t.inventory.noFeedItems}</Text>
+                  <Text style={styles.emptySub}>{t.inventory.addFeedToStart}</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={filteredFeeds}
+                  keyExtractor={(item) => item.id}
+                  scrollEnabled={false}
+                  renderItem={({ item }) => <ItemCard item={item} type="feed" />}
+                />
+              )}
+            </>
           )}
 
           {activeTab === 'additive' && (
-            filteredAdditives.length === 0 ? (
-              <View style={styles.empty}>
-                <Ionicons name="flask-outline" size={64} color="#dce8f2" />
-                <Text style={styles.emptyTitle}>{t.inventory.noAdditives}</Text>
-                <Text style={styles.emptySub}>{t.inventory.addAdditivesToStart}</Text>
-              </View>
-            ) : (
-              <FlatList
-                data={filteredAdditives}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-                renderItem={({ item }) => <ItemCard item={item} type="additive" />}
-              />
-            )
+            <>
+              {openTabVoidDrafts.length > 0 && (
+                <View style={{ marginBottom: 12 }}>
+                  <OrsonAgentCards
+                    agent={agent}
+                    operationIds={openTabVoidDrafts}
+                    onDismiss={(id) => agent.dismiss(id)}
+                  />
+                </View>
+              )}
+              {filteredAdditives.length === 0 ? (
+                <View style={styles.empty}>
+                  <Ionicons name="flask-outline" size={64} color="#dce8f2" />
+                  <Text style={styles.emptyTitle}>{t.inventory.noAdditives}</Text>
+                  <Text style={styles.emptySub}>{t.inventory.addAdditivesToStart}</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={filteredAdditives}
+                  keyExtractor={(item) => item.id}
+                  scrollEnabled={false}
+                  renderItem={({ item }) => <ItemCard item={item} type="additive" />}
+                />
+              )}
+            </>
           )}
         </ScrollView>
         )}
@@ -1342,4 +1506,38 @@ const styles = StyleSheet.create({
   historyQty: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#0d2137', marginBottom: 2 },
   historyDate: { fontSize: 12, color: '#315f57' },
   historyNotes: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#0d2137', marginTop: 4, fontStyle: 'italic' },
+  voidRecordBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f2c7c7',
+    backgroundColor: '#fff',
+    marginLeft: 8,
+  },
+  voidRecordText: {
+    color: '#b42318',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  voidErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
+  voidErrorText: {
+    color: '#b3261e',
+    fontSize: 13,
+    flex: 1,
+  },
 });

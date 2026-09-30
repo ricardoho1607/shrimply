@@ -497,8 +497,42 @@ async function planCommands({ auth, commands, operationId, transaction }) {
 
         if (!Array.isArray(stock.usageHistory))
           fail("This item has incomplete usage history and cannot have purchases voided.");
-        if (stock.usageHistory.length > 0)
-          fail("Items with recorded usage cannot have purchases voided.");
+
+        let netUsageStock = 0;
+        let netUsageCost = 0;
+        for (const u of stock.usageHistory) {
+          if (!u || typeof u !== "object" || Array.isArray(u))
+            fail("Usage history contains invalid records.");
+
+          if (typeof u.quantity !== "number" || !Number.isFinite(u.quantity))
+            fail("Usage history contains invalid quantity or cost.");
+          const uQty = u.quantity;
+
+          let uCost;
+          if (u.totalCost !== undefined) {
+            if (typeof u.totalCost !== "number" || !Number.isFinite(u.totalCost))
+              fail("Usage history contains invalid quantity or cost.");
+            uCost = u.totalCost;
+          } else if (u.unitPrice !== undefined) {
+            if (typeof u.unitPrice !== "number" || !Number.isFinite(u.unitPrice) || u.unitPrice < 0)
+              fail("Usage history contains invalid quantity or cost.");
+            uCost = uQty * u.unitPrice;
+          } else {
+            fail("Usage history contains invalid quantity or cost.");
+          }
+          if (!Number.isFinite(uCost))
+            fail("Usage history contains invalid quantity or cost.");
+          if (uQty > 0 && uCost < -0.005)
+            fail("Usage history contains invalid quantity or cost.");
+          if (uQty < 0 && uCost > 0.005)
+            fail("Usage history contains invalid quantity or cost.");
+          if (uQty === 0 && Math.abs(uCost) > 0.005)
+            fail("Usage history contains invalid quantity or cost.");
+          netUsageStock += uQty;
+          netUsageCost += uCost;
+        }
+        if (netUsageStock < -0.005 || netUsageCost < -0.01)
+          fail("Usage history contains invalid quantity or cost.");
 
         if (!Array.isArray(stock.stockInHistory))
           fail("This item has incomplete purchase history and cannot have purchases voided.");
@@ -540,7 +574,7 @@ async function planCommands({ auth, commands, operationId, transaction }) {
           fail("Inventory stock or cost totals are invalid.");
 
         if (available < purchaseQty)
-          fail("Available stock is less than the purchase quantity.");
+          fail("Voiding this purchase would make remaining inventory stock or valuation negative.");
 
         const purchaseCost = purchaseQty * purchasePrice;
         if (!Number.isFinite(purchaseCost) || purchaseCost <= 0)
@@ -553,7 +587,7 @@ async function planCommands({ auth, commands, operationId, transaction }) {
         let expectedActiveStock = 0;
         let expectedActiveCost = 0;
         for (const p of stock.stockInHistory) {
-          if (!p || typeof p !== "object")
+          if (!p || typeof p !== "object" || Array.isArray(p))
             fail("Purchase history contains invalid records.");
           if (p.voided) continue;
           const q = Number(p.quantity);
@@ -563,10 +597,23 @@ async function planCommands({ auth, commands, operationId, transaction }) {
           expectedActiveStock += q;
           expectedActiveCost += q * pr;
         }
-        if (available < expectedActiveStock - 0.005)
+        if (available + netUsageStock < expectedActiveStock - 0.005)
           fail("Active purchase history exceeds available stock; cannot safely void without usage reconciliation.");
-        if (cost < expectedActiveCost - 0.01)
+        if (cost + netUsageCost < expectedActiveCost - 0.01)
           fail("Active purchase history exceeds inventory cost; cannot safely void without usage reconciliation.");
+
+        const roundQty = (val) => Math.round(val * 1000) / 1000;
+        const roundCost = (val) => Math.round(val * 100) / 100;
+        const rawRemainingStock = roundQty(available - purchaseQty);
+        const rawRemainingCost = roundCost(cost - purchaseCost);
+        if (rawRemainingStock < -0.005 || rawRemainingCost < -0.01)
+          fail("Voiding this purchase would make remaining inventory stock or valuation negative.");
+        const remainingStock = Math.max(0, rawRemainingStock);
+        const remainingCost = Math.max(0, rawRemainingCost);
+        if (remainingStock === 0 && remainingCost > 0.01)
+          fail("Remaining inventory valuation cannot support remaining stock without usage reconciliation.");
+        if (remainingStock > 0 && remainingCost <= 0.005)
+          fail("Remaining inventory valuation cannot support remaining stock without usage reconciliation.");
 
         const expectedCollection = c.itemType === "feed" ? "feeds" : "additives";
         const expense = buildInventoryExpense({
@@ -649,10 +696,7 @@ async function planCommands({ auth, commands, operationId, transaction }) {
           totalCost: purchaseCost,
           expenseId,
         };
-        const roundQty = (val) => Math.round(val * 1000) / 1000;
-        const roundCost = (val) => Math.round(val * 100) / 100;
-        const remainingStock = roundQty(available - purchaseQty);
-        const remainingCost = roundCost(Math.max(0, cost - purchaseCost));
+        const finalRemainingCost = remainingStock === 0 ? 0 : remainingCost;
         const updatedPurchase = {
           ...purchase,
           voided: true,
@@ -663,7 +707,7 @@ async function planCommands({ auth, commands, operationId, transaction }) {
         history[index] = updatedPurchase;
         put(collection, stockId, {
           totalStock: remainingStock,
-          totalCost: remainingCost,
+          totalCost: finalRemainingCost,
           stockInHistory: history,
           archived: remainingStock === 0,
           financeEntries: {

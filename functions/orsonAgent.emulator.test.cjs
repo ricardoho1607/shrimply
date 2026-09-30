@@ -773,7 +773,8 @@ test("voiding cannot be repeated and voided purchase cannot be resurrected via s
   assert.equal(resurrect.rows[0].error, "A voided purchase cannot be corrected or resurrected.");
 });
 
-test("rejects voiding if item has recorded usage", async () => {
+test("rejects voiding used inventory when removal would make stock negative", async () => {
+  await db.doc(`companies/${companyId}/feeds/feed-a`).update({ totalStock: 0, totalCost: 0 });
   await confirm(await prepare([
     command("stock_in_inventory", { quantity: 10, price: 3, unit: "kg" },
       { pondId: undefined, itemId: "feed-a", itemType: "feed" })
@@ -781,9 +782,11 @@ test("rejects voiding if item has recorded usage", async () => {
   const stock = await get("feeds/feed-a");
   const purchaseId = stock.stockInHistory[0].id;
 
-  // Add recorded usage
+  // Reconcile actual usage against the current stock and cost.
   await db.doc(`companies/${companyId}/feeds/feed-a`).update({
-    usageHistory: [{ id: "u-1", date, quantity: 2 }],
+    totalStock: 8,
+    totalCost: 24,
+    usageHistory: [{ id: "u-1", date, quantity: 2, unitPrice: 3, totalCost: 6 }],
   });
 
   const op = await prepare([
@@ -791,7 +794,50 @@ test("rejects voiding if item has recorded usage", async () => {
       { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId })
   ]);
   assert.equal(op.rows[0].valid, false);
-  assert.equal(op.rows[0].error, "Items with recorded usage cannot have purchases voided.");
+  assert.equal(op.rows[0].error, "Voiding this purchase would make remaining inventory stock or valuation negative.");
+});
+
+test("voids a used purchase when reconciled remaining stock and finance stay positive", async () => {
+  await db.doc(`companies/${companyId}/feeds/feed-a`).update({ totalStock: 0, totalCost: 0 });
+  await confirm(await prepare([
+    command("stock_in_inventory", { quantity: 400, price: 3, unit: "kg" },
+      { pondId: undefined, itemId: "feed-a", itemType: "feed" })
+  ]));
+  await confirm(await prepare([
+    command("stock_in_inventory", { quantity: 100, price: 3, unit: "kg" },
+      { pondId: undefined, itemId: "feed-a", itemType: "feed" })
+  ]));
+
+  let stock = await get("feeds/feed-a");
+  const targetPurchase = stock.stockInHistory[1];
+  await db.doc(`companies/${companyId}/feeds/feed-a`).update({
+    totalStock: 300,
+    totalCost: 900,
+    usageHistory: [{ id: "u-1", date, quantity: 200, unitPrice: 3, totalCost: 600, pondId: "p1" }],
+  });
+
+  const op = await prepare([
+    command("void_inventory_purchase", {},
+      { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: targetPurchase.id })
+  ]);
+  assert.equal(op.rows[0].valid, true);
+  assert.ok(op.rows[0].effects.some((e) => e.includes("remaining stock becomes 200 kg")));
+  assert.equal((await confirm(op)).state, "completed");
+
+  stock = await get("feeds/feed-a");
+  assert.equal(stock.totalStock, 200);
+  assert.equal(stock.totalCost, 600);
+  assert.equal(stock.stockInHistory[1].voided, true);
+  assert.equal(stock.stockInHistory[0].voided, undefined);
+  const targetFinanceEntry = Object.values(stock.financeEntries).find((entry) => entry.reference?.includes(targetPurchase.id));
+  assert.ok(targetFinanceEntry);
+  assert.equal(targetFinanceEntry.voided, true);
+
+  const expenses = await db.collection(`companies/${companyId}/expenses`).get();
+  const targetExpense = expenses.docs.find((doc) => doc.data().sourceLineId === targetPurchase.id);
+  assert.ok(targetExpense);
+  assert.equal(targetExpense.data().voided, true);
+  assert.equal(targetExpense.data().amount, 300);
 });
 
 test("rejects voiding if expense has settlements or confirmed payment", async () => {
@@ -887,7 +933,7 @@ test("rejects voiding if expense source metadata does not match purchase or tota
       { pondId: undefined, itemId: "feed-a", itemType: "feed", recordId: purchaseId })
   ]);
   assert.equal(op.rows[0].valid, false);
-  assert.equal(op.rows[0].error, "Available stock is less than the purchase quantity.");
+  assert.equal(op.rows[0].error, "Voiding this purchase would make remaining inventory stock or valuation negative.");
 });
 
 test("stale draft confirmation fails if inventory item or expense changes between draft and save", async () => {

@@ -110,7 +110,8 @@ function matchesVoidOperation(
   const row = operation.rows[0];
   const target = row?.command;
   return !!target && target.id === command.id && target.type === 'void_inventory_purchase' &&
-    target.itemType === 'additive' && target.itemId === command.itemId &&
+    target.itemType === command.itemType && (command.itemType === 'feed' || command.itemType === 'additive') &&
+    target.itemId === command.itemId &&
     target.recordId === command.recordId && target.date === command.date &&
     !!target.values && typeof target.values === 'object' && !Array.isArray(target.values) &&
     Object.keys(target.values).length === 0 &&
@@ -222,7 +223,7 @@ export default function InventoryFeedsPage() {
   const [voidStatusUncertain, setVoidStatusUncertain] = useState(false);
   const acceptedInScope = acceptedVoid !== null && acceptedVoid.companyId === companyId && acceptedVoid.uid === userUid;
   const acceptedVoidItemName = acceptedInScope
-    ? additives.find(item => item.id === acceptedVoid.command.itemId)?.itemName
+    ? (acceptedVoid.command.itemType === 'feed' ? feeds : additives).find(item => item.id === acceptedVoid.command.itemId)?.itemName
     : undefined;
   const storedVoidOperation = acceptedInScope
     ? agent.operations.find(operation => operation.id === acceptedVoid.operation.id)
@@ -440,7 +441,9 @@ export default function InventoryFeedsPage() {
       if ((isVoidSaved(result) && isVoidSaved(next.operation)) ||
         (isVoidRetryable(result) && isVoidRetryable(next.operation))) {
         setVoidStatusUncertain(false);
-        setVoidPreparationError('');
+        const rowError = result.rows[0]?.error;
+        const failedReceipt = result.receipts.find(r => r.status === 'failed')?.message;
+        setVoidPreparationError(rowError || failedReceipt || '');
         return;
       }
     }
@@ -452,7 +455,7 @@ export default function InventoryFeedsPage() {
   const prepareVoidStockIn = async (record: StockHistory) => {
     const previous = acceptedVoidRef.current;
     if (
-      voidActionLock.current || !companyId || !selectedItem || itemType !== 'additive' ||
+      voidActionLock.current || !companyId || !selectedItem || !(itemType === 'feed' || itemType === 'additive') ||
       !canEditInventory || !canUseOrson || !record.id || !record.date || agent.busy ||
       hasOpenVoidOperation || (previous?.companyId === companyId && previous.uid === userUid &&
         !isVoidSaved(previous.operation) && previous.operation.state !== 'discarded')
@@ -468,7 +471,7 @@ export default function InventoryFeedsPage() {
         id: crypto.randomUUID(),
         type: 'void_inventory_purchase',
         date: record.date,
-        itemType: 'additive',
+        itemType,
         itemId: selectedItem.id,
         recordId: record.id,
         values: {},
@@ -486,10 +489,11 @@ export default function InventoryFeedsPage() {
       saveAcceptedVoid(accepted);
       const result = await agent.confirm(operation, [command.id]);
       acceptVoidResult(accepted, result);
-    } catch {
+    } catch (err: unknown) {
+      const errMessage = err instanceof Error && err.message ? err.message : '';
       setVoidStatusUncertain(!!accepted);
-      setVoidPreparationError(accepted ? uncertainVoidMessage :
-        copy('Could not verify the removal draft. Check your connection and try again.'));
+      setVoidPreparationError(accepted ? (errMessage ? `${uncertainVoidMessage} (${errMessage})` : uncertainVoidMessage) :
+        (errMessage || copy('Could not verify the removal draft. Check your connection and try again.')));
     } finally {
       voidActionLock.current = false;
       setPreparingVoidRecordId(null);
@@ -508,9 +512,10 @@ export default function InventoryFeedsPage() {
     try {
       const result = await agent.recover(accepted.operation);
       acceptVoidResult(accepted, result);
-    } catch {
+    } catch (err: unknown) {
+      const errMessage = err instanceof Error && err.message ? err.message : '';
       setVoidStatusUncertain(true);
-      setVoidPreparationError(uncertainVoidMessage);
+      setVoidPreparationError(errMessage ? `${uncertainVoidMessage} (${errMessage})` : uncertainVoidMessage);
     } finally {
       voidActionLock.current = false;
       setCheckingVoidStatus(false);
@@ -531,9 +536,10 @@ export default function InventoryFeedsPage() {
     try {
       const result = await agent.confirm(accepted.operation, [accepted.command.id]);
       acceptVoidResult(accepted, result);
-    } catch {
+    } catch (err: unknown) {
+      const errMessage = err instanceof Error && err.message ? err.message : '';
       setVoidStatusUncertain(true);
-      setVoidPreparationError(uncertainVoidMessage);
+      setVoidPreparationError(errMessage ? `${uncertainVoidMessage} (${errMessage})` : uncertainVoidMessage);
     } finally {
       voidActionLock.current = false;
       setPreparingVoidRecordId(null);
@@ -1310,7 +1316,7 @@ export default function InventoryFeedsPage() {
                                   <strong className={styles.historyQuantity}>
                                     +{formatQuantity(h.quantity)} {historyItem.unit}
                                   </strong>
-                                  {itemType === 'additive' && canEditInventory && canUseOrson && h.id && h.date && (
+                                  {(itemType === 'feed' || itemType === 'additive') && canEditInventory && canUseOrson && h.id && h.date && (
                                     <button
                                       type="button"
                                       onClick={() => void prepareVoidStockIn(h)}
