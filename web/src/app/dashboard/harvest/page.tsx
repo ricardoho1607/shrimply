@@ -17,6 +17,7 @@ import {
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, query, orderBy, onSnapshot, doc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import { removeUndefinedFields } from '@/lib/firestoreData';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -517,15 +518,15 @@ export default function HarvestPage() {
         const revenue = buildHarvestRevenue({ ...newRecord, ponds: canonicalPonds });
         transaction.set(harvestRef, {
           financeEntry: { ...financeSourceEntry(revenue), id: financeSyncDocumentId(revenue.reference) },
-          ...newRecord,
-          ponds: canonicalPonds,
+          ...removeUndefinedFields(newRecord),
+          ponds: canonicalPonds.map(removeUndefinedFields),
           ...(previousRecord ? { correctedFromHarvestId: previousRecord.id } : {}),
           createdAt: serverTimestamp(),
           createdBy: user.uid,
         });
         {
           transaction.set(doc(db, 'companies', companyId, 'revenues', financeSyncDocumentId(revenue.reference)), {
-            ...revenue,
+            ...removeUndefinedFields(revenue),
             companyId,
             addedBy: user.uid,
             addedByName: user.name || user.email || 'Unknown',
@@ -544,7 +545,7 @@ export default function HarvestPage() {
             financeEntry: { ...financeSourceEntry(previousRevenue), id: previousRevenueId, voided: true },
           });
           transaction.set(doc(db, 'companies', companyId, 'revenues', previousRevenueId), {
-            ...previousRevenue,
+            ...removeUndefinedFields(previousRevenue),
             companyId,
             addedBy: user.uid,
             timestamp: Date.now(),
@@ -697,7 +698,7 @@ export default function HarvestPage() {
         const revenue = buildHarvestRevenue(record);
         const revenueId = financeSyncDocumentId(revenue.reference);
         transaction.update(harvestRef, { voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid, financeEntry: { ...financeSourceEntry(revenue), id: revenueId, voided: true } });
-        transaction.set(doc(db, 'companies', companyId, 'revenues', revenueId), { ...revenue, companyId, addedBy: user.uid, timestamp: Date.now(), voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid }, { merge: true });
+        transaction.set(doc(db, 'companies', companyId, 'revenues', revenueId), { ...removeUndefinedFields(revenue), companyId, addedBy: user.uid, timestamp: Date.now(), voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid }, { merge: true });
       });
     } catch (error) {
       console.error('Error deleting record:', error);
