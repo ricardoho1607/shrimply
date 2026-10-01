@@ -44,6 +44,7 @@ function compile(name) {
   "physicalPondIdentity",
   "enterpriseCycles",
   "orsonAgentContract",
+  "orsonEvidence",
 ].forEach(compile);
 console.log(
   `Orson shared domain mirrors ${process.argv.includes("--check") ? "verified" : "updated"} (${seen.size}).`,

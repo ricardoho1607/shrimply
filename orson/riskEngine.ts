@@ -6,6 +6,12 @@ import type {
   OrsonRiskSeverity,
 } from './types';
 import { evaluateCrossParameterRules } from './knowledge/evaluateCrossParameterRules';
+import { differenceInFarmCalendarDays } from '../shared/farmDate';
+import {
+  comparePondRiskReports,
+  evaluateMeasurementFreshness,
+  compareRiskFindings,
+} from '../shared/orsonEvidence';
 
 const severityRank: Record<OrsonRiskSeverity, number> = {
   info: 0,
@@ -23,6 +29,7 @@ const hasNumber = (value: number | null | undefined): value is number => value !
 
 const highestSeverity = (findings: OrsonRiskFinding[]): OrsonRiskSeverity => {
   return findings.reduce<OrsonRiskSeverity>((highest, finding) => {
+    if (finding.isHistorical || finding.status === 'historical') return highest;
     return severityRank[finding.severity] > severityRank[highest] ? finding.severity : highest;
   }, 'info');
 };
@@ -30,6 +37,108 @@ const highestSeverity = (findings: OrsonRiskFinding[]): OrsonRiskSeverity => {
 const confidenceFromCompleteness = (base: number, score: number) => round(Math.min(0.95, Math.max(0.25, base * (0.65 + score * 0.35))));
 
 const createFinding = (finding: OrsonRiskFinding): OrsonRiskFinding => finding;
+
+const evidenceKeysByFinding: Record<string, string[]> = {
+  low_do: ['doMinimumMgL'],
+  do_decline: ['doMinimumMgL'],
+  ammonia_elevated: ['ammoniaMgL'],
+  abnormal_shrimp_behaviour: ['shrimpBehaviour'],
+  heavy_rain_low_do: ['weatherEvent', 'doMinimumMgL'],
+  high_sludge_load: ['sludgeLoad'],
+  surface_scum_observed: ['surfaceScum'],
+  unsafe_ph: ['phMorning', 'phEvening'],
+  ph_instability: ['phSwing'],
+  feed_allocation_drop: ['daily_feed'],
+  feed_pressure_high: ['daily_feed', 'mbw'],
+  feed_pressure_low: ['daily_feed', 'mbw'],
+  biomass_model_disagreement: ['daily_feed', 'mbw'],
+  slow_growth: ['mbw'],
+  high_fcr: ['daily_feed', 'mbw'],
+  mortality_spike: ['mortality'],
+  low_do_high_temperature: ['doMinimumMgL', 'temperatureC'],
+  high_ph_high_tan: ['phMorning', 'phEvening', 'lab'],
+  low_do_high_tan: ['doMinimumMgL', 'lab'],
+  nh3_elevated: ['lab'],
+  high_nitrite_low_do: ['lab', 'doMinimumMgL'],
+  low_alkalinity_high_ph_swing: ['lab', 'phSwing'],
+  plankton_transparency_instability: ['transparencyCm'],
+  salinity_shock: ['salinityPpt'],
+  lab_report_risk: ['lab'],
+};
+
+const sameDateCompoundFindings = new Set([
+  'heavy_rain_low_do',
+  'low_do_high_temperature',
+  'high_ph_high_tan',
+  'low_do_high_tan',
+  'high_nitrite_low_do',
+  'low_alkalinity_high_ph_swing',
+  'plankton_transparency_instability',
+]);
+
+const qualifyFindingEvidence = (
+  finding: OrsonRiskFinding,
+  metrics: OrsonPondMetrics,
+  asOf: Date | string,
+): OrsonRiskFinding => {
+  if (finding.severity === 'info' || finding.id === 'missing_data') return finding;
+  const keys = finding.supportingMetricKeys ?? evidenceKeysByFinding[finding.id] ?? [];
+  const evidence = keys.map((key) => metrics.evidence?.allMetrics[key] ?? null);
+  const validEvidence = evidence.filter((item): item is NonNullable<typeof item> => item !== null);
+  const fresh = validEvidence.map((item) => ({
+    item,
+    freshness: evaluateMeasurementFreshness(item, asOf, {
+      domain: item.domain,
+      timeZone: metrics.evidence?.timeZone,
+    }),
+  }));
+  const hasAllRequiredEvidence = keys.length > 0 && validEvidence.length === keys.length;
+  const allFresh = hasAllRequiredEvidence && fresh.every(({ item, freshness }) => item.isFresh && freshness.isFresh);
+  const dates = validEvidence.map((item) => item.date).filter((date): date is string => Boolean(date));
+  const requiresSameDate = finding.requiresSameDateEvidence === true
+    || (finding.requiresSameDateEvidence !== false && sameDateCompoundFindings.has(finding.id));
+  const dateCompatible = !requiresSameDate
+    || (dates.length === keys.length && dates.every((date) => date === dates[0]));
+  const alreadyHistorical = finding.isHistorical === true || finding.status === 'historical';
+  const current = allFresh && dateCompatible && !alreadyHistorical;
+  const eventDate = dates.slice().sort().reverse()[0] ?? finding.eventDate;
+
+  if (current) {
+    return {
+      ...finding,
+      eventDate,
+      measurementEvidence: validEvidence,
+      status: 'current',
+      isHistorical: false,
+    };
+  }
+
+  const reason = !hasAllRequiredEvidence
+    ? 'one or more measurements have no dated source record'
+    : !dateCompatible
+      ? 'combined measurements were recorded on different farm-local dates'
+      : fresh.some(({ freshness }) => freshness.isFuture)
+        ? 'one or more measurements are future-dated'
+        : fresh.some(({ freshness }) => !freshness.valid)
+          ? 'one or more measurements have an invalid or missing date'
+          : 'one or more measurements are stale';
+  const ageText = fresh
+    .map(({ freshness }) => freshness.ageDays)
+    .filter((age): age is number => age !== null)
+    .sort((a, b) => b - a)[0];
+  const qualifier = ageText === undefined ? reason : `${reason} (${ageText} farm-local days old)`;
+  return {
+    ...finding,
+    severity: 'watch',
+    title: /^historical\b/i.test(finding.title) ? finding.title : `Historical ${finding.title}`,
+    summary: `${finding.summary} Current conditions are unverified because ${qualifier}.`,
+    recommendation: `${finding.recommendation} Recheck the relevant measurements before treating this as a current condition.`,
+    eventDate,
+    measurementEvidence: validEvidence,
+    status: 'historical',
+    isHistorical: true,
+  };
+};
 
 const severityFromLabStatus = (status: OrsonLabStatusLevel | null): OrsonRiskSeverity | null => {
   if (status === 'critical') return 'critical';
@@ -51,15 +160,58 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
   const dataScore = metrics.dataCompleteness.score;
   const labSeverity = severityFromLabStatus(metrics.labContext.worstStatus);
   const labWater = latestLabWaterMetrics(metrics);
+  // Re-evaluate measurement age when producing the report; cached metric evidence
+  // may have been calculated before a later risk evaluation.
+  const asOfDateKey = generatedAt;
+  const timeZone = metrics.evidence?.timeZone;
   const latestPhValues = [metrics.latestPhMorning, metrics.latestPhEvening].filter(hasNumber);
   const latestPhMinimum = latestPhValues.length > 0 ? Math.min(...latestPhValues) : null;
   const latestPhMaximum = latestPhValues.length > 0 ? Math.max(...latestPhValues) : null;
   const latestDoRecord = [...metrics.dailyRecords14d].reverse().find((record) => hasNumber(record.doMinimumMgL)) ?? null;
+  const latestPhRecord = [...metrics.dailyRecords14d].reverse().find((record) => hasNumber(record.phMorning) || hasNumber(record.phEvening)) ?? null;
+  const latestTemperatureRecord = [...metrics.dailyRecords14d].reverse().find((record) => hasNumber(record.temperatureC)) ?? null;
   const latestAmmoniaRecord = [...metrics.dailyRecords14d].reverse().find((record) => hasNumber(record.ammoniaMgL)) ?? null;
   const latestWeatherRecord = [...metrics.dailyRecords14d].reverse().find((record) => record.weatherEvent !== null) ?? null;
   const latestSludgeRecord = [...metrics.dailyRecords14d].reverse().find((record) => record.sludgeLoad !== null) ?? null;
   const latestScumRecord = [...metrics.dailyRecords14d].reverse().find((record) => record.surfaceScum !== null) ?? null;
   const latestBehaviourRecord = [...metrics.dailyRecords14d].reverse().find((record) => record.shrimpBehaviour !== null) ?? null;
+
+  const doEvidence = metrics.evidence?.allMetrics?.doMinimumMgL ?? null;
+  const doDate = latestDoRecord?.date ?? doEvidence?.date ?? null;
+  const doFreshness = doEvidence
+    ? evaluateMeasurementFreshness(doEvidence, asOfDateKey, { domain: 'water', timeZone })
+    : latestDoRecord
+      ? evaluateMeasurementFreshness({ date: latestDoRecord.date, observedAt: latestDoRecord.observedAt?.[0] ?? null }, asOfDateKey, { domain: 'water', timeZone })
+      : evaluateMeasurementFreshness(null, asOfDateKey, { domain: 'water', timeZone });
+  const isDoFresh = Boolean(doFreshness?.isFresh);
+  const doAgeDays = doFreshness?.ageDays ?? null;
+
+  const tempEvidence = metrics.evidence?.allMetrics?.temperatureC ?? null;
+  const tempDate = latestTemperatureRecord?.date ?? tempEvidence?.date ?? null;
+  const tempFreshness = tempEvidence
+    ? evaluateMeasurementFreshness(tempEvidence, asOfDateKey, { domain: 'water', timeZone })
+    : latestTemperatureRecord
+      ? evaluateMeasurementFreshness({ date: latestTemperatureRecord.date, observedAt: latestTemperatureRecord.observedAt?.[0] ?? null }, asOfDateKey, { domain: 'water', timeZone })
+      : evaluateMeasurementFreshness(null, asOfDateKey, { domain: 'water', timeZone });
+  const isTempFresh = Boolean(tempFreshness?.isFresh);
+
+  const phEvidence = metrics.evidence?.allMetrics?.phSwing ?? null;
+  const phDate = latestPhRecord?.date ?? phEvidence?.date ?? null;
+  const phFreshness = phEvidence
+    ? evaluateMeasurementFreshness(phEvidence, asOfDateKey, { domain: 'water', timeZone })
+    : latestPhRecord
+      ? evaluateMeasurementFreshness({ date: latestPhRecord.date, observedAt: latestPhRecord.observedAt?.[0] ?? null }, asOfDateKey, { domain: 'water', timeZone })
+      : evaluateMeasurementFreshness(null, asOfDateKey, { domain: 'water', timeZone });
+  const isPhFresh = Boolean(phFreshness?.isFresh);
+
+  const labEvidence = metrics.evidence?.allMetrics?.lab ?? null;
+  const labDate = labWater?.date ?? metrics.labContext.latest?.sampleDate ?? labEvidence?.date ?? null;
+  const labFreshness = labWater
+    ? evaluateMeasurementFreshness({ date: labWater.date, measuredAt: labWater.measuredAt ?? metrics.labContext.latest?.measuredAt }, asOfDateKey, { domain: 'lab', timeZone })
+    : labEvidence
+      ? evaluateMeasurementFreshness(labEvidence, asOfDateKey, { domain: 'lab', timeZone })
+      : evaluateMeasurementFreshness(null, asOfDateKey, { domain: 'lab', timeZone });
+  const isLabFresh = Boolean(labFreshness?.isFresh);
 
   if (labSeverity) {
     const latestLab = metrics.labContext.latest ?? metrics.labContext.byType[0] ?? null;
@@ -81,24 +233,44 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
       recommendation: metrics.labContext.recommendations[0] ??
         'Treat the confirmed lab finding as high-confidence context and compare it with the latest water quality, growth, appetite, and mortality trends.',
       metricRefs: ['labContext'],
+      eventDate: latestLab?.sampleDate ?? undefined,
     }));
   }
 
   if (hasNumber(metrics.doMinimumLatest) && metrics.doMinimumLatest < 5) {
-    findings.push(createFinding({
-      id: 'low_do',
-      severity: metrics.doMinimumLatest < 3.5 ? 'critical' : 'warning',
-      confidence: confidenceFromCompleteness(0.92, dataScore),
-      title: 'Low dissolved oxygen',
-      summary: `Latest DO minimum is ${metrics.doMinimumLatest} mg/L.`,
-      evidence: [
-        `DO minimum: ${metrics.doMinimumLatest} mg/L`,
-        `DO trend: ${metrics.doMinimumTrend.direction}`,
-      ],
-      recommendation: 'Increase aeration and recheck DO before the next feeding window, especially before sunrise.',
-      metricRefs: ['doMinimumLatest', 'doMinimumTrend'],
-      eventDate: latestDoRecord?.date,
-    }));
+    if (isDoFresh) {
+      findings.push(createFinding({
+        id: 'low_do',
+        severity: metrics.doMinimumLatest < 3.5 ? 'critical' : 'warning',
+        confidence: confidenceFromCompleteness(0.92, dataScore),
+        title: 'Low dissolved oxygen',
+        summary: `Latest DO minimum is ${metrics.doMinimumLatest} mg/L.`,
+        evidence: [
+          `DO minimum: ${metrics.doMinimumLatest} mg/L`,
+          `DO trend: ${metrics.doMinimumTrend.direction}`,
+          ...(doDate ? [`Observation date: ${doDate}`] : []),
+        ],
+        recommendation: 'Increase aeration and recheck DO before the next feeding window, especially before sunrise.',
+        metricRefs: ['doMinimumLatest', 'doMinimumTrend'],
+        eventDate: latestDoRecord?.date,
+      }));
+    } else {
+      findings.push(createFinding({
+        id: 'low_do',
+        severity: 'watch',
+        confidence: confidenceFromCompleteness(0.65, dataScore),
+        title: `Historical low DO (${doAgeDays ?? 'unknown age'}d old - recheck required)`,
+        summary: `Low DO (${metrics.doMinimumLatest} mg/L) was recorded ${doAgeDays ?? 'unknown'} days ago on ${latestDoRecord?.date ?? 'an older date'}. Stale abnormal data is historical; recheck DO immediately.`,
+        evidence: [
+          `Recorded DO minimum: ${metrics.doMinimumLatest} mg/L`,
+          `Observation date: ${latestDoRecord?.date ?? 'unknown'} (${doAgeDays ?? 'unknown'} days old - stale)`,
+          'Current safety: unverified; stale readings cannot establish current safety or active emergency',
+        ],
+        recommendation: 'Perform an immediate dissolved oxygen measurement before feeding or adjusting operations. Stale abnormal data cannot confirm current safety.',
+        metricRefs: ['doMinimumLatest', 'doMinimumTrend'],
+        eventDate: latestDoRecord?.date,
+      }));
+    }
   }
 
   if (latestAmmoniaRecord && hasNumber(latestAmmoniaRecord.ammoniaMgL) && latestAmmoniaRecord.ammoniaMgL >= 1) {
@@ -197,6 +369,10 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
       ],
       recommendation: 'Recheck pH and alkalinity before changing feed or water-management inputs; avoid abrupt chemical correction.',
       metricRefs: ['latestPhMorning', 'latestPhEvening'],
+      supportingMetricKeys: [
+        ...(hasNumber(metrics.latestPhMorning) ? ['phMorning'] : []),
+        ...(hasNumber(metrics.latestPhEvening) ? ['phEvening'] : []),
+      ],
     }));
   }
 
@@ -204,42 +380,121 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
     hasNumber(metrics.doMinimumLatest) && metrics.doMinimumLatest < 5
     && hasNumber(metrics.latestTemperatureC) && metrics.latestTemperatureC > 30
   ) {
-    findings.push(createFinding({
-      id: 'low_do_high_temperature',
-      severity: 'warning',
-      confidence: confidenceFromCompleteness(0.86, dataScore),
-      title: 'Low DO combined with high temperature',
-      summary: `DO is ${metrics.doMinimumLatest} mg/L while temperature is ${metrics.latestTemperatureC} C.`,
-      evidence: [`DO minimum: ${metrics.doMinimumLatest} mg/L`, `Temperature: ${metrics.latestTemperatureC} C`],
-      recommendation: 'Increase aeration, avoid feed increases, and recheck early-morning DO and temperature.',
-      metricRefs: ['doMinimumLatest', 'latestTemperatureC'],
-    }));
+    const doTempDiff = (doDate && tempDate) ? Math.abs(differenceInFarmCalendarDays(doDate, tempDate)) : 0;
+    const isDoTempCompatible = isDoFresh && isTempFresh && doTempDiff === 0 && Boolean(doDate && tempDate);
+
+    if (isDoTempCompatible) {
+      const isCritical = metrics.doMinimumLatest < 3.5 || (metrics.doMinimumLatest < 4 && metrics.latestTemperatureC > 32);
+      findings.push(createFinding({
+        id: 'low_do_high_temperature',
+        severity: isCritical ? 'critical' : 'warning',
+        confidence: confidenceFromCompleteness(0.86, dataScore),
+        title: 'Low DO combined with high temperature',
+        summary: `DO is ${metrics.doMinimumLatest} mg/L while temperature is ${metrics.latestTemperatureC} C.`,
+        evidence: [
+          `DO minimum: ${metrics.doMinimumLatest} mg/L`,
+          `Temperature: ${metrics.latestTemperatureC} C`,
+          ...(doDate ? [`Observation date: ${doDate}`] : []),
+        ],
+        recommendation: 'Increase aeration, avoid feed increases, and recheck early-morning DO and temperature.',
+        metricRefs: ['doMinimumLatest', 'latestTemperatureC'],
+        eventDate: doDate ?? undefined,
+      }));
+    } else {
+      findings.push(createFinding({
+        id: 'low_do_high_temperature',
+        severity: 'watch',
+        confidence: confidenceFromCompleteness(0.65, dataScore),
+        title: 'Historical low DO with high temperature (differing dates)',
+        summary: `DO was ${metrics.doMinimumLatest} mg/L on ${doDate ?? 'unknown'} while temperature was ${metrics.latestTemperatureC} C on ${tempDate ?? 'unknown'}. Differing dates represent qualified history; recheck simultaneous conditions.`,
+        evidence: [
+          `DO minimum: ${metrics.doMinimumLatest} mg/L (${doDate ?? 'unknown'})`,
+          `Temperature: ${metrics.latestTemperatureC} C (${tempDate ?? 'unknown'})`,
+          'Temporal status: differing observation dates (qualified history)',
+        ],
+        recommendation: 'Measure DO and water temperature simultaneously in the next morning round.',
+        metricRefs: ['doMinimumLatest', 'latestTemperatureC'],
+        eventDate: doDate ?? tempDate ?? undefined,
+      }));
+    }
   }
 
   if (labWater && hasNumber(labWater.tanMgL) && labWater.tanMgL > 1) {
     if (hasNumber(metrics.doMinimumLatest) && metrics.doMinimumLatest < 4) {
-      findings.push(createFinding({
-        id: 'low_do_high_tan',
-        severity: 'critical',
-        confidence: 0.9,
-        title: 'Low DO combined with high TAN',
-        summary: `TAN is ${labWater.tanMgL} mg/L while DO is ${metrics.doMinimumLatest} mg/L.`,
-        evidence: [`TAN: ${labWater.tanMgL} mg/L`, `DO minimum: ${metrics.doMinimumLatest} mg/L`],
-        recommendation: 'Increase aeration immediately, hold feed increases, inspect organic load, and retest TAN, pH, temperature, and DO.',
-        metricRefs: ['labContext.metrics.waterQuality.tanMgL', 'doMinimumLatest'],
-      }));
+      const doLabDiff = (doDate && labDate) ? Math.abs(differenceInFarmCalendarDays(doDate, labDate)) : 0;
+      const isDoLabCompatible = isDoFresh && isLabFresh && doLabDiff === 0 && Boolean(doDate && labDate);
+
+      if (isDoLabCompatible) {
+        findings.push(createFinding({
+          id: 'low_do_high_tan',
+          severity: 'critical',
+          confidence: 0.9,
+          title: 'Low DO combined with high TAN',
+          summary: `TAN is ${labWater.tanMgL} mg/L while DO is ${metrics.doMinimumLatest} mg/L.`,
+          evidence: [
+            `TAN: ${labWater.tanMgL} mg/L`,
+            `DO minimum: ${metrics.doMinimumLatest} mg/L`,
+            ...(doDate ? [`Date: ${doDate}`] : []),
+          ],
+          recommendation: 'Increase aeration immediately, hold feed increases, inspect organic load, and retest TAN, pH, temperature, and DO.',
+          metricRefs: ['labContext.metrics.waterQuality.tanMgL', 'doMinimumLatest'],
+          eventDate: doDate ?? undefined,
+        }));
+      } else {
+        findings.push(createFinding({
+          id: 'low_do_high_tan',
+          severity: 'watch',
+          confidence: 0.7,
+          title: 'Historical low DO with high TAN (differing dates)',
+          summary: `Lab TAN was ${labWater.tanMgL} mg/L on ${labDate ?? 'unknown'} while DO was ${metrics.doMinimumLatest} mg/L on ${doDate ?? 'unknown'}. Differing dates represent qualified history; retest TAN and DO concurrently.`,
+          evidence: [
+            `TAN: ${labWater.tanMgL} mg/L (${labDate ?? 'unknown'})`,
+            `DO minimum: ${metrics.doMinimumLatest} mg/L (${doDate ?? 'unknown'})`,
+            'Temporal status: differing observation dates (qualified history)',
+          ],
+          recommendation: 'Retest TAN concurrently with morning DO before modifying feeding or applying treatments.',
+          metricRefs: ['labContext.metrics.waterQuality.tanMgL', 'doMinimumLatest'],
+          eventDate: doDate ?? labDate ?? undefined,
+        }));
+      }
     }
     if (hasNumber(latestPhMaximum) && latestPhMaximum > 8.5) {
-      findings.push(createFinding({
-        id: 'high_ph_high_tan',
-        severity: 'critical',
-        confidence: 0.9,
-        title: 'High pH combined with high TAN',
-        summary: `TAN is ${labWater.tanMgL} mg/L while pH reaches ${latestPhMaximum}.`,
-        evidence: [`TAN: ${labWater.tanMgL} mg/L`, `Highest latest pH: ${latestPhMaximum}`],
-        recommendation: 'Do not raise pH or feed pressure; strengthen aeration and retest TAN/NH3 with pH and temperature.',
-        metricRefs: ['labContext.metrics.waterQuality.tanMgL', 'latestPhMorning', 'latestPhEvening'],
-      }));
+      const phLabDiff = (phDate && labDate) ? Math.abs(differenceInFarmCalendarDays(phDate, labDate)) : 0;
+      const isPhLabCompatible = isPhFresh && isLabFresh && phLabDiff === 0 && Boolean(phDate && labDate);
+
+      if (isPhLabCompatible) {
+        findings.push(createFinding({
+          id: 'high_ph_high_tan',
+          severity: 'critical',
+          confidence: 0.9,
+          title: 'High pH combined with high TAN',
+          summary: `TAN is ${labWater.tanMgL} mg/L while pH reaches ${latestPhMaximum}.`,
+          evidence: [
+            `TAN: ${labWater.tanMgL} mg/L`,
+            `Highest latest pH: ${latestPhMaximum}`,
+            ...(phDate ? [`Date: ${phDate}`] : []),
+          ],
+          recommendation: 'Do not raise pH or feed pressure; strengthen aeration and retest TAN/NH3 with pH and temperature.',
+          metricRefs: ['labContext.metrics.waterQuality.tanMgL', 'latestPhMorning', 'latestPhEvening'],
+          eventDate: phDate ?? undefined,
+        }));
+      } else {
+        findings.push(createFinding({
+          id: 'high_ph_high_tan',
+          severity: 'watch',
+          confidence: 0.7,
+          title: 'Historical high pH with high TAN (differing dates)',
+          summary: `Lab TAN was ${labWater.tanMgL} mg/L on ${labDate ?? 'unknown'} while pH reached ${latestPhMaximum} on ${phDate ?? 'unknown'}. Differing dates represent qualified history; retest TAN and pH concurrently.`,
+          evidence: [
+            `TAN: ${labWater.tanMgL} mg/L (${labDate ?? 'unknown'})`,
+            `Highest latest pH: ${latestPhMaximum} (${phDate ?? 'unknown'})`,
+            'Temporal status: differing observation dates (qualified history)',
+          ],
+          recommendation: 'Retest TAN and pH simultaneously before taking corrective action.',
+          metricRefs: ['labContext.metrics.waterQuality.tanMgL', 'latestPhMorning', 'latestPhEvening'],
+          eventDate: phDate ?? labDate ?? undefined,
+        }));
+      }
     }
   }
 
@@ -250,9 +505,10 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
       confidence: 0.92,
       title: 'Unionized ammonia is elevated',
       summary: `Confirmed lab NH3 is ${labWater.nh3MgL} mg/L.`,
-      evidence: [`NH3: ${labWater.nh3MgL} mg/L`],
+      evidence: [`NH3: ${labWater.nh3MgL} mg/L`, ...(labDate ? [`Sample date: ${labDate}`] : [])],
       recommendation: 'Hold feed increases, protect DO, reduce organic-load drivers, and follow the confirmed lab recommendation.',
       metricRefs: ['labContext.metrics.waterQuality.nh3MgL'],
+      eventDate: labDate ?? undefined,
     }));
   }
 
@@ -260,32 +516,84 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
     labWater && hasNumber(labWater.nitriteMgL) && labWater.nitriteMgL > 0.3
     && hasNumber(metrics.doMinimumLatest) && metrics.doMinimumLatest < 5
   ) {
-    findings.push(createFinding({
-      id: 'high_nitrite_low_do',
-      severity: 'critical',
-      confidence: 0.9,
-      title: 'High nitrite combined with low DO',
-      summary: `Nitrite is ${labWater.nitriteMgL} mg/L while DO is ${metrics.doMinimumLatest} mg/L.`,
-      evidence: [`NO2: ${labWater.nitriteMgL} mg/L`, `DO minimum: ${metrics.doMinimumLatest} mg/L`],
-      recommendation: 'Increase aeration, reduce feed pressure, check alkalinity and organic load, and retest nitrite.',
-      metricRefs: ['labContext.metrics.waterQuality.nitriteMgL', 'doMinimumLatest'],
-    }));
+    const doLabDiff = (doDate && labDate) ? Math.abs(differenceInFarmCalendarDays(doDate, labDate)) : 0;
+    const isDoLabCompatible = isDoFresh && isLabFresh && doLabDiff === 0 && Boolean(doDate && labDate);
+
+    if (isDoLabCompatible) {
+      findings.push(createFinding({
+        id: 'high_nitrite_low_do',
+        severity: 'critical',
+        confidence: 0.9,
+        title: 'High nitrite combined with low DO',
+        summary: `Nitrite is ${labWater.nitriteMgL} mg/L while DO is ${metrics.doMinimumLatest} mg/L.`,
+        evidence: [
+          `NO2: ${labWater.nitriteMgL} mg/L`,
+          `DO minimum: ${metrics.doMinimumLatest} mg/L`,
+          ...(doDate ? [`Date: ${doDate}`] : []),
+        ],
+        recommendation: 'Increase aeration, reduce feed pressure, check alkalinity and organic load, and retest nitrite.',
+        metricRefs: ['labContext.metrics.waterQuality.nitriteMgL', 'doMinimumLatest'],
+        eventDate: doDate ?? undefined,
+      }));
+    } else {
+      findings.push(createFinding({
+        id: 'high_nitrite_low_do',
+        severity: 'watch',
+        confidence: 0.7,
+        title: 'Historical high nitrite with low DO (differing dates)',
+        summary: `Lab nitrite was ${labWater.nitriteMgL} mg/L on ${labDate ?? 'unknown'} while DO was ${metrics.doMinimumLatest} mg/L on ${doDate ?? 'unknown'}. Differing dates represent qualified history; retest nitrite and DO concurrently.`,
+        evidence: [
+          `NO2: ${labWater.nitriteMgL} mg/L (${labDate ?? 'unknown'})`,
+          `DO minimum: ${metrics.doMinimumLatest} mg/L (${doDate ?? 'unknown'})`,
+          'Temporal status: differing observation dates (qualified history)',
+        ],
+        recommendation: 'Retest nitrite concurrently with morning DO before modifying feeding or applying treatments.',
+        metricRefs: ['labContext.metrics.waterQuality.nitriteMgL', 'doMinimumLatest'],
+        eventDate: doDate ?? labDate ?? undefined,
+      }));
+    }
   }
 
   if (
     labWater && hasNumber(labWater.alkalinityMgL) && labWater.alkalinityMgL < 80
     && hasNumber(metrics.phSwingLatest) && metrics.phSwingLatest > 0.5
   ) {
-    findings.push(createFinding({
-      id: 'low_alkalinity_high_ph_swing',
-      severity: 'warning',
-      confidence: 0.88,
-      title: 'Low alkalinity combined with unstable pH',
-      summary: `Alkalinity is ${labWater.alkalinityMgL} mg/L while pH swing is ${metrics.phSwingLatest}.`,
-      evidence: [`Alkalinity: ${labWater.alkalinityMgL} mg/L`, `pH swing: ${metrics.phSwingLatest}`],
-      recommendation: 'Use the farm-approved gradual buffering protocol and monitor morning and evening pH after correction.',
-      metricRefs: ['labContext.metrics.waterQuality.alkalinityMgL', 'phSwingLatest'],
-    }));
+    const phLabDiff = (phDate && labDate) ? Math.abs(differenceInFarmCalendarDays(phDate, labDate)) : 0;
+    const isPhLabCompatible = isPhFresh && isLabFresh && phLabDiff === 0 && Boolean(phDate && labDate);
+
+    if (isPhLabCompatible) {
+      findings.push(createFinding({
+        id: 'low_alkalinity_high_ph_swing',
+        severity: 'warning',
+        confidence: 0.88,
+        title: 'Low alkalinity combined with unstable pH',
+        summary: `Alkalinity is ${labWater.alkalinityMgL} mg/L while pH swing is ${metrics.phSwingLatest}.`,
+        evidence: [
+          `Alkalinity: ${labWater.alkalinityMgL} mg/L`,
+          `pH swing: ${metrics.phSwingLatest}`,
+          ...(phDate ? [`Date: ${phDate}`] : []),
+        ],
+        recommendation: 'Use the farm-approved gradual buffering protocol and monitor morning and evening pH after correction.',
+        metricRefs: ['labContext.metrics.waterQuality.alkalinityMgL', 'phSwingLatest'],
+        eventDate: phDate ?? undefined,
+      }));
+    } else {
+      findings.push(createFinding({
+        id: 'low_alkalinity_high_ph_swing',
+        severity: 'watch',
+        confidence: 0.7,
+        title: 'Historical low alkalinity with unstable pH (differing dates)',
+        summary: `Lab alkalinity was ${labWater.alkalinityMgL} mg/L on ${labDate ?? 'unknown'} while pH swing was ${metrics.phSwingLatest} on ${phDate ?? 'unknown'}. Differing dates represent qualified history; retest alkalinity and pH concurrently.`,
+        evidence: [
+          `Alkalinity: ${labWater.alkalinityMgL} mg/L (${labDate ?? 'unknown'})`,
+          `pH swing: ${metrics.phSwingLatest} (${phDate ?? 'unknown'})`,
+          'Temporal status: differing observation dates (qualified history)',
+        ],
+        recommendation: 'Retest alkalinity and diurnal pH together before adding buffer additives.',
+        metricRefs: ['labContext.metrics.waterQuality.alkalinityMgL', 'phSwingLatest'],
+        eventDate: phDate ?? labDate ?? undefined,
+      }));
+    }
   }
 
   const transparencyOutsideTarget = hasNumber(metrics.latestTransparencyCm)
@@ -293,6 +601,9 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
   const waterUnstable = (hasNumber(metrics.doMinimumLatest) && metrics.doMinimumLatest < 5)
     || (hasNumber(metrics.phSwingLatest) && metrics.phSwingLatest > 0.5);
   if (transparencyOutsideTarget && waterUnstable) {
+    const unstableMetric = hasNumber(metrics.doMinimumLatest) && metrics.doMinimumLatest < 5
+      ? 'doMinimumMgL'
+      : 'phSwing';
     findings.push(createFinding({
       id: 'plankton_transparency_instability',
       severity: 'watch',
@@ -305,6 +616,8 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
       ],
       recommendation: 'Check pond color and plankton condition, maintain aeration, and avoid abrupt bloom-control or feed changes.',
       metricRefs: ['latestTransparencyCm', 'doMinimumLatest', 'phSwingLatest'],
+      supportingMetricKeys: ['transparencyCm', unstableMetric],
+      requiresSameDateEvidence: true,
     }));
   }
 
@@ -365,6 +678,7 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
       ],
       recommendation: 'Monitor morning pH and alkalinity closely; avoid sudden feed or water-management changes.',
       metricRefs: ['phSwingTrend'],
+      supportingMetricKeys: ['phSwing'],
     }));
   }
 
@@ -535,17 +849,26 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
     }));
   }
 
-  findings.sort((a, b) => severityRank[b.severity] - severityRank[a.severity] || b.confidence - a.confidence);
+  const qualifiedFindings = findings.map((finding) => qualifyFindingEvidence(
+    finding,
+    metrics,
+    metrics.evidence?.asOfTimestamp ?? generatedAt,
+  ));
+  qualifiedFindings.sort(compareRiskFindings);
 
   return {
     pondId: metrics.pondId,
     pondName: metrics.pondName,
-    overallSeverity: highestSeverity(findings),
-    findings,
+    overallSeverity: highestSeverity(qualifiedFindings),
+    findings: qualifiedFindings,
     generatedAt: generatedAt.toISOString(),
   };
 };
 
+export const compareWholeFarmRiskReports = (a: OrsonRiskReport, b: OrsonRiskReport): number =>
+  comparePondRiskReports(a, b);
+
 export const analyzePondsRisks = (metrics: OrsonPondMetrics[], generatedAt = new Date()): OrsonRiskReport[] => {
-  return metrics.map((pondMetrics) => analyzePondRisks(pondMetrics, generatedAt));
+  const reports = metrics.map((pondMetrics) => analyzePondRisks(pondMetrics, generatedAt));
+  return reports.sort(compareWholeFarmRiskReports);
 };

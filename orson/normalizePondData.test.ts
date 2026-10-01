@@ -115,3 +115,56 @@ export const runNormalizePondDataSelfTest = () => {
 
   return pond;
 };
+
+export const runFeedEvidenceNormalizationSelfTest = () => {
+  const pond = normalizePondData(
+    {
+      id: 'pond-evidence-norm',
+      pondName: 'Evidence Pond',
+      docStart: '2026-03-01',
+      initialPopulation: 80000,
+      initialWeight: '0.45',
+      samplings: [
+        {
+          id: 's-zero-feed',
+          date: '2026-03-05',
+          mbw: 0,
+          feedData: {
+            totalDailyFeed: 0,
+            feedingResponse: 'weak',
+          },
+        },
+        {
+          id: 's-valid-mbw',
+          date: '2026-03-07',
+          mbw: 2.8,
+          feed: 18,
+        },
+        {
+          id: 's-neg-mbw',
+          date: '2026-03-08',
+          mbw: -1.5,
+          feed: 'n/a',
+        },
+      ],
+    },
+    { now: new Date('2026-03-10T00:00:00Z') },
+  );
+
+  const zeroRecord = pond.records.find((r) => r.id === 's-zero-feed');
+  assert(zeroRecord !== undefined, 'finds zero feed record');
+  assert(zeroRecord?.feedKg === 0, 'preserves explicit zero feedKg');
+  assert(zeroRecord?.feedData?.isExplicitZero === true, 'flags isExplicitZero as true');
+  assert(zeroRecord?.feedData?.totalDailyFeedKg === 0, 'feedData totalDailyFeedKg is 0');
+  assert(zeroRecord?.mbwG === null, 'zero mbw normalizes to null (positive-only)');
+  assert(zeroRecord?.isFresh === true, 'evaluates freshness within window');
+  assert(typeof zeroRecord?.ageDays === 'number', 'populates ageDays');
+
+  const validRecord = pond.records.find((r) => r.id === 's-valid-mbw');
+  assert(validRecord?.mbwG === 2.8, 'positive mbw is preserved');
+  assert(validRecord?.feedKg === 18, 'parses numeric feed string/number');
+
+  const negRecord = pond.records.find((r) => r.id === 's-neg-mbw');
+  assert(negRecord?.mbwG === null, 'negative mbw normalizes to null');
+  assert(negRecord?.feedKg === null, 'empty token feed normalizes to null');
+};

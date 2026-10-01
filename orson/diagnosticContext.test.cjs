@@ -323,3 +323,69 @@ test('the 20 synthetic diagnostic contexts retain knowledge, pond evidence and t
     if (scenario.ponds.length) assert.match(request, /ORSON RISK PAYLOAD/, scenario.id);
   }
 });
+
+test('prompt context carries evidence provenance, freshness, per-metric coverage, and preserves explicit zero feed without double counting', () => {
+  const result = buildOrsonAnalysis([
+    pond('Truth Pond', [
+      { id: 's-stock', date: '2026-08-01', mbw: 2.0 },
+      { id: 's-mid', date: '2026-08-15', mbw: 5.0, feed: 30 },
+      {
+        id: 's-zero',
+        date: '2026-09-02',
+        mbw: 12.0,
+        feed: 20,
+        feedData: { totalDailyFeed: 0 },
+        doMorning: 5.2,
+      },
+      {
+        id: 's-prev',
+        date: '2026-09-03',
+        feedData: { totalDailyFeed: 45 },
+        doMorning: 4.8,
+        doEvening: 5.5,
+      },
+      dailyRecord('2026-09-04', 1, {
+        id: 'rec-latest',
+        feedData: { totalDailyFeed: 50 },
+        doMorning: 4.5,
+        doEvening: 5.2,
+      }),
+    ]),
+  ], 'Analyze feed and water quality in Truth Pond', now);
+
+  const pack = result.promptPackage;
+  const payload = riskPayload(pack.context)[0];
+
+  assert.ok(payload.evidence, 'evidence summary exists');
+  assert.equal(payload.evidence.as_of_date, '2026-09-04');
+  assert.equal(payload.evidence.farm_time_zone, 'UTC');
+  assert.ok(payload.evidence.water, 'water metric evidence exists');
+  assert.equal(payload.evidence.water.date, '2026-09-04');
+  assert.equal(payload.evidence.water.is_fresh, true);
+  assert.equal(payload.evidence.water.age_days, 0);
+  assert.ok(payload.evidence.water.coverage.recorded_days > 0);
+
+  const dayZero = payload.daily_records_14d.find((r) => r.date === '2026-09-02');
+  assert.ok(dayZero, 'record for 2026-09-02 exists');
+  assert.equal(dayZero.feed_kg, 0, 'authoritative zero feed is preserved');
+  assert.equal(dayZero.feed_kg_display, '0.0', 'zero feed formatted display is preserved');
+  assert.equal(dayZero.feed_source, 'daily_feed', 'authoritative feed wins over sampling estimate');
+  assert.equal(dayZero.actual_daily_feed_kg, 0);
+  assert.equal(dayZero.sampling_feed_estimate_kg, 20);
+
+  assert.equal(dayZero.ph_morning, undefined, 'missing ph_morning stays undefined/unknown');
+  assert.equal(dayZero.ammonia_mg_l, undefined, 'missing ammonia stays undefined/unknown');
+
+  assert.ok(payload.growth_evidence, 'growth evidence exists');
+  assert.equal(payload.growth_evidence.adg_source, 'measured');
+  assert.equal(typeof payload.growth_evidence.sample_count, 'number');
+  assert.equal(payload.growth_evidence.latest_date, '2026-09-02');
+  assert.equal(payload.growth_evidence.age_days, 2);
+  assert.equal(payload.growth_evidence.is_fresh, true);
+
+  assert.match(pack.systemInstruction, /Always use farm-local calendar dates/);
+  assert.match(pack.systemInstruction, /Stale normal data is not current safety/);
+  assert.match(pack.systemInstruction, /Logged feed allocation is an operational distribution/);
+  assert.match(pack.systemInstruction, /Explicit zero feed \(0 kg\) indicates feeding was halted or fasted/);
+  assert.match(pack.systemInstruction, /A missing observation is strictly unknown/);
+});

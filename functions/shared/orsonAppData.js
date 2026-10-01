@@ -1,5 +1,7 @@
 'use strict';
 const { hasUserPermission } = require('./permissions');
+const { selectDailyFeedEntries } = require('./orsonDomain/orsonEvidence');
+const { normalizeFarmDateKey } = require('./orsonDomain/farmDate');
 const DATASETS = Object.freeze({
   ponds: 'viewFarm', physicalPonds: 'viewFarm', blocks: 'viewFarm', cycles: 'viewFarm',
   feeds: 'viewFarm', additives: 'viewFarm', harvestRecords: 'viewFarm', labReports: 'viewFarm',
@@ -62,12 +64,7 @@ const round = (value, decimals = 3) => {
   const factor = 10 ** decimals;
   return Math.round((number + Number.EPSILON) * factor) / factor;
 };
-const dateKey = value => {
-  if (typeof value === 'string' && validDateKey(value.slice(0, 10))) return value.slice(0, 10);
-  if (typeof value?.toDate === 'function') return value.toDate().toISOString().slice(0, 10);
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
-  return null;
-};
+const dateKey = (value, timeZone) => normalizeFarmDateKey(value, timeZone);
 const farmToday = timeZone => {
   try {
     const parts = new Intl.DateTimeFormat('en', { timeZone: timeZone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
@@ -89,23 +86,55 @@ const buildPondTimeline = (pondId, pond, args, timeZone) => {
   const startDate = shiftDate(endDate, -(days - 1));
   const timeline = new Map();
   const ensureDay = date => {
-    if (!timeline.has(date)) timeline.set(date, { date, mortalityCount: null, legacyMortalityCount: null, dedicatedMortalityCount: null, feedKg: null, feedingResponse: null, mbwG: null, doMorningMgL: null, doEveningMgL: null, doMinimumMgL: null, phMorning: null, phEvening: null, phSwing: null, salinityPpt: null, temperatureC: null, transparencyCm: null, events: [] });
+    if (!timeline.has(date)) timeline.set(date, {
+      date,
+      mortalityCount: null,
+      legacyMortalityCount: null,
+      dedicatedMortalityCount: null,
+      feedKg: null,
+      actualDailyFeedKg: null,
+      samplingFeedEstimateKg: null,
+      hasAuthoritativeFeed: false,
+      hasExplicitZeroFeed: false,
+      authoritativeSourceId: null,
+      authoritativeTimestampMs: null,
+      feedMeasuredAt: null,
+      feedPrecision: 'date-only',
+      feedSourceId: null,
+      samplingSourceId: null,
+      samplingTimestampMs: null,
+      feedingResponse: null,
+      mbwG: null,
+      doMorningMgL: null,
+      doEveningMgL: null,
+      doMinimumMgL: null,
+      phMorning: null,
+      phEvening: null,
+      phSwing: null,
+      salinityPpt: null,
+      temperatureC: null,
+      transparencyCm: null,
+      events: []
+    });
     return timeline.get(date);
   };
   const setNumber = (day, key, value, decimals = 3) => {
     const parsed = round(value, decimals);
     if (parsed !== null) day[key] = parsed;
   };
+  const selectedFeedEntries = selectDailyFeedEntries(
+    (Array.isArray(pond.samplings) ? pond.samplings : []).filter(record => belongsToCurrentCycle(record, pond)),
+    { allowSamplingEstimate: true, asOfDate: endDate, timeZone },
+  );
   for (const record of (Array.isArray(pond.samplings) ? pond.samplings : [])) {
-    const date = dateKey(record?.date);
+    const date = dateKey(record?.measuredAt ?? record?.observedAt ?? record?.date, timeZone);
     if (!date || date < startDate || date > endDate || !belongsToCurrentCycle(record, pond)) continue;
     const day = ensureDay(date);
     const mbw = finite(record.mbw ?? record.abw);
     if (mbw !== null && mbw > 0) day.mbwG = round(mbw);
     const legacyMortality = finite(record.mortality);
     if (legacyMortality !== null && legacyMortality > 0) day.legacyMortalityCount = round((day.legacyMortalityCount ?? 0) + legacyMortality, 0);
-    const feed = finite(record.feedData?.totalDailyFeed ?? record.feed);
-    if (feed !== null && feed > 0) day.feedKg = Math.max(day.feedKg ?? 0, round(feed));
+
     if (typeof record.feedData?.feedingResponse === 'string' && record.feedData.feedingResponse.trim()) day.feedingResponse = record.feedData.feedingResponse.trim().slice(0, 80);
     setNumber(day, 'doMorningMgL', record.doMorning);
     setNumber(day, 'doEveningMgL', record.doEvening);
@@ -124,8 +153,24 @@ const buildPondTimeline = (pondId, pond, args, timeZone) => {
     if (record.shrimpBehaviour) day.events.push(`Shrimp behaviour: ${String(record.shrimpBehaviour).slice(0, 80)}`);
     if (record.harvestData) day.events.push('Harvest recorded');
   }
+  for (const entry of selectedFeedEntries) {
+    if (entry.farmDate < startDate || entry.farmDate > endDate) continue;
+    const day = ensureDay(entry.farmDate);
+    day.feedMeasuredAt = entry.measuredAt;
+    day.feedPrecision = entry.precision;
+    day.feedSourceId = entry.sourceIds[0] || null;
+    if (entry.hasAuthoritativeDailyFeed) {
+      day.hasAuthoritativeFeed = true;
+      day.hasExplicitZeroFeed = entry.feedKg === 0;
+      day.actualDailyFeedKg = entry.feedKg;
+      day.authoritativeSourceId = entry.sourceIds[0] || null;
+    } else if (entry.isEstimate) {
+      day.samplingFeedEstimateKg = entry.feedKg;
+      day.samplingSourceId = entry.sourceIds[0] || null;
+    }
+  }
   for (const record of (Array.isArray(pond.mortalityRecords) ? pond.mortalityRecords : [])) {
-    const date = dateKey(record?.date);
+    const date = dateKey(record?.measuredAt ?? record?.observedAt ?? record?.date, timeZone);
     if (!date || date < startDate || date > endDate || !belongsToCurrentCycle(record, pond)) continue;
     const count = finite(record.count);
     if (count === null || (count <= 0 && record.observationType !== 'none_observed')) continue;
@@ -134,9 +179,28 @@ const buildPondTimeline = (pondId, pond, args, timeZone) => {
     if (record.observationType) day.events.push(`Mortality observation: ${String(record.observationType).slice(0, 80)}`);
   }
   const rows = [...timeline.values()].sort((a, b) => a.date.localeCompare(b.date)).map(day => {
-    const { legacyMortalityCount, dedicatedMortalityCount, ...publicDay } = day;
+    const {
+      legacyMortalityCount,
+      dedicatedMortalityCount,
+      hasAuthoritativeFeed,
+      hasExplicitZeroFeed,
+      authoritativeFeedTotals,
+      samplingFeedTotals,
+      actualDailyFeedKg,
+      samplingFeedEstimateKg,
+      ...publicDay
+    } = day;
+
+    const hasAuth = hasExplicitZeroFeed || (hasAuthoritativeFeed && actualDailyFeedKg !== null);
+    const resolvedFeedKg = hasAuth
+      ? (hasExplicitZeroFeed ? 0 : round(actualDailyFeedKg, 2))
+      : samplingFeedEstimateKg !== null
+        ? round(samplingFeedEstimateKg, 2)
+        : null;
+
     return {
       ...publicDay,
+      feedKg: resolvedFeedKg,
       mortalityCount: dedicatedMortalityCount ?? legacyMortalityCount,
       events: [...new Set(day.events)],
     };

@@ -19,11 +19,18 @@ import {
   normalizeFarmDateKey,
   resolveFarmTimeZone,
 } from '../shared/farmDate';
+import {
+  parseFeedKg,
+  validateFeedKg,
+  evaluateMeasurementFreshness,
+} from '../shared/orsonEvidence';
 
 type RawRecord = Record<string, any>;
 type RawPond = Record<string, any>;
 
 const EMPTY_VALUES = new Set(['', 'n/a', 'na', 'null', 'undefined', '--', '-']);
+
+const hasNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
 const LAB_STATUS_RANK: Record<OrsonLabStatusLevel, number> = {
   good: 0,
@@ -123,6 +130,7 @@ const normalizeLabMetrics = (value: unknown): OrsonLabMetrics | null => {
 
   const normalizedWater: NonNullable<OrsonLabMetrics['waterQuality']> = {
     date: normalizeDateString(water.date),
+    measuredAt: normalizeObservedAt(water.measuredAt ?? water.observedAt ?? raw.measuredAt ?? raw.observedAt ?? water.date ?? raw.sampleDate ?? raw.date),
     salinityPpt: firstNumber(water.salinityPpt),
     alkalinityMgL: firstNumber(water.alkalinityMgL, water.alkalinityTotal),
     tanMgL: schemaVersion === 2 ? firstNumber(water.tanMgL, water.tan) : firstNumber(water.tan),
@@ -222,6 +230,7 @@ const normalizeLabStatus = (value: unknown): OrsonLabStatusSummary | null => {
     labReportId: firstString(raw.labReportId, raw.reportId, raw.id),
     reportType: firstString(raw.reportType, raw.type),
     sampleDate: normalizeDateString(raw.sampleDate ?? raw.date),
+    measuredAt: normalizeObservedAt(raw.measuredAt ?? raw.observedAt ?? raw.sampleDate ?? raw.date),
     status: normalizeLabStatusLevel(raw.status),
     mainIssue: firstString(raw.mainIssue, raw.summary, raw.issue),
     keyRisks: stringArray(raw.keyRisks, 4),
@@ -433,14 +442,49 @@ const normalizeHistoricalBenchmark = (pond: RawPond): OrsonPromptHistoricalBench
   return null;
 };
 
-const normalizeFeedData = (record: RawRecord): OrsonNormalizedFeedData | null => {
+const normalizeFeedData = (record: RawRecord, timeZone?: string): OrsonNormalizedFeedData | null => {
   const rawFeedData = record.feedData;
-  if (!rawFeedData || typeof rawFeedData !== 'object') return null;
+  const directActual = parseFeedKg(record.actualDailyFeedKg);
+  const measurementValue = rawFeedData && typeof rawFeedData === 'object'
+    ? rawFeedData.measuredAt ?? rawFeedData.observedAt ?? rawFeedData.date ?? record.measuredAt ?? record.observedAt ?? record.date
+    : record.measuredAt ?? record.observedAt ?? record.date;
+  const measuredAt = normalizeObservedAt(measurementValue) ?? normalizeFarmDateKey(measurementValue, timeZone);
+  if (!rawFeedData || typeof rawFeedData !== 'object') {
+    if (directActual !== null && !record.isBaselineEstimate) {
+      return {
+        totalDailyFeedKg: directActual,
+        measuredAt,
+        inventoryFeedId: null,
+        feedType: null,
+        feedingFrequency: null,
+        feedingResponse: null,
+        isExplicitZero: directActual === 0,
+        source: firstString(record.source),
+      };
+    }
+    return null;
+  }
 
-  const totalDailyFeedKg = firstNumber(rawFeedData.totalDailyFeed, record.feed);
+  const directTotal = parseFeedKg(rawFeedData.totalDailyFeedKg ?? rawFeedData.totalDailyFeed ?? directActual);
+  let totalDailyFeedKg: OrsonNumber = null;
+  if (directTotal !== null) {
+    totalDailyFeedKg = directTotal;
+  } else if (Array.isArray(rawFeedData.feedAllocations) && rawFeedData.feedAllocations.length > 0) {
+    let sum = 0;
+    let hasValid = false;
+    for (const alloc of rawFeedData.feedAllocations) {
+      const parsed = parseFeedKg(alloc?.quantityKg);
+      if (parsed !== null) {
+        sum += parsed;
+        hasValid = true;
+      }
+    }
+    if (hasValid) totalDailyFeedKg = Math.round(sum * 1000) / 1000;
+  }
 
   return {
     totalDailyFeedKg,
+    measuredAt,
     inventoryFeedId: firstString(rawFeedData.inventoryFeedId),
     feedType: firstString(rawFeedData.feedType, rawFeedData.feedName),
     feedingFrequency: firstNumber(rawFeedData.feedingFrequency),
@@ -449,14 +493,17 @@ const normalizeFeedData = (record: RawRecord): OrsonNormalizedFeedData | null =>
       || rawFeedData.feedingResponse === 'weak'
       ? rawFeedData.feedingResponse
       : null,
+    isExplicitZero: totalDailyFeedKg === 0,
+    source: firstString(rawFeedData.source, record.source),
   };
 };
 
 const recordKinds = (record: RawRecord, feedData: OrsonNormalizedFeedData | null): OrsonRecordKind[] => {
   const kinds: OrsonRecordKind[] = [];
-  const mbw = firstNumber(record.mbw, record.abw);
+  const rawMbw = firstNumber(record.mbw, record.abw);
+  const mbw = rawMbw !== null && rawMbw > 0 ? rawMbw : null;
   const mortality = firstNumber(record.mortality, record.dead, record.deaths);
-  const feed = firstNumber(record.feed);
+  const feed = parseFeedKg(record.feed);
 
   if ((mbw !== null && mbw > 0) || (mortality !== null && mortality > 0)) kinds.push('sampling');
   if (record.mortalityObservationType) kinds.push('mortality');
@@ -479,11 +526,16 @@ const recordKinds = (record: RawRecord, feedData: OrsonNormalizedFeedData | null
 };
 
 const normalizeRecord = (record: RawRecord, docStartDate: string | null, timeZone?: string): OrsonNormalizedRecord => {
-  const date = normalizeDateString(record.date);
-  const timestampMs = toTimestampMs(date);
-  const feedData = normalizeFeedData(record);
-  const feedKg = feedData?.totalDailyFeedKg ?? firstNumber(record.feed);
-  const mbwG = firstNumber(record.mbw, record.abw);
+  const measuredAt = record.measuredAt ?? record.observedAt ?? record.date;
+  const date = normalizeFarmDateKey(measuredAt, timeZone) ?? normalizeFarmDateKey(record.date, timeZone);
+  const observedAt = normalizeObservedAt(measuredAt);
+  const timestampMs = toTimestampMs(observedAt);
+  const feedData = normalizeFeedData(record, timeZone);
+  const feedKg = feedData?.totalDailyFeedKg !== null && feedData?.totalDailyFeedKg !== undefined
+    ? feedData.totalDailyFeedKg
+    : parseFeedKg(record.feed);
+  const rawMbw = firstNumber(record.mbw, record.abw);
+  const mbwG = rawMbw !== null && rawMbw > 0 ? rawMbw : null;
   const mortalityCount = record.mortalityObservationType
     ? record.mortalityObservationType === 'estimated_total'
       ? firstNumber(record.mortality, record.count) ?? 0
@@ -518,7 +570,7 @@ const normalizeRecord = (record: RawRecord, docStartDate: string | null, timeZon
     pondCycleId: firstString(record.pondCycleId),
     source: firstString(record.source),
     date,
-    observedAt: normalizeObservedAt(record.observedAt ?? record.date),
+    observedAt,
     timestampMs,
     doc: calculateDoc(docStartDate, date, timeZone),
     kinds: recordKinds(record, feedData),
@@ -614,17 +666,48 @@ export const normalizePondData = (
     .filter((record) => record && typeof record === 'object')
     .map((record) => normalizeRecord(record, docStartDate, options.timeZone))
     .sort((a, b) => {
-      if (a.timestampMs === null && b.timestampMs === null) return 0;
-      if (a.timestampMs === null) return 1;
-      if (b.timestampMs === null) return -1;
-      return a.timestampMs - b.timestampMs;
+      const dateDiff = (a.date ?? '').localeCompare(b.date ?? '');
+      if (dateDiff !== 0) return dateDiff;
+      if (a.timestampMs !== null && b.timestampMs !== null && a.timestampMs !== b.timestampMs) {
+        return a.timestampMs - b.timestampMs;
+      }
+      if (a.timestampMs === null && b.timestampMs !== null) return -1;
+      if (a.timestampMs !== null && b.timestampMs === null) return 1;
+      return (a.id ?? '').localeCompare(b.id ?? '');
     });
+
+  for (const record of records) {
+    if (record.date) {
+      const domain = record.kinds.includes('sampling') || (hasNumber(record.mbwG) && record.mbwG > 0)
+        ? 'mbw'
+        : record.kinds.includes('feed')
+          ? 'dailyFeed'
+          : record.kinds.includes('water_quality')
+            ? 'water'
+            : 'operations';
+      const freshness = evaluateMeasurementFreshness({ date: record.date, observedAt: record.observedAt }, now, {
+        domain,
+        timeZone: options.timeZone,
+      });
+      record.ageDays = freshness.ageDays;
+      record.isFresh = freshness.isFresh;
+      record.isStale = freshness.isStale;
+    }
+  }
+
+  const rawInitialWeight = firstNumber(pond.initialWeight, pond.initialWeightG, pond.plWeight);
+  const initialWeightG = rawInitialWeight !== null && rawInitialWeight > 0 ? rawInitialWeight : null;
+  const rawBaselineMbw = firstNumber(pond.baselineMbw, pond.baselineMbwG);
+  const baselineMbwG = rawBaselineMbw !== null && rawBaselineMbw > 0 ? rawBaselineMbw : null;
+  const rawPostHarvestMbw = firstNumber(pond.postHarvestReferenceMbw);
+  const postHarvestReferenceMbwG = rawPostHarvestMbw !== null && rawPostHarvestMbw > 0 ? rawPostHarvestMbw : null;
 
   const normalized: OrsonNormalizedPond = {
     id: firstString(pond.id),
     pondName: firstString(pond.pondName, pond.name) ?? 'Unnamed pond',
     species: firstString(pond.species),
     asOfDate,
+    asOfTimestamp: now.toISOString(),
     timeZone: resolveFarmTimeZone(options.timeZone),
     docStartDate,
     docStartTimestampMs,
@@ -632,7 +715,7 @@ export const normalizePondData = (
     pondAreaM2,
     densityPerM2,
     initialPopulation,
-    initialWeightG: firstNumber(pond.initialWeight, pond.initialWeightG, pond.plWeight),
+    initialWeightG,
     totalHarvestedBiomassKg: firstNumber(pond.totalHarvestedBiomass, pond.harvestedBiomass),
     totalHarvestedPopulation: firstNumber(pond.totalHarvestedPopulation, pond.harvestedPopulation),
     totalHarvestedFeedKg: firstNumber(pond.totalHarvestedFeed, pond.harvestedFeed),
@@ -642,11 +725,11 @@ export const normalizePondData = (
     postHarvestRemainingPopulation: firstNumber(pond.postHarvestRemainingPopulation),
     postHarvestReferenceSamplingId: firstString(pond.postHarvestReferenceSamplingId),
     postHarvestReferenceSamplingDate: normalizeDateString(pond.postHarvestReferenceSamplingDate),
-    postHarvestReferenceMbwG: firstNumber(pond.postHarvestReferenceMbw),
+    postHarvestReferenceMbwG,
     cycleStartMode: pond.cycleStartMode === 'midcycle' ? 'midcycle' : 'new',
     baselineDate: normalizeDateString(pond.baselineDate),
     baselineDoc: firstNumber(pond.baselineDoc),
-    baselineMbwG: firstNumber(pond.baselineMbw),
+    baselineMbwG,
     baselineEstimatedPopulation: firstNumber(pond.baselineEstimatedPopulation),
     baselineSurvivalRate: firstNumber(pond.baselineSurvivalRate),
     baselineCumulativeFeedKg: firstNumber(pond.baselineCumulativeFeed),

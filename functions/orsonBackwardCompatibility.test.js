@@ -32,3 +32,10 @@ test("Firebase source packaging excludes local credentials and includes the Meta
   assert.ok(names.includes("functions/shared/orsonAnswerGrounding.js"));
   assert.ok(names.every((name) => !path.basename(name).startsWith(".env") && path.basename(name) !== ".secret.local"));
 });
+
+test("the alert synchronization system maintains backward compatibility with legacy notification formats", () => {
+  const alertSource = read("functions/orsonAlertState.js");
+  assert.match(alertSource, /prevData\.dedupeKey == null/);
+  assert.match(alertSource, /prevData\.createdAt == null && prevData\.timestamp != null/);
+  assert.match(alertSource, /prevData\.data\?\.status === ['"]resolved['"] \? ['"]resolved['"] : finding\.status/);
+});

@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createOrsonAppDataReader } = require('./orsonAppData');
-const fixture = (role = 'technician', data = {}, more = false) => {
+const fixture = (role = 'technician', data = {}, more = false, timeZone = 'UTC') => {
   const paths = [];
   const makeRef = path => ({
     collection: name => makeRef(`${path}/${name}`), doc: id => makeRef(`${path}/${id}`),
@@ -14,7 +14,7 @@ const fixture = (role = 'technician', data = {}, more = false) => {
       return path.endsWith('/list') ? { docs: Array.from({ length: more ? 11 : 1 }, (_, i) => doc(`record-${i}`)) } : doc('record');
     },
   });
-  const reader = createOrsonAppDataReader({ db: { collection: name => makeRef(name) }, company: { ownerId: 'owner', teamMembers: ['member'] }, user: { role, companyId: 'company' }, uid: role === 'owner' ? 'owner' : 'member', companyId: 'company' });
+  const reader = createOrsonAppDataReader({ db: { collection: name => makeRef(name) }, company: { ownerId: 'owner', teamMembers: ['member'], timeZone }, user: { role, companyId: 'company' }, uid: role === 'owner' ? 'owner' : 'member', companyId: 'company' });
   return { ...reader, paths };
 };
 test('data tool enforces permissions and cannot read another company or arbitrary path', async () => {
@@ -103,4 +103,84 @@ test('pond timeline returns date-aligned chart series without inventing missing 
   assert.ok(reader.tools.some(item => item.name === 'read_pond_timeline'));
   await assert.rejects(reader.execute('read_pond_timeline', { pondId: 'pond-a', days: 91, endDate: '2026-09-12' }));
   await assert.rejects(reader.execute('read_pond_timeline', { pondId: 'pond-a', days: 30, endDate: '2026-02-31' }));
+});
+
+test('pond timeline preserves zero feed, authoritative daily-feed precedence, and prevents duplicate summing', async () => {
+  const reader = fixture('technician', {
+    pondName: 'Pond Feed',
+    samplings: [
+      // 2026-09-07: authoritative feed (25kg) and sampling (40kg)
+      { date: '2026-09-07', feed: 40 },
+      { date: '2026-09-07', feedData: { totalDailyFeed: 25, feedingResponse: 'normal' } },
+      // 2026-09-08: duplicate daily feed totals (30kg and 30kg)
+      { date: '2026-09-08', feedData: { totalDailyFeed: 30 } },
+      { date: '2026-09-08', feedData: { totalDailyFeed: 30 } },
+      // 2026-09-09: explicit zero feed (0kg) and sampling (15kg)
+      { date: '2026-09-09', feedData: { totalDailyFeed: 0, isExplicitZero: true } },
+      { date: '2026-09-09', feed: 15 },
+      // 2026-09-10: no feed logged at all
+      { date: '2026-09-10', doMorning: '5.0' },
+    ],
+  });
+
+  const result = await reader.execute('read_pond_timeline', { pondId: 'pond-feed', days: 7, endDate: '2026-09-10' });
+  const d7 = result.timeline.find(d => d.date === '2026-09-07');
+  const d8 = result.timeline.find(d => d.date === '2026-09-08');
+  const d9 = result.timeline.find(d => d.date === '2026-09-09');
+  const d10 = result.timeline.find(d => d.date === '2026-09-10');
+
+  // Authoritative feed wins over sampling
+  assert.equal(d7?.feedKg, 25, 'authoritative feed wins over sampling');
+  // Duplicate totals do not sum
+  assert.equal(d8?.feedKg, 30, 'duplicate feed totals do not sum to 60');
+  // Explicit zero is preserved
+  assert.equal(d9?.feedKg, 0, 'explicit zero feed is preserved as 0');
+  // Missing feed remains null
+  assert.equal(d10?.feedKg, null, 'missing feed remains null, not zero');
+
+  // Chart lineSeries includes zero but excludes null
+  const feedSeries = result.lineSeries.feedKg;
+  assert.deepEqual(feedSeries, [
+    { date: '2026-09-07', value: 25 },
+    { date: '2026-09-08', value: 30 },
+    { date: '2026-09-09', value: 0 },
+  ]);
+});
+
+test('pond timeline selects latest feed correction and zero correction after positive', async () => {
+  const reader = fixture('technician', {
+    pondName: 'Pond Corrections',
+    samplings: [
+      // Day 1: unequal corrections (20kg at 08:00, 35kg at 16:00)
+      { id: 'z-old', date: '2026-09-01', updatedAt: '2026-09-01T16:00:00Z', feedData: { totalDailyFeed: 20, measuredAt: '2026-09-01T08:00:00Z' } },
+      { id: 'a-new', date: '2026-09-01', updatedAt: '2026-09-01T08:00:00Z', feedData: { totalDailyFeed: 35, measuredAt: '2026-09-01T16:00:00Z' } },
+      // Day 2: positive (50kg at 08:00), then zero correction (0kg at 12:00)
+      { id: 'z-positive', date: '2026-09-02', updatedAt: '2026-09-02T14:00:00Z', feedData: { totalDailyFeed: 50, measuredAt: '2026-09-02T08:00:00Z' } },
+      { id: 'a-zero', date: '2026-09-02', updatedAt: '2026-09-02T07:00:00Z', feedData: { totalDailyFeed: 0, isExplicitZero: true, measuredAt: '2026-09-02T12:00:00Z' } },
+    ],
+  });
+
+  const result = await reader.execute('read_pond_timeline', { pondId: 'pond-corr', days: 7, endDate: '2026-09-03' });
+  const d1 = result.timeline.find(d => d.date === '2026-09-01');
+  const d2 = result.timeline.find(d => d.date === '2026-09-02');
+
+  assert.equal(d1?.feedKg, 35, 'later correction of 35kg must win over 20kg without summing to 55kg');
+  assert.equal(d2?.feedKg, 0, 'zero correction after positive must be selected as 0kg');
+});
+
+test('pond timeline assigns exact measurement timestamps to farm-local dates', async () => {
+  const reader = fixture('technician', {
+    pondName: 'Jakarta Boundary',
+    samplings: [{
+      id: 'boundary-feed',
+      date: '2026-08-31',
+      feedData: { totalDailyFeed: 12, measuredAt: '2026-08-31T17:30:00Z' },
+    }],
+  }, false, 'Asia/Jakarta');
+
+  const result = await reader.execute('read_pond_timeline', { pondId: 'pond-boundary', days: 7, endDate: '2026-09-01' });
+  const farmDay = result.timeline.find(day => day.date === '2026-09-01');
+  assert.equal(farmDay?.feedKg, 12);
+  assert.equal(farmDay?.feedMeasuredAt, '2026-08-31T17:30:00Z');
+  assert.equal(farmDay?.feedPrecision, 'timestamp');
 });

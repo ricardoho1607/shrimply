@@ -82,6 +82,8 @@ export const runMetricsSelfTest = () => {
   assert(metrics.feedAllocationTrend.direction === 'up', 'calculates recent feed allocation trend');
   assert(metrics.dataCompleteness.score > 0.8, 'calculates data completeness');
 
+  runMetricCoverageRegressionSelfTest();
+
   return metrics;
 };
 
@@ -231,4 +233,193 @@ export const runUnifiedBiomassParitySelfTest = () => {
   assert(normalizedMidnightPond.currentDoc === 4, 'Orson uses the farm calendar DOC after local midnight');
   assert(sharedMidnightMetrics.currentPopulation === 341678, 'the shared model estimates SIM-C1 living population');
   assert(orsonMidnightMetrics.estimatedCurrentPopulation === sharedMidnightMetrics.currentPopulation, 'Orson matches the shared living population after local midnight');
+};
+
+export const runFeedEvidenceParitySelfTest = () => {
+  const asOf = new Date('2026-02-08T00:00:00Z');
+  const pond = normalizePondData(
+    {
+      id: 'pond-evidence-test',
+      pondName: 'Evidence Test Pond',
+      docStart: '2026-01-01',
+      initialPopulation: 100000,
+      initialWeight: 0.5,
+      cycleId: 'cycle-2026-a',
+      pondCycleId: 'pond-evidence-test:cycle-2026-a',
+      samplings: [
+        // Historical feed point outside 14d window
+        {
+          id: 'hist-feed',
+          date: '2026-01-15',
+          mbw: 1.0,
+          feedData: { totalDailyFeed: 15 },
+        },
+        // Day 1 (2026-02-05): authoritative feed (28kg) and sampling estimate (45kg)
+        {
+          id: 'sample-d1',
+          date: '2026-02-05',
+          mbw: 2.5,
+          feed: 45,
+          phMorning: 7.8,
+          phEvening: 8.1,
+          doMorning: 5.2,
+          doEvening: 4.8,
+        },
+        {
+          id: 'auth-feed-d1',
+          date: '2026-02-05',
+          feedData: {
+            totalDailyFeed: 28,
+            feedingResponse: 'normal',
+          },
+        },
+        // Day 2 (2026-02-06): duplicate totals (32kg and 32kg)
+        {
+          id: 'auth-feed-d2-a',
+          date: '2026-02-06',
+          feedData: { totalDailyFeed: 32 },
+        },
+        {
+          id: 'auth-feed-d2-b',
+          date: '2026-02-06',
+          feedData: { totalDailyFeed: 32 },
+        },
+        // Day 3 (2026-02-07): explicit zero feed (0kg) and sampling (20kg), plus mbw: 0
+        {
+          id: 'auth-feed-d3-zero',
+          date: '2026-02-07',
+          feedData: { totalDailyFeed: 0, isExplicitZero: true },
+        },
+        {
+          id: 'sample-d3',
+          date: '2026-02-07',
+          mbw: 0,
+          feed: 20,
+        },
+      ],
+      mortalityRecords: [
+        {
+          id: 'mort-d2',
+          date: '2026-02-06',
+          observationType: 'none_observed',
+          count: 0,
+        },
+      ],
+    },
+    { now: asOf },
+  );
+
+  const metrics = calculatePondMetrics(pond);
+  const d1 = metrics.dailyRecords14d.find((r) => r.date === '2026-02-05');
+  const d2 = metrics.dailyRecords14d.find((r) => r.date === '2026-02-06');
+  const d3 = metrics.dailyRecords14d.find((r) => r.date === '2026-02-07');
+
+  // Criterion 1: Daily authoritative feed wins over sampling
+  assert(d1 !== undefined, 'finds day 1 record');
+  assert(d1?.feedKg === 28, 'authoritative feed (28kg) wins over sampling estimate (45kg)');
+  assert(d1?.feedSource === 'daily_feed', 'feedSource is daily_feed');
+  assert(d1?.actualDailyFeedKg === 28, 'actualDailyFeedKg is 28');
+  assert(d1?.samplingFeedEstimateKg === 45, 'preserves sampling estimate for diagnostics');
+
+  // Criterion 1: Duplicate totals do not sum
+  assert(d2 !== undefined, 'finds day 2 record');
+  assert(d2?.feedKg === 32, 'duplicate totals do not sum (remains 32kg, not 64kg)');
+  assert(d2?.actualDailyFeedKg === 32, 'actualDailyFeedKg does not duplicate');
+
+  // Criterion 1: Explicit zero cannot be overwritten
+  assert(d3 !== undefined, 'finds day 3 record');
+  assert(d3?.feedKg === 0, 'explicit zero feed is preserved as 0kg');
+  assert(d3?.actualDailyFeedKg === 0, 'actualDailyFeedKg is 0 for explicit zero');
+  assert(d3?.feedSource === 'daily_feed', 'feedSource remains daily_feed even when zero');
+
+  // Criterion 3: Zero feed does not collapse biomass/population or imply safety
+  assert(metrics.feedBiomassModel.actualFeedKg === 0, 'latest feed pressure recognizes 0kg feed');
+  assert(metrics.feedBiomassModel.feedBasedPopulation === null, 'zero feed does not collapse feed-based population to 0');
+  assert(metrics.feedBiomassModel.feedBasedBiomassKg === null, 'zero feed does not collapse feed-based biomass to 0');
+  assert(metrics.estimatedBiomassKg !== null && metrics.estimatedBiomassKg > 0, 'biological biomass remains intact');
+  assert(metrics.estimatedCurrentPopulation !== null && metrics.estimatedCurrentPopulation > 0, 'population remains intact');
+  assert(
+    metrics.feedBiomassModel.warnings.some((w) => w.includes('Zero daily feed was logged')),
+    'flags warning that zero daily feed was logged (does not imply safety)',
+  );
+
+  // Criterion 3: MBW positive-only; preserve ADG
+  assert(d3?.mbwG === null, 'day 3 mbw: 0 normalizes to null (positive-only)');
+  assert(metrics.latestMbwG === 2.5, 'looks back to latest positive MBW (2.5g), ignoring 0g');
+  assert(typeof metrics.adgGPerDay === 'number' && metrics.adgGPerDay > 0, 'preserves ADG calculation from valid MBW');
+
+  // Criterion 2: Trend has last 3-5 feed observations available
+  assert(metrics.feedAllocationTrend.points >= 3, 'trend retains at least 3 feed observations across window/history');
+
+  // Criterion 4: Evidence types retain source, pond/cycle, date precision, freshness, and coverage
+  assert(metrics.evidence !== undefined, 'metrics includes evidence summary');
+  assert(metrics.evidence?.pondId === 'pond-evidence-test', 'evidence retains pondId');
+  assert(metrics.evidence?.cycleId === 'cycle-2026-a', 'evidence retains cycleId');
+  assert(metrics.evidence?.asOfDate === '2026-02-08', 'evidence retains asOfDate');
+  assert(metrics.evidence?.water.domain === 'water', 'water evidence domain is water');
+  assert(metrics.evidence?.water.coverage !== undefined, 'water evidence has coverage');
+  assert(metrics.evidence?.mbw.domain === 'mbw', 'mbw evidence domain is mbw');
+  assert(metrics.evidence?.mbw.isFresh === true, 'mbw evidence evaluates freshness');
+  assert(metrics.evidence?.dailyFeed.domain === 'dailyFeed', 'dailyFeed evidence domain is dailyFeed');
+  assert(metrics.evidence?.mortality.domain === 'operations', 'mortality evidence domain is operations');
+  assert(metrics.growthEvidence.pondId === 'pond-evidence-test', 'growthEvidence retains pondId');
+  assert(metrics.growthEvidence.cycleId === 'cycle-2026-a', 'growthEvidence retains cycleId');
+  assert(metrics.growthEvidence.latestDate === '2026-02-05', 'growthEvidence retains latestDate');
+  assert(typeof metrics.growthEvidence.ageDays === 'number', 'growthEvidence retains ageDays');
+  assert(typeof metrics.growthEvidence.coverageRatio === 'number', 'growthEvidence retains coverageRatio');
+
+  // Daily records retain evidence fields
+  assert(d1?.pondId === 'pond-evidence-test', 'daily record retains pondId');
+  assert(d1?.cycleId === 'cycle-2026-a', 'daily record retains cycleId');
+  assert(typeof d1?.ageDays === 'number', 'daily record retains ageDays');
+  assert(typeof d1?.isFresh === 'boolean', 'daily record retains isFresh');
+  assert(d1?.authoritativeSourceId === 'auth-feed-d1', 'daily record retains authoritativeSourceId');
+};
+
+export const runMetricCoverageRegressionSelfTest = () => {
+  // 1. Regression test: calculatePondMetrics on a pond with empty records must never throw
+  const emptyPond = normalizePondData(
+    {
+      id: 'pond-empty-coverage',
+      pondName: 'Empty Pond',
+      docStart: '2026-01-01',
+      samplings: [],
+      records: [],
+    },
+    { now: new Date('2026-01-15T00:00:00Z') },
+  );
+
+  const emptyMetrics = calculatePondMetrics(emptyPond);
+  assert(emptyMetrics !== undefined, 'calculatePondMetrics completes for empty records');
+  assert(emptyMetrics.evidence !== undefined, 'empty metrics evidence exists');
+  assert(emptyMetrics.evidence?.water.coverage?.recordedDays === 0, 'empty water coverage recordedDays is 0');
+  assert(emptyMetrics.evidence?.water.coverage?.coverageRatio === 0, 'empty water coverageRatio is 0');
+  assert(emptyMetrics.evidence?.water.isFresh === false, 'empty water is not fresh');
+  assert(emptyMetrics.evidence?.water.isStale === true, 'empty water is stale');
+  assert(emptyMetrics.evidence?.mbw.isFresh === false, 'empty mbw is not fresh');
+  assert(emptyMetrics.evidence?.dailyFeed.coverage?.recordedDays === 0, 'empty dailyFeed coverage recordedDays is 0');
+  assert(emptyMetrics.evidence?.mortality.coverage?.recordedDays === 0, 'empty mortality coverage recordedDays is 0');
+  assert(emptyMetrics.growthEvidence.coverageRatio === 0, 'empty growthEvidence coverageRatio is 0');
+
+  // 2. Non-empty records: verify calculatePondMetrics computes genuine coverage without throwing
+  const populatedPond = normalizePondData(
+    {
+      id: 'pond-pop-coverage',
+      pondName: 'Populated Pond',
+      docStart: '2026-01-01',
+      samplings: [
+        { id: 's1', date: '2026-01-10', mbw: 3.5, doMorning: 5.1, doEvening: 4.8, feed: 30, mortality: 5 },
+        { id: 's2', date: '2026-01-15', mbw: 4.2, doMorning: 4.9, doEvening: 4.5, feed: 35, mortality: 0 },
+      ],
+    },
+    { now: new Date('2026-01-15T00:00:00Z') },
+  );
+
+  const popMetrics = calculatePondMetrics(populatedPond);
+  assert(popMetrics !== undefined, 'calculatePondMetrics completes for populated records');
+  assert(popMetrics.evidence?.water.coverage?.recordedDays === 2, 'water coverage recordedDays is 2');
+  assert(popMetrics.evidence?.water.coverage?.coverageRatio !== undefined, 'water coverageRatio is computed');
+  assert(popMetrics.evidence?.water.isFresh === true, 'water on asOfDate is fresh');
+  assert((popMetrics.evidence?.water.coverage?.missingDates?.length ?? 0) > 0, 'missing dates are identified');
+  assert(popMetrics.growthEvidence.coverageRatio !== undefined, 'growthEvidence coverageRatio is computed');
 };

@@ -3,7 +3,10 @@ import type {
   OrsonCalibrationProfile,
   OrsonDataCompleteness,
   OrsonDiagnosticHarvestEvent,
+  OrsonEvidenceSummary,
   OrsonFeedBiomassModel,
+  OrsonGrowthEvidence,
+  OrsonMetricEvidenceItem,
   OrsonNormalizedPond,
   OrsonNormalizedRecord,
   OrsonNumber,
@@ -16,7 +19,13 @@ import type {
 } from './types';
 import { getOrsonCalibrationAdjustment } from './learning';
 import { buildPondDiagnosticContext, selectDiagnosticRecords } from './diagnosticContext';
-import { shiftDateKey } from '../shared/farmDate';
+import { differenceInFarmCalendarDays, shiftDateKey } from '../shared/farmDate';
+import {
+  evaluateMeasurementFreshness,
+  evaluateMetricCoverage,
+  parseFeedKg,
+  selectDailyFeedEntries,
+} from '../shared/orsonEvidence';
 import {
   calculateAdg as calculateSharedAdg,
   calculateSmoothedAdg,
@@ -53,6 +62,41 @@ const latestWith = (
 ): { record: OrsonNormalizedRecord; value: number } | null => {
   const points = recordsWith(pond, selector);
   return points.length > 0 ? points[points.length - 1] : null;
+};
+
+const getDailyFeedEntries = (pond: OrsonNormalizedPond, allowSamplingEstimate = true) =>
+  selectDailyFeedEntries(pond.records, {
+    allowSamplingEstimate,
+    asOfDate: pond.asOfTimestamp ?? pond.asOfDate,
+    timeZone: pond.timeZone,
+  });
+
+const buildMetricEvidenceItem = (
+  metric: string,
+  domain: OrsonMetricEvidenceItem['domain'],
+  pond: OrsonNormalizedPond,
+  asOf: string,
+  source: { id?: string | null; date?: string | null; farmDate?: string | null; observedAt?: string | null; measuredAt?: string | null; precision?: 'timestamp' | 'date-only'; sourceIds?: string[] } | null,
+): OrsonMetricEvidenceItem => {
+  const date = source?.date ?? source?.farmDate ?? null;
+  const measuredAt = source?.measuredAt ?? source?.observedAt ?? null;
+  const freshness = evaluateMeasurementFreshness({ date, measuredAt }, asOf, {
+    domain,
+    timeZone: pond.timeZone,
+  });
+  return {
+    metric,
+    domain,
+    sourceId: source?.id ?? source?.sourceIds?.[0] ?? null,
+    pondId: pond.id,
+    cycleId: pond.cycleId,
+    date,
+    precision: source?.precision ?? (measuredAt ? 'timestamp' : 'date-only'),
+    measuredAt,
+    ageDays: freshness.ageDays,
+    isFresh: freshness.isFresh,
+    isStale: freshness.isStale,
+  };
 };
 
 const minNumber = (...values: OrsonNumber[]): OrsonNumber => {
@@ -133,12 +177,9 @@ const detectMbwOutliers = (
 const calculateDataCompleteness = (pond: OrsonNormalizedPond): OrsonDataCompleteness => {
   const latestMbw = latestWith(pond, (record) => positive(record.mbwG));
   const latestWq = latestWith(pond, (record) => minNumber(record.phMorning, record.phEvening, record.doMorning, record.doEvening));
-  const latestFeed = latestWith(pond, (record) => record.isBaselineEstimate || !record.feedData
-    ? null
-    : positive(record.feedData.totalDailyFeedKg));
-  const recentFeedRecords = recordsWith(pond, (record) => record.isBaselineEstimate || !record.feedData
-    ? null
-    : positive(record.feedData.totalDailyFeedKg)).slice(-5);
+  const authoritativeFeed = getDailyFeedEntries(pond, false);
+  const latestFeed = authoritativeFeed[authoritativeFeed.length - 1] ?? null;
+  const recentFeedRecords = authoritativeFeed.slice(-5);
 
   const fields: Record<string, boolean> = {
     docStartDate: pond.docStartDate !== null,
@@ -229,10 +270,9 @@ const calculateFeedBiomassModel = (params: {
     calibration,
   } = params;
 
-  const latestFeedRecord = latestWith(pond, (record) => record.isBaselineEstimate || !record.feedData
-    ? null
-    : positive(record.feedData.totalDailyFeedKg));
-  const actualFeedKg = latestFeedRecord?.value ?? null;
+  const authoritativeFeed = getDailyFeedEntries(pond, false);
+  const latestFeedRecord = authoritativeFeed[authoritativeFeed.length - 1] ?? null;
+  const actualFeedKg = latestFeedRecord?.feedKg ?? null;
   const feedRatePercent = getFeedRatePercentFromMbw(latestMbwG);
   const expectedFeedKg = hasNumber(estimatedBiomassKg) && hasNumber(feedRatePercent)
     ? round((estimatedBiomassKg * feedRatePercent) / 100, 2)
@@ -241,7 +281,7 @@ const calculateFeedBiomassModel = (params: {
     ? round(actualFeedKg / expectedFeedKg, 3)
     : null;
 
-  const feedBasedPopulation = hasNumber(actualFeedKg) && hasNumber(feedRatePercent) && hasNumber(latestMbwG) && latestMbwG > 0
+  const feedBasedPopulation = hasNumber(actualFeedKg) && actualFeedKg > 0 && hasNumber(feedRatePercent) && hasNumber(latestMbwG) && latestMbwG > 0
     ? round(((actualFeedKg / feedRatePercent) / latestMbwG) * 100000, 0)
     : null;
   const feedBasedBiomassKg = hasNumber(feedBasedPopulation) && hasNumber(latestMbwG)
@@ -279,6 +319,9 @@ const calculateFeedBiomassModel = (params: {
     : rawBiomassRangeKg;
 
   const warnings: string[] = [];
+  if (actualFeedKg === 0) {
+    warnings.push('Zero daily feed was logged; verify whether feeding was halted intentionally or unrecorded.');
+  }
   if (hasNumber(feedPressureRatio) && feedPressureRatio > 1.25) {
     warnings.push('Logged feed is higher than expected for the estimated biomass and feed-rate table.');
   }
@@ -316,6 +359,8 @@ export const calculatePondMetrics = (
   calibrationProfile?: OrsonCalibrationProfile | null,
 ): OrsonPondMetrics => {
   const pond = { ...inputPond, records: selectDiagnosticRecords(inputPond) };
+  const asOfDate = pond.asOfDate;
+  const asOfTimestamp = pond.asOfTimestamp ?? asOfDate;
   const calibration = getOrsonCalibrationAdjustment(calibrationProfile, pond.pondName);
   const sharedPond = toSharedPond(pond);
   const currentDateKey = pond.asOfDate;
@@ -323,7 +368,7 @@ export const calculatePondMetrics = (
     currentDoc: pond.currentDoc ?? undefined,
     currentDateKey,
   });
-  const mbwPoints = recordsWith(pond, (record) => record.isBaselineEstimate || record.timestampMs === null ? null : positive(record.mbwG));
+  const mbwPoints = recordsWith(pond, (record) => record.isBaselineEstimate || !record.date ? null : positive(record.mbwG));
   const mbwOutlierDates = detectMbwOutliers(mbwPoints);
   const mbwOutlierDateSet = new Set(mbwOutlierDates);
   const cleanMbwPoints = mbwPoints.filter((point) => !point.record.date || !mbwOutlierDateSet.has(point.record.date));
@@ -335,14 +380,45 @@ export const calculatePondMetrics = (
   const totalMortalityCount = sharedMetrics.totalMortality;
   const estimatedCurrentPopulation = sharedMetrics.currentPopulation;
   const measuredDates = new Set(mbwPoints.map(point => point.record.date));
-  const canCompareStocking = latestMbw?.record.timestampMs != null && pond.docStartDate != null
-    && latestMbw.record.timestampMs > new Date(pond.docStartDate).getTime();
+  const canCompareStocking = Boolean(latestMbw?.record.date && pond.docStartDate && latestMbw.record.date > pond.docStartDate);
   const hasGrowthInterval = measuredDates.size >= 2 || (mbwPoints.length > 0 && canCompareStocking);
   const sharedAdg = hasGrowthInterval ? round(calculateSharedAdg(sharedPond)) : null;
+  const mbwDates = pond.records
+    .filter((point) => !point.isBaselineEstimate && positive(point.mbwG) !== null && point.date)
+    .map((point) => point.date as string);
+  const mbwFreshness = evaluateMeasurementFreshness(latestMbw ? { date: latestMbw.record.date, observedAt: latestMbw.record.observedAt } : null, asOfTimestamp, {
+    domain: 'mbw',
+    timeZone: pond.timeZone,
+  });
+  const mbwCoverage = evaluateMetricCoverage(mbwDates, {
+    metric: 'mbw',
+    domain: 'mbw',
+    asOfDate,
+    windowDays: 14,
+    minDaysRequired: 2,
+    timeZone: pond.timeZone,
+  });
+  const mbwEvidence: OrsonMetricEvidenceItem = {
+    ...buildMetricEvidenceItem('mbw', 'mbw', pond, asOfTimestamp, latestMbw?.record ?? null),
+    coverage: {
+      windowDays: mbwCoverage.windowDays,
+      recordedDays: mbwCoverage.recordedDays,
+      coverageRatio: mbwCoverage.coverageRatio,
+      missingDates: mbwCoverage.missingDates,
+    },
+  };
   const growthEvidence: OrsonPondMetrics['growthEvidence'] = {
     sampleCount: mbwPoints.length,
     adgSource: !hasGrowthInterval ? 'unavailable' : measuredDates.size >= 2 ? 'measured' : 'stocking_comparison',
     weightSource: latestMbw ? 'measured' : hasNumber(pond.initialWeightG) || hasNumber(pond.baselineMbwG) ? 'baseline' : 'fallback',
+    source: latestMbw?.record.source ?? (latestMbw ? 'sampling' : null),
+    pondId: pond.id,
+    cycleId: pond.cycleId,
+    latestDate: latestMbw?.record.date ?? null,
+    ageDays: mbwFreshness.ageDays,
+    isFresh: mbwFreshness.isFresh,
+    isStale: mbwFreshness.isStale,
+    coverageRatio: mbwCoverage.coverageRatio,
   };
 
   const hasMidcycleBaseline = pond.cycleStartMode === 'midcycle' ||
@@ -405,13 +481,14 @@ export const calculatePondMetrics = (
     timestampMs: new Date(`${record.date}T00:00:00.000Z`).getTime(),
     value: record.salinityPpt,
   })));
-  const feedAllocationTrend = calculateTrend(dailyRecords14d
-    .filter((record) => hasNumber(positive(record.actualDailyFeedKg ?? null)))
+  const trendFeedPoints = getDailyFeedEntries(pond, false)
     .slice(-5)
-    .map((record) => ({
-    timestampMs: new Date(`${record.date}T00:00:00.000Z`).getTime(),
-    value: positive(record.actualDailyFeedKg ?? null),
-  })));
+    .map((entry) => ({
+      timestampMs: new Date(`${entry.farmDate}T00:00:00.000Z`).getTime(),
+      value: entry.feedKg,
+    }));
+
+  const feedAllocationTrend = calculateTrend(trendFeedPoints);
   const mortalityTrend = calculateTrend(dailyRecords14d.map((record) => ({
     timestampMs: new Date(`${record.date}T00:00:00.000Z`).getTime(),
     value: record.mortalityCount,
@@ -429,6 +506,144 @@ export const calculatePondMetrics = (
     sharedMetrics,
     calibration: calibration.adjustment,
   });
+
+  const waterDates = pond.records
+    .filter((record) => record.kinds.includes('water_quality') && record.date)
+    .map((record) => record.date as string);
+  const latestWaterRecord = latestWith(pond, (record) => record.kinds.includes('water_quality') ? 1 : null);
+  const waterCoverage = evaluateMetricCoverage(waterDates, {
+    metric: 'water_quality',
+    domain: 'water',
+    asOfDate,
+    windowDays: 14,
+    minDaysRequired: 3,
+    timeZone: pond.timeZone,
+  });
+  const waterEvidence: OrsonMetricEvidenceItem = {
+    ...buildMetricEvidenceItem('water_quality', 'water', pond, asOfTimestamp, latestWaterRecord?.record ?? null),
+    coverage: {
+      windowDays: waterCoverage.windowDays,
+      recordedDays: waterCoverage.recordedDays,
+      coverageRatio: waterCoverage.coverageRatio,
+      missingDates: waterCoverage.missingDates,
+    },
+  };
+
+  const authoritativeFeedEntries = getDailyFeedEntries(pond, false);
+  const feedDates = authoritativeFeedEntries.map((entry) => entry.farmDate);
+  const latestFeedRecord = authoritativeFeedEntries[authoritativeFeedEntries.length - 1] ?? null;
+  const feedCoverage = evaluateMetricCoverage(feedDates, {
+    metric: 'daily_feed',
+    domain: 'dailyFeed',
+    asOfDate,
+    windowDays: 14,
+    minDaysRequired: 3,
+    timeZone: pond.timeZone,
+  });
+  const dailyFeedEvidence: OrsonMetricEvidenceItem = {
+    ...buildMetricEvidenceItem('daily_feed', 'dailyFeed', pond, asOfTimestamp, latestFeedRecord),
+    coverage: {
+      windowDays: feedCoverage.windowDays,
+      recordedDays: feedCoverage.recordedDays,
+      coverageRatio: feedCoverage.coverageRatio,
+      missingDates: feedCoverage.missingDates,
+    },
+  };
+
+  const mortalityDates = pond.records
+    .filter((record) => (record.mortalityCount !== null || record.mortalityObservationType !== null) && record.date)
+    .map((record) => record.date as string);
+  const latestMortalityRecord = latestWith(pond, (record) => record.mortalityCount !== null || record.mortalityObservationType !== null ? 1 : null);
+  const mortalityCoverage = evaluateMetricCoverage(mortalityDates, {
+    metric: 'mortality',
+    domain: 'operations',
+    asOfDate,
+    windowDays: 14,
+    minDaysRequired: 3,
+    timeZone: pond.timeZone,
+  });
+  const mortalityEvidence: OrsonMetricEvidenceItem = {
+    ...buildMetricEvidenceItem('mortality', 'operations', pond, asOfTimestamp, latestMortalityRecord?.record ?? null),
+    coverage: {
+      windowDays: mortalityCoverage.windowDays,
+      recordedDays: mortalityCoverage.recordedDays,
+      coverageRatio: mortalityCoverage.coverageRatio,
+      missingDates: mortalityCoverage.missingDates,
+    },
+  };
+
+  const labDates = pond.labContext.latest?.sampleDate ? [pond.labContext.latest.sampleDate] : [];
+  const labCoverage = evaluateMetricCoverage(labDates, {
+    metric: 'lab',
+    domain: 'lab',
+    asOfDate,
+    windowDays: 30,
+    minDaysRequired: 1,
+    timeZone: pond.timeZone,
+  });
+  const labEvidence: OrsonMetricEvidenceItem = {
+    ...buildMetricEvidenceItem('lab', 'lab', pond, asOfTimestamp, pond.labContext.latest ? {
+      id: pond.labContext.latest.labReportId,
+      date: pond.labContext.latest.sampleDate,
+      measuredAt: pond.labContext.latest.measuredAt,
+    } : null),
+    coverage: {
+      windowDays: labCoverage.windowDays,
+      recordedDays: labCoverage.recordedDays,
+      coverageRatio: labCoverage.coverageRatio,
+      missingDates: labCoverage.missingDates,
+    },
+  };
+
+  const latestAmmoniaRecord = latestWith(pond, (record) => record.ammoniaMgL);
+  const latestSalinityRecord = latestWith(pond, (record) => record.salinityPpt);
+  const latestWeatherRecord = latestWith(pond, (record) => record.weatherEvent ? 1 : null);
+  const latestSludgeRecord = latestWith(pond, (record) => record.sludgeLoad ? 1 : null);
+  const latestScumRecord = latestWith(pond, (record) => record.surfaceScum !== null ? 1 : null);
+  const latestBehaviourRecord = latestWith(pond, (record) => record.shrimpBehaviour ? 1 : null);
+  const latestWaterExchangeRecord = latestWith(pond, (record) => record.waterExchangePercent);
+  const metricEvidence: Record<string, OrsonMetricEvidenceItem> = {
+    doMinimumMgL: buildMetricEvidenceItem('doMinimumMgL', 'water', pond, asOfTimestamp, latestDo?.record ?? null),
+    doMorning: buildMetricEvidenceItem('doMorning', 'water', pond, asOfTimestamp, latestWith(pond, (record) => record.doMorning)?.record ?? null),
+    doEvening: buildMetricEvidenceItem('doEvening', 'water', pond, asOfTimestamp, latestWith(pond, (record) => record.doEvening)?.record ?? null),
+    phMorning: buildMetricEvidenceItem('phMorning', 'water', pond, asOfTimestamp, latestWith(pond, (record) => record.phMorning)?.record ?? null),
+    phEvening: buildMetricEvidenceItem('phEvening', 'water', pond, asOfTimestamp, latestWith(pond, (record) => record.phEvening)?.record ?? null),
+    phSwing: buildMetricEvidenceItem('phSwing', 'water', pond, asOfTimestamp, latestPh?.record ?? null),
+    temperatureC: buildMetricEvidenceItem('temperatureC', 'water', pond, asOfTimestamp, latestTemperature?.record ?? null),
+    ammoniaMgL: buildMetricEvidenceItem('ammoniaMgL', 'water', pond, asOfTimestamp, latestAmmoniaRecord?.record ?? null),
+    transparencyCm: buildMetricEvidenceItem('transparencyCm', 'water', pond, asOfTimestamp, latestTransparency?.record ?? null),
+    salinityPpt: buildMetricEvidenceItem('salinityPpt', 'water', pond, asOfTimestamp, latestSalinityRecord?.record ?? null),
+    weatherEvent: buildMetricEvidenceItem('weatherEvent', 'operations', pond, asOfTimestamp, latestWeatherRecord?.record ?? null),
+    waterExchangePercent: buildMetricEvidenceItem('waterExchangePercent', 'operations', pond, asOfTimestamp, latestWaterExchangeRecord?.record ?? null),
+    sludgeLoad: buildMetricEvidenceItem('sludgeLoad', 'operations', pond, asOfTimestamp, latestSludgeRecord?.record ?? null),
+    surfaceScum: buildMetricEvidenceItem('surfaceScum', 'operations', pond, asOfTimestamp, latestScumRecord?.record ?? null),
+    shrimpBehaviour: buildMetricEvidenceItem('shrimpBehaviour', 'operations', pond, asOfTimestamp, latestBehaviourRecord?.record ?? null),
+    mbw: mbwEvidence,
+    daily_feed: dailyFeedEvidence,
+    mortality: mortalityEvidence,
+    lab: labEvidence,
+  };
+
+  const evidence: OrsonEvidenceSummary = {
+    asOfDate,
+    asOfTimestamp,
+    timeZone: pond.timeZone,
+    pondId: pond.id,
+    cycleId: pond.cycleId,
+    water: waterEvidence,
+    mbw: mbwEvidence,
+    dailyFeed: dailyFeedEvidence,
+    mortality: mortalityEvidence,
+    lab: labEvidence,
+    allMetrics: {
+      water_quality: waterEvidence,
+      mbw: mbwEvidence,
+      daily_feed: dailyFeedEvidence,
+      mortality: mortalityEvidence,
+      lab: labEvidence,
+      ...metricEvidence,
+    },
+  };
   const diagnosticContext = buildPondDiagnosticContext(inputPond, dailyRecords14d, dataAssumptions);
   const currentFeedDay = dailyRecords14d.find(record => record.date === pond.asOfDate);
   const currentFeedKg = currentFeedDay?.actualDailyFeedKg;
@@ -460,6 +675,7 @@ export const calculatePondMetrics = (
     smoothedAdgGPerDay: hasGrowthInterval ? round(calculateSmoothedAdg(sharedPond)) : null,
     growthConfidence: cleanMbwPoints.length < 2 ? 'low' : mbwOutlierDates.length > 0 || cleanMbwPoints.length < 3 ? 'medium' : 'high',
     growthEvidence,
+    evidence,
     mbwOutlierDates,
     totalFeedKg: round(totalFeedKg, 2),
     totalHarvestedBiomassKg: pond.totalHarvestedBiomassKg,
@@ -528,12 +744,19 @@ export const extractDailyRecords14d = (
   const windowStart = shiftDateKey(asOfDate, -(Math.max(1, Math.min(30, windowDays)) - 1));
   const dayMap = new Map<string, {
     diagnosticMeasurements?: OrsonNormalizedRecord['diagnosticMeasurements'];
+    measurementProvenance: NonNullable<OrsonPromptDailyRecord['measurementProvenance']>;
     date: string;
     observedAt: string[];
     doc: number | null;
     feedKg: number | null;
     actualDailyFeedKg: number | null;
     samplingFeedEstimateKg: number | null;
+    hasAuthoritativeFeed: boolean;
+    hasExplicitZeroFeed: boolean;
+    authoritativeFeedTotals: number[];
+    authoritativeSourceId: string | null;
+    samplingFeedTotals: number[];
+    samplingSourceId: string | null;
     mbwG: number | null;
     mortalityCount: number | null;
     mortalityObservedCount: number | null;
@@ -557,79 +780,119 @@ export const extractDailyRecords14d = (
     sourceKinds: OrsonNormalizedRecord['kinds'];
   }>();
 
+  const createEmptyDay = (date: string, doc: number | null) => ({
+    date,
+    observedAt: [] as string[],
+    diagnosticMeasurements: undefined as OrsonNormalizedRecord['diagnosticMeasurements'],
+    measurementProvenance: {} as NonNullable<OrsonPromptDailyRecord['measurementProvenance']>,
+    doc,
+    feedKg: null as number | null,
+    actualDailyFeedKg: null as number | null,
+    samplingFeedEstimateKg: null as number | null,
+    hasAuthoritativeFeed: false,
+    hasExplicitZeroFeed: false,
+    authoritativeFeedTotals: [] as number[],
+    authoritativeSourceId: null as string | null,
+    authoritativeTimestampMs: null as number | null,
+    samplingFeedTotals: [] as number[],
+    samplingSourceId: null as string | null,
+    samplingTimestampMs: null as number | null,
+    mbwG: null as number | null,
+    mortalityCount: null as number | null,
+    mortalityObservedCount: null as number | null,
+    mortalityObservationTypes: [] as ('estimated_total' | 'observed_recovered' | 'none_observed' | 'legacy_positive')[],
+    doMorning: null as number | null,
+    doEvening: null as number | null,
+    phMorning: null as number | null,
+    phEvening: null as number | null,
+    salinityPpt: null as number | null,
+    temperatureC: null as number | null,
+    ammoniaMgL: null as number | null,
+    operationalNotes: null as string | null,
+    transparencyCm: null as number | null,
+    feedingResponse: null as 'strong' | 'normal' | 'weak' | null,
+    weatherEvent: null as 'rain' | 'heavy_rain' | 'sudden_cloud' | null,
+    waterExchangePercent: null as number | null,
+    sludgeLoad: null as 'low' | 'moderate' | 'high' | null,
+    surfaceScum: null as boolean | null,
+    shrimpBehaviour: null as 'normal' | 'abnormal' | null,
+    sourceIds: [] as string[],
+    sourceKinds: [] as OrsonNormalizedRecord['kinds'],
+  });
+
+  const setMeasurementProvenance = (
+    day: { measurementProvenance: NonNullable<OrsonPromptDailyRecord['measurementProvenance']> },
+    metric: string,
+    record: OrsonNormalizedRecord,
+    appendSource = false,
+  ) => {
+    const existing = day.measurementProvenance[metric];
+    const sourceIds = appendSource
+      ? Array.from(new Set([...(existing?.sourceIds ?? (existing?.sourceId ? [existing.sourceId] : [])), ...(record.id ? [record.id] : [])]))
+      : (record.id ? [record.id] : []);
+    day.measurementProvenance[metric] = {
+      sourceId: sourceIds[sourceIds.length - 1] ?? null,
+      sourceIds,
+      date: record.date!,
+      measuredAt: record.observedAt,
+      precision: record.observedAt ? 'timestamp' : 'date-only',
+    };
+  };
+
+  const selectedFeedEntries = getDailyFeedEntries(pond, true).filter((entry) => entry.farmDate >= windowStart && entry.farmDate <= asOfDate);
+
   for (const [recordIndex, record] of selectDiagnosticRecords(pond).entries()) {
     if (!record.date) continue;
     const date = record.date;
     if (date < windowStart || date > asOfDate) continue;
-    const existing = dayMap.get(date) ?? {
-      date,
-      observedAt: [],
-      doc: record.doc,
-      feedKg: null,
-      actualDailyFeedKg: null,
-      samplingFeedEstimateKg: null,
-      mbwG: null,
-      mortalityCount: null,
-      mortalityObservedCount: null,
-      mortalityObservationTypes: [],
-      doMorning: null,
-      doEvening: null,
-      phMorning: null,
-      phEvening: null,
-      salinityPpt: null,
-      temperatureC: null,
-      ammoniaMgL: null,
-      operationalNotes: null,
-      transparencyCm: null,
-      feedingResponse: null,
-      weatherEvent: null,
-      waterExchangePercent: null,
-      sludgeLoad: null,
-      surfaceScum: null,
-      shrimpBehaviour: null,
-      sourceIds: [],
-      sourceKinds: [],
-    };
+    const existing = dayMap.get(date) ?? createEmptyDay(date, record.doc);
 
     if (record.doc !== null) existing.doc = record.doc;
-    if (record.diagnosticMeasurements) existing.diagnosticMeasurements = { ...existing.diagnosticMeasurements, ...record.diagnosticMeasurements };
-    if (record.feedData && hasNumber(record.feedData.totalDailyFeedKg)) {
-      existing.actualDailyFeedKg = (existing.actualDailyFeedKg ?? 0) + record.feedData.totalDailyFeedKg;
-    } else if (hasNumber(record.feedKg)) {
-      existing.samplingFeedEstimateKg = (existing.samplingFeedEstimateKg ?? 0) + record.feedKg;
+    if (record.diagnosticMeasurements) {
+      existing.diagnosticMeasurements = { ...existing.diagnosticMeasurements, ...record.diagnosticMeasurements };
+      Object.entries(record.diagnosticMeasurements).forEach(([metric, value]) => {
+        if (value !== null && value !== undefined) setMeasurementProvenance(existing, metric, record);
+      });
     }
-    if (hasNumber(record.mbwG)) existing.mbwG = record.mbwG;
+    if (hasNumber(record.mbwG) && record.mbwG > 0) {
+      existing.mbwG = record.mbwG;
+      setMeasurementProvenance(existing, 'mbwG', record);
+    }
     if (record.mortalityObservationType) {
       if (!existing.mortalityObservationTypes.includes(record.mortalityObservationType)) {
         existing.mortalityObservationTypes.push(record.mortalityObservationType);
       }
       if (record.mortalityObservationType === 'estimated_total' && hasNumber(record.mortalityCount)) {
         existing.mortalityCount = (existing.mortalityCount ?? 0) + record.mortalityCount;
+        setMeasurementProvenance(existing, 'mortalityCount', record, true);
       } else if (record.mortalityObservationType === 'none_observed' && existing.mortalityCount === null) {
         existing.mortalityCount = 0;
+        setMeasurementProvenance(existing, 'mortalityCount', record, true);
       }
       if (record.mortalityObservationType === 'observed_recovered' && hasNumber(record.mortalityObservedCount)) {
         existing.mortalityObservedCount = (existing.mortalityObservedCount ?? 0) + record.mortalityObservedCount;
+        setMeasurementProvenance(existing, 'mortalityObservedCount', record, true);
       }
     } else if (hasNumber(record.mortalityCount) && record.mortalityCount > 0) {
       existing.mortalityCount = (existing.mortalityCount ?? 0) + record.mortalityCount;
+      setMeasurementProvenance(existing, 'mortalityCount', record, true);
       if (!existing.mortalityObservationTypes.includes('legacy_positive')) existing.mortalityObservationTypes.push('legacy_positive');
     }
-    if (hasNumber(record.doMorning)) existing.doMorning = record.doMorning;
-    if (hasNumber(record.doEvening)) existing.doEvening = record.doEvening;
-    if (hasNumber(record.phMorning)) existing.phMorning = record.phMorning;
-    if (hasNumber(record.phEvening)) existing.phEvening = record.phEvening;
-    if (hasNumber(record.salinityPpt)) existing.salinityPpt = record.salinityPpt;
-    if (hasNumber(record.temperatureC)) existing.temperatureC = record.temperatureC;
-    if (hasNumber(record.ammoniaMgL)) existing.ammoniaMgL = record.ammoniaMgL;
-    if (record.operationalNotes) existing.operationalNotes = record.operationalNotes;
-    if (hasNumber(record.transparencyCm)) existing.transparencyCm = record.transparencyCm;
+    if (hasNumber(record.doMorning)) { existing.doMorning = record.doMorning; setMeasurementProvenance(existing, 'doMorning', record); }
+    if (hasNumber(record.doEvening)) { existing.doEvening = record.doEvening; setMeasurementProvenance(existing, 'doEvening', record); }
+    if (hasNumber(record.phMorning)) { existing.phMorning = record.phMorning; setMeasurementProvenance(existing, 'phMorning', record); }
+    if (hasNumber(record.phEvening)) { existing.phEvening = record.phEvening; setMeasurementProvenance(existing, 'phEvening', record); }
+    if (hasNumber(record.salinityPpt)) { existing.salinityPpt = record.salinityPpt; setMeasurementProvenance(existing, 'salinityPpt', record); }
+    if (hasNumber(record.temperatureC)) { existing.temperatureC = record.temperatureC; setMeasurementProvenance(existing, 'temperatureC', record); }
+    if (hasNumber(record.ammoniaMgL)) { existing.ammoniaMgL = record.ammoniaMgL; setMeasurementProvenance(existing, 'ammoniaMgL', record); }
+    if (record.operationalNotes) { existing.operationalNotes = record.operationalNotes; setMeasurementProvenance(existing, 'operationalNotes', record); }
+    if (hasNumber(record.transparencyCm)) { existing.transparencyCm = record.transparencyCm; setMeasurementProvenance(existing, 'transparencyCm', record); }
     if (record.feedData?.feedingResponse) existing.feedingResponse = record.feedData.feedingResponse;
-    if (record.weatherEvent) existing.weatherEvent = record.weatherEvent;
-    if (hasNumber(record.waterExchangePercent)) existing.waterExchangePercent = record.waterExchangePercent;
-    if (record.sludgeLoad) existing.sludgeLoad = record.sludgeLoad;
-    if (record.surfaceScum !== null) existing.surfaceScum = record.surfaceScum;
-    if (record.shrimpBehaviour) existing.shrimpBehaviour = record.shrimpBehaviour;
+    if (record.weatherEvent) { existing.weatherEvent = record.weatherEvent; setMeasurementProvenance(existing, 'weatherEvent', record); }
+    if (hasNumber(record.waterExchangePercent)) { existing.waterExchangePercent = record.waterExchangePercent; setMeasurementProvenance(existing, 'waterExchangePercent', record); }
+    if (record.sludgeLoad) { existing.sludgeLoad = record.sludgeLoad; setMeasurementProvenance(existing, 'sludgeLoad', record); }
+    if (record.surfaceScum !== null) { existing.surfaceScum = record.surfaceScum; setMeasurementProvenance(existing, 'surfaceScum', record); }
+    if (record.shrimpBehaviour) { existing.shrimpBehaviour = record.shrimpBehaviour; setMeasurementProvenance(existing, 'shrimpBehaviour', record); }
     existing.sourceIds.push(record.id ?? `record:${date}:${recordIndex}`);
     if (record.observedAt && !existing.observedAt.includes(record.observedAt)) existing.observedAt.push(record.observedAt);
     record.kinds.forEach((kind) => {
@@ -637,6 +900,30 @@ export const extractDailyRecords14d = (
     });
 
     dayMap.set(date, existing);
+  }
+
+  for (const entry of selectedFeedEntries) {
+    const day = dayMap.get(entry.farmDate) ?? createEmptyDay(entry.farmDate, null);
+    dayMap.set(entry.farmDate, day);
+    day.feedKg = entry.feedKg;
+    day.hasAuthoritativeFeed = entry.hasAuthoritativeDailyFeed;
+    day.hasExplicitZeroFeed = entry.hasAuthoritativeDailyFeed && entry.feedKg === 0;
+    day.actualDailyFeedKg = entry.hasAuthoritativeDailyFeed ? entry.feedKg : null;
+    day.samplingFeedEstimateKg = entry.isEstimate ? entry.feedKg : null;
+    day.authoritativeSourceId = entry.hasAuthoritativeDailyFeed ? (entry.sourceIds[0] ?? null) : null;
+    day.samplingSourceId = entry.isEstimate ? (entry.sourceIds[0] ?? null) : null;
+    const feedProvenance = {
+      sourceId: entry.sourceIds[0] ?? null,
+      sourceIds: entry.sourceIds,
+      date: entry.farmDate,
+      measuredAt: entry.measuredAt,
+      precision: entry.precision,
+    };
+    day.measurementProvenance[entry.isEstimate ? 'samplingFeedEstimateKg' : 'daily_feed'] = feedProvenance;
+    if (!entry.isEstimate) {
+      day.measurementProvenance.feedKg = feedProvenance;
+      day.measurementProvenance.actualDailyFeedKg = feedProvenance;
+    }
   }
 
   const recentDays = Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -647,20 +934,35 @@ export const extractDailyRecords14d = (
       ? round(Math.abs(day.phEvening - day.phMorning), 2)
       : null;
 
+    const hasAuthoritative = day.hasExplicitZeroFeed || (day.hasAuthoritativeFeed && hasNumber(day.actualDailyFeedKg));
+    const resolvedFeedKg = hasAuthoritative
+      ? (day.hasExplicitZeroFeed ? 0 : round(day.actualDailyFeedKg!, 2))
+      : hasNumber(day.samplingFeedEstimateKg)
+        ? round(day.samplingFeedEstimateKg!, 2)
+        : null;
+
+    const feedSource: OrsonPromptDailyRecord['feedSource'] = hasAuthoritative
+      ? 'daily_feed'
+      : hasNumber(day.samplingFeedEstimateKg)
+        ? 'sampling_estimate'
+        : null;
+
+    const freshness = evaluateMeasurementFreshness(day.date, asOfDate, {
+      domain: 'operations',
+      timeZone: pond.timeZone,
+    });
+
     return {
       date: day.date,
       diagnosticMeasurements: day.diagnosticMeasurements,
+      measurementProvenance: day.measurementProvenance,
       observedAt: day.observedAt,
       doc: day.doc,
-      feedKg: hasNumber(day.actualDailyFeedKg)
-        ? round(day.actualDailyFeedKg, 2)
-        : hasNumber(day.samplingFeedEstimateKg) ? round(day.samplingFeedEstimateKg, 2) : null,
-      feedSource: hasNumber(day.actualDailyFeedKg) && hasNumber(day.samplingFeedEstimateKg)
-        ? 'mixed'
-        : hasNumber(day.actualDailyFeedKg) ? 'daily_feed' : hasNumber(day.samplingFeedEstimateKg) ? 'sampling_estimate' : null,
-      actualDailyFeedKg: hasNumber(day.actualDailyFeedKg) ? round(day.actualDailyFeedKg, 2) : null,
-      samplingFeedEstimateKg: hasNumber(day.samplingFeedEstimateKg) ? round(day.samplingFeedEstimateKg, 2) : null,
-      mbwG: hasNumber(day.mbwG) ? round(day.mbwG, 2) : null,
+      feedKg: resolvedFeedKg,
+      feedSource,
+      actualDailyFeedKg: day.hasExplicitZeroFeed ? 0 : hasNumber(day.actualDailyFeedKg) ? round(day.actualDailyFeedKg!, 2) : null,
+      samplingFeedEstimateKg: hasNumber(day.samplingFeedEstimateKg) ? round(day.samplingFeedEstimateKg!, 2) : null,
+      mbwG: hasNumber(day.mbwG) && day.mbwG > 0 ? round(day.mbwG, 2) : null,
       mortalityCount: hasNumber(day.mortalityCount) ? round(day.mortalityCount, 0) : null,
       mortalityObservedCount: hasNumber(day.mortalityObservedCount) ? round(day.mortalityObservedCount, 0) : null,
       mortalityObservationTypes: day.mortalityObservationTypes,
@@ -683,6 +985,12 @@ export const extractDailyRecords14d = (
       shrimpBehaviour: day.shrimpBehaviour ?? null,
       sourceIds: Array.from(new Set(day.sourceIds)),
       sourceKinds: day.sourceKinds,
+      pondId: pond.id,
+      cycleId: pond.cycleId,
+      ageDays: freshness.ageDays,
+      isFresh: freshness.isFresh,
+      isStale: freshness.isStale,
+      authoritativeSourceId: day.authoritativeSourceId,
     };
   });
 };

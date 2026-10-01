@@ -30,6 +30,8 @@ import type {
   OrsonMetricComparison,
   OrsonPondDiagnosticContext,
   OrsonIntervalSeriesSummary,
+  OrsonEvidenceSummary,
+  OrsonMetricEvidenceItem,
 } from './types';
 
 const EXPLICIT_GENERAL = /\b(secara umum|pertanyaan umum|bukan analisis kolam|in general|general (?:question|guidance)|not (?:a |an )?(?:pond|farm)(?:-specific)? analysis)\b/i;
@@ -725,6 +727,7 @@ export const buildOrsonPromptPayload = (
     smoothedAdgGPerDay: metrics.smoothedAdgGPerDay,
     growthConfidence: metrics.growthConfidence,
     growthEvidence: metrics.growthEvidence,
+    evidence: metrics.evidence,
     fcr: metrics.fcr,
     totalFeedKg: metrics.totalFeedKg,
     biomassGainKg: metrics.biomassGainKg,
@@ -798,6 +801,13 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     'SOURCE OF TRUTH:',
     '- Use the provided ORSON RISK PAYLOAD and ORSON COMPARATIVE MATRIX as the source of truth for included farm values.',
     '- The payload is produced by deterministic Shrimply calculations before this model call.',
+    '- Always use farm-local calendar dates (as_of_date, date keys in daily_records_14d, and farm_time_zone). Never confuse UTC timestamps with farm-local operational dates or shift post-midnight observations to the wrong day.',
+    '- Date-only evidence has no measured hour. Missing, invalid, and future-dated measurements cannot establish a current condition or prove safety.',
+    '- Stale normal data is not current safety. If a reading or lab status was normal days or weeks ago (or is marked is_stale), do not present the pond as currently safe, stable, or optimal. Clearly report the measurement date, age in days, and missing recent coverage.',
+    '- Logged feed allocation is an operational distribution, never measured appetite, tray clearance, or feed consumption. A change in logged feed allocation alone cannot establish appetite, hunger, or feed conversion; use direct tray (anco) clearance or direct feeding-response observations when available.',
+    '- Explicit zero feed (0 kg) means the recorded daily feed allocation or total is zero; the reason and actual consumption are unknown. Do not infer fasting, halted feeding, appetite, tray clearance, or consumption from this value. Do not treat zero feed as missing data or assume it means zero living biomass.',
+    '- A missing observation is strictly unknown, never zero, normal, or safe. When observations or analytes are unrecorded, explicitly state that they are missing rather than assuming baseline values.',
+    '- Prompt context carries source IDs internally, measurement dates, precision, freshness, and per-metric coverage. Explain dates and coverage gaps when describing provenance; never expose record IDs.',
     '- If ORSON EXACT RECORDS is present, use it instead of ORSON RISK PAYLOAD. Report only its pond, requested dates, and requested fields; do not add other pond metrics, biological conclusions, or unrequested context.',
     '- Deterministic risk levels and findings remain authoritative. Diagnostic explanations may connect dated evidence, but must remain labelled as hypotheses unless a finding or confirmed lab result establishes them.',
     '- Routine questions use the latest 3-5 question-relevant records from daily_records_14d, recent_lab_reports, and recent_treatments. Explicit history and diagnostic questions may use the complete included calendar window shown in history_coverage.',
@@ -1134,6 +1144,49 @@ const compactDiagnosticContext = (context: OrsonPondDiagnosticContext) => ({
   },
 });
 
+const compactEvidenceItem = (item?: OrsonMetricEvidenceItem | null) => item ? ({
+  metric: item.metric,
+  domain: item.domain,
+  source_id: item.sourceId ?? null,
+  sourceId: item.sourceId ?? null,
+  pond_id: item.pondId ?? null,
+  cycle_id: item.cycleId ?? null,
+  date: item.date ?? null,
+  measured_at: item.measuredAt ?? null,
+  precision: item.precision ?? 'date-only',
+  age_days: item.ageDays ?? null,
+  ageDays: item.ageDays ?? null,
+  is_fresh: item.isFresh,
+  isFresh: item.isFresh,
+  is_stale: item.isStale,
+  isStale: item.isStale,
+  coverage: item.coverage ? {
+    window_days: item.coverage.windowDays,
+    windowDays: item.coverage.windowDays,
+    recorded_days: item.coverage.recordedDays,
+    recordedDays: item.coverage.recordedDays,
+    coverage_ratio: item.coverage.coverageRatio,
+    coverageRatio: item.coverage.coverageRatio,
+    missing_dates: item.coverage.missingDates,
+    missingDates: item.coverage.missingDates,
+  } : null,
+}) : null;
+
+const compactEvidence = (evidence?: OrsonEvidenceSummary | null) => evidence ? ({
+  as_of_date: evidence.asOfDate,
+  as_of_timestamp: evidence.asOfTimestamp ?? null,
+  farm_time_zone: evidence.timeZone,
+  pond_id: evidence.pondId ?? null,
+  cycle_id: evidence.cycleId ?? null,
+  water: compactEvidenceItem(evidence.water),
+  mbw: compactEvidenceItem(evidence.mbw),
+  daily_feed: compactEvidenceItem(evidence.dailyFeed),
+  dailyFeed: compactEvidenceItem(evidence.dailyFeed),
+  mortality: compactEvidenceItem(evidence.mortality),
+  lab: compactEvidenceItem(evidence.lab),
+  metrics: Object.fromEntries(Object.entries(evidence.allMetrics).map(([metric, item]) => [metric, compactEvidenceItem(item)])),
+}) : undefined;
+
 export const buildOrsonPromptContext = (
   payloads: OrsonPromptPondPayload[],
   questionFocus: OrsonQuestionFocus,
@@ -1215,7 +1268,21 @@ export const buildOrsonPromptContext = (
     adg_g_per_day: payload.adgGPerDay,
     smoothed_adg_g_per_day: payload.smoothedAdgGPerDay,
     growth_confidence: payload.growthConfidence,
-    growth_evidence: payload.growthEvidence,
+    growth_evidence: {
+      ...payload.growthEvidence,
+      sample_count: payload.growthEvidence.sampleCount,
+      adg_source: payload.growthEvidence.adgSource,
+      weight_source: payload.growthEvidence.weightSource,
+      source: payload.growthEvidence.source ?? null,
+      pond_id: payload.growthEvidence.pondId ?? null,
+      cycle_id: payload.growthEvidence.cycleId ?? null,
+      latest_date: payload.growthEvidence.latestDate ?? null,
+      age_days: payload.growthEvidence.ageDays ?? null,
+      is_fresh: payload.growthEvidence.isFresh ?? null,
+      is_stale: payload.growthEvidence.isStale ?? null,
+      coverage_ratio: payload.growthEvidence.coverageRatio ?? null,
+    },
+    evidence: payload.evidence ? compactEvidence(payload.evidence) : undefined,
     fcr: payload.fcr,
     calculation_context: {
       adg: {
@@ -1223,6 +1290,9 @@ export const buildOrsonPromptContext = (
         source: payload.growthEvidence.adgSource,
         measured_sample_count: payload.growthEvidence.sampleCount,
         latest_mbw_date: payload.diagnosticContext.currentEvidenceDates.mbw,
+        age_days: payload.growthEvidence.ageDays ?? null,
+        is_fresh: payload.growthEvidence.isFresh ?? null,
+        is_stale: payload.growthEvidence.isStale ?? null,
       },
       fcr: {
         value: payload.fcr,
@@ -1313,6 +1383,7 @@ export const buildOrsonPromptContext = (
       .map((r) => withoutUnavailable({
       date: r.date,
       observed_at: r.observedAt,
+      measurement_provenance: r.measurementProvenance ?? {},
       doc: r.doc,
       feed_kg: r.feedKg,
       feed_kg_display: typeof r.feedKg === 'number' ? formatRecordedDecimal(r.feedKg) : null,
@@ -1342,6 +1413,12 @@ export const buildOrsonPromptContext = (
       shrimp_behaviour: r.shrimpBehaviour,
       source_ids: r.sourceIds,
       source_kinds: r.sourceKinds,
+      pond_id: r.pondId ?? null,
+      cycle_id: r.cycleId ?? null,
+      age_days: r.ageDays ?? null,
+      is_fresh: r.isFresh ?? null,
+      is_stale: r.isStale ?? null,
+      authoritative_source_id: r.authoritativeSourceId ?? null,
     })),
     recent_lab_reports: (payload.recentLabReports || []).slice(0, payloads.length === 1 ? 5 : 1).map((l) => ({
       source_id: l.labReportId ?? null,
@@ -1523,6 +1600,7 @@ export const buildOrsonPromptContext = (
         smoothed_adg_g_per_day: p.smoothedAdgGPerDay,
         growth_confidence: p.growthConfidence,
         growth_evidence: p.growthEvidence,
+        evidence: p.evidence ? compactEvidence(p.evidence) : undefined,
         fcr: p.fcr,
         biomass_kg: p.biomassKg,
         survival_pct: p.survivalPercent,
