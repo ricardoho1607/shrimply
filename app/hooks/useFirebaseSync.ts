@@ -1334,7 +1334,7 @@ const useFirebaseSyncController = () => {
   }, [addPendingChange]);
 
   const syncMortality = useCallback((action: 'create' | 'update' | 'delete', pondId: string, record: MortalityRecord, recordId?: string, operationId?: string) => {
-    addPendingChange({
+    return addPendingChange({
       id: operationId || createOfflineOperationId(`mortality-${record.id}-${action}`),
       type: 'mortality',
       action,

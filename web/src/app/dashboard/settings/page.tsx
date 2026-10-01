@@ -1,5 +1,8 @@
 "use client";
 
+import { useSaveOperation } from '../../../../../shared/useSaveOperation';
+import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
+import { updateRecordOnline, uploadSaveFile } from '@/lib/saveData';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   User, 
@@ -22,8 +25,8 @@ import {
   Trash2,
   AlertTriangle
 } from 'lucide-react';
-import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
+import { doc, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { getDownloadURL, ref as storageRef } from 'firebase/storage';
 import Link from 'next/link';
 import { db, storage } from '@/lib/firebase';
 import { syncPublicCompanyProfile } from '@/lib/publicCompanyProfile';
@@ -94,6 +97,7 @@ export default function SettingsPage() {
   const { user, company, getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, requestCompanyDeletion, approveCompanyDeletion, cancelCompanyDeletion } = useAuth();
   const { data: members } = useCompanyMembers<NonNullable<ReturnType<typeof useAuth>['user']>>();
   const [saving, setSaving] = useState(false);
+  const { save, busy: savePending } = useSaveOperation();
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [deletionLoading, setDeletionLoading] = useState(false);
@@ -208,17 +212,19 @@ export default function SettingsPage() {
       alert(copy('Choose an image smaller than 5 MB.'));
       return;
     }
+    if (!save.acquire()) return;
     setUploadingPhoto(true);
     try {
       const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
       const photoRef = storageRef(storage, `users/${user.uid}/profile/avatar-${Date.now()}.${extension}`);
-      await uploadBytes(photoRef, file, { contentType: file.type });
+      await uploadSaveFile(photoRef, file, { contentType: file.type });
       const profileImage = await getDownloadURL(photoRef);
-      await updateDoc(doc(db, 'users', user.uid), { profileImage });
+      await updateRecordOnline(db, doc(db, 'users', user.uid), removeUndefinedFields({ profileImage }));
     } catch (error) {
       console.error('Error uploading profile photo:', error);
       alert(copy('Failed to upload profile photo.'));
     } finally {
+      save.release();
       setUploadingPhoto(false);
     }
   };
@@ -286,17 +292,19 @@ export default function SettingsPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (save.busy) return;
     if (!user) return;
     if (activeTab === 'company' && !canEditCompany) return;
     setSaving(true);
     setSuccess(false);
 
+    if (!save.acquire()) return;
     try {
       if (activeTab === 'profile') {
-        await updateDoc(doc(db, 'users', user.uid), {
+        await updateRecordOnline(db, doc(db, 'users', user.uid), removeUndefinedFields({
           name: userForm.name,
           phone: userForm.phone
-        });
+        }));
       } else if (activeTab === 'company') {
         const targetCompanyId = company?.id || user.companyId || user.uid;
 
@@ -317,12 +325,14 @@ export default function SettingsPage() {
 
         if (!company?.id && !user.companyId) {
           // Create new company record if missing
-          const { setDoc } = await import('firebase/firestore');
-          await setDoc(doc(db, 'companies', targetCompanyId), {
+          await runTransaction(db, async tx => {
+            await tx.get(doc(db, 'users', user.uid));
+            tx.set(doc(db, 'companies', targetCompanyId), {
             ...companyData,
             id: targetCompanyId,
             teamMembers: [user.uid],
             createdAt: serverTimestamp(),
+            });
           });
           await syncPublicCompanyProfile(targetCompanyId, {
             ...companyData,
@@ -330,12 +340,12 @@ export default function SettingsPage() {
           });
           
           // Link it to the user
-          await updateDoc(doc(db, 'users', user.uid), {
+          await updateRecordOnline(db, doc(db, 'users', user.uid), removeUndefinedFields({
             companyId: targetCompanyId
-          });
+          }));
         } else {
           // Update existing company record
-          await updateDoc(doc(db, 'companies', targetCompanyId), companyData);
+          await updateRecordOnline(db, doc(db, 'companies', targetCompanyId), removeUndefinedFields(companyData));
           await syncPublicCompanyProfile(targetCompanyId, {
             ...companyData,
             id: targetCompanyId,
@@ -348,6 +358,7 @@ export default function SettingsPage() {
       console.error('Error saving settings:', error);
       alert(`${copy('Failed to save settings:')} ${error instanceof Error ? error.message : copy('Unknown error')}`);
     } finally {
+      save.release();
       setSaving(false);
     }
   };
@@ -382,7 +393,7 @@ export default function SettingsPage() {
                 fontWeight: activeTab === tab.id ? 600 : 500, fontSize: '13px', cursor: 'pointer', textAlign: 'left',
                 fontFamily: 'var(--jakarta)',
                 transition: 'all 0.2s'
-              }}
+              }} disabled={savePending}
             >
               <tab.icon size={18} />
               {tab.label}
@@ -394,7 +405,7 @@ export default function SettingsPage() {
         <div className="glass-card settings-panel" style={{ padding: '32px', borderRadius: '18px' }}>
           
           {activeTab === 'profile' && (
-            <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}><fieldset disabled={savePending} style={{ display: 'contents' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                 <div style={{ position: 'relative' }}>
                   <div style={{ width: '100px', height: '100px', borderRadius: '24px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 600, color: 'var(--primary)', overflow: 'hidden', border: '1px solid var(--border)' }}>
@@ -402,7 +413,7 @@ export default function SettingsPage() {
                   </div>
                   <label className="settings-avatar-button" style={{ position: 'absolute', bottom: '-8px', right: '-8px', width: '36px', height: '36px', borderRadius: '50%', background: 'var(--primary)', color: '#FFF', border: '3px solid white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: uploadingPhoto ? 'wait' : 'pointer', boxShadow: 'var(--shadow-card)' }}>
                     {uploadingPhoto ? <Loader2 className="animate-spin" size={14} /> : <Camera size={14} />}
-                    <input type="file" accept="image/*" disabled={uploadingPhoto} onChange={(event) => void handleProfilePhoto(event.target.files?.[0])} style={{ display: 'none' }} />
+                    <input type="file" accept="image/*" disabled={savePending || uploadingPhoto} onChange={(event) => void handleProfilePhoto(event.target.files?.[0])} style={{ display: 'none' }} />
                   </label>
                 </div>
                 <div>
@@ -444,16 +455,16 @@ export default function SettingsPage() {
 
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
                 {success && <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#059669', fontSize: '13px', fontWeight: 600 }}><CheckCircle2 size={16} /> {t.settings.changesSaved || 'Changes saved'}</div>}
-                <button type="submit" disabled={saving || !canEditCompany} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button type="submit" disabled={savePending || (saving || !canEditCompany)} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {saving && <Loader2 className="animate-spin" size={18} />}
                   {t.settings.saveChanges || 'Save Changes'}
                 </button>
               </div>
-            </form>
+            </fieldset></form>
           )}
 
           {activeTab === 'company' && (
-            <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}><fieldset disabled={savePending} style={{ display: 'contents' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '20px', justifyContent: 'space-between', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                 <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
@@ -555,12 +566,12 @@ export default function SettingsPage() {
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
                 {success && <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#059669', fontSize: '13px', fontWeight: 600 }}><CheckCircle2 size={16} /> {t.settings.updatedSuccessfully || 'Updated successfully'}</div>}
-                <button type="submit" disabled={saving} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button type="submit" disabled={savePending || (saving)} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
                   {t.settings.updateOrganization || 'Update Organization'}
                 </button>
               </div>
-            </form>
+            </fieldset></form>
           )}
 
           {activeTab === 'organization' && (
@@ -570,7 +581,7 @@ export default function SettingsPage() {
                   <h3 style={{ fontSize: '18px', fontWeight: 600 }}>{copy('Team Members')}</h3>
                   <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{copy("Manage your organization's members and their roles.")}</p>
                 </div>
-                <button className="btn-primary settings-invite-button" style={{ padding: '10px 16px', fontSize: '13px', borderRadius: '10px' }}>{copy('+ Invite Member')}</button>
+                <button className="btn-primary settings-invite-button" style={{ padding: '10px 16px', fontSize: '13px', borderRadius: '10px' }} disabled={savePending}>{copy('+ Invite Member')}</button>
               </div>
 
               {canManageTeam && (
@@ -603,7 +614,7 @@ export default function SettingsPage() {
                       <div className="settings-join-request-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                         <button
                           type="button"
-                          disabled={processingRequestId === request.id}
+                          disabled={savePending || (processingRequestId === request.id)}
                           onClick={() => handleJoinRequestDecision(request.id, 'reject')}
                           style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 12px', borderRadius: '10px', border: '1px solid #FECDCA', background: '#FEF3F2', color: '#B42318', fontWeight: 600, cursor: 'pointer' }}
                         >
@@ -612,7 +623,7 @@ export default function SettingsPage() {
                         </button>
                         <button
                           type="button"
-                          disabled={processingRequestId === request.id}
+                          disabled={savePending || (processingRequestId === request.id)}
                           onClick={() => handleJoinRequestDecision(request.id, 'approve')}
                           style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 12px', borderRadius: '10px', border: '1px solid #BBE1FA', background: 'var(--primary)', color: '#FFFFFF', fontWeight: 600, cursor: 'pointer' }}
                         >
@@ -649,7 +660,7 @@ export default function SettingsPage() {
                       && member.id !== user?.uid
                       && member.id !== company?.ownerId
                       && !['owner', 'co-owner'].includes(member.role || '') && (
-                      <button type="button" disabled={removingMemberId === member.id} onClick={() => void handleRemoveMember(member.id, member.name)} aria-label={`Remove ${member.name || 'member'}`} style={{ border: '1px solid #FECDCA', color: '#B42318', background: '#FEF3F2', borderRadius: '10px', padding: '9px', cursor: 'pointer' }}>
+                      <button type="button" disabled={savePending || (removingMemberId === member.id)} onClick={() => void handleRemoveMember(member.id, member.name)} aria-label={`Remove ${member.name || 'member'}`} style={{ border: '1px solid #FECDCA', color: '#B42318', background: '#FEF3F2', borderRadius: '10px', padding: '9px', cursor: 'pointer' }}>
                         {removingMemberId === member.id ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
                       </button>
                     )}
@@ -678,7 +689,7 @@ export default function SettingsPage() {
                     {canManageCompanyDeletion && !company.deletionRequest.approvedByIds?.includes(user?.uid || '') && (
                       <button
                         type="button"
-                        disabled={deletionLoading}
+                        disabled={savePending || (deletionLoading)}
                         onClick={handleApproveCompanyDeletion}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: '10px', border: 'none', background: '#D92D20', color: '#FFFFFF', fontWeight: 600, cursor: 'pointer' }}
                       >
@@ -689,7 +700,7 @@ export default function SettingsPage() {
                     {canManageCompanyDeletion && (
                       <button
                         type="button"
-                        disabled={deletionLoading}
+                        disabled={savePending || (deletionLoading)}
                         onClick={handleCancelCompanyDeletion}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: '10px', border: '1px solid #D0D5DD', background: '#FFFFFF', color: '#344054', fontWeight: 600, cursor: 'pointer' }}
                       >
@@ -713,7 +724,7 @@ export default function SettingsPage() {
                   <div>
                     <button
                       type="button"
-                      disabled={deletionLoading}
+                      disabled={savePending || (deletionLoading)}
                       onClick={handleRequestCompanyDeletion}
                       style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: '10px', border: '1px solid #FECDCA', background: '#FEF3F2', color: '#B42318', fontWeight: 600, cursor: 'pointer' }}
                     >
@@ -750,7 +761,7 @@ export default function SettingsPage() {
                         background: currentLanguage === lang.code ? 'var(--primary-dim)' : 'var(--bg-mid)',
                         display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', textAlign: 'left',
                         transition: 'all 0.2s'
-                      }}
+                      }} disabled={savePending}
                     >
                       <span style={{ fontSize: '24px' }}>{lang.flag}</span>
                       <div style={{ flex: 1 }}>
@@ -789,7 +800,7 @@ export default function SettingsPage() {
                   {Object.values(CURRENCIES).map((curr) => (
                     <button
                       key={curr.code}
-                      disabled={!canEditCompany}
+                      disabled={savePending || (!canEditCompany)}
                       onClick={() => setCurrency(curr.code as Parameters<typeof setCurrency>[0])}
                       style={{
                         padding: '16px', borderRadius: '16px', border: '1px solid',

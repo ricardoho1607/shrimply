@@ -1,6 +1,8 @@
 "use client";
 
 import { getUsageReturnCost } from '../../../../../shared/financeIntegrity';
+import { useSaveOperation } from '../../../../../shared/useSaveOperation';
+import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -131,6 +133,7 @@ export default function FeedRecordsPage() {
   const requestedAction = searchParams.get('action');
   const today = useFarmDateKey(company?.timeZone);
   const [ponds, setPonds] = useState<Pond[]>([]);
+  const { save, busy: savePending } = useSaveOperation();
   const [loading, setLoading] = useState(true);
   const [companyId, setCompanyId] = useState<string | null>(null);
 
@@ -313,6 +316,7 @@ export default function FeedRecordsPage() {
 
   const handleAddFeed = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (save.busy) return;
     if (!companyId || !formData.pondId || !user) return;
     if (!canEditFeed) return;
     if (!accessiblePonds.some((pond) => pond.id === formData.pondId)) return;
@@ -345,6 +349,7 @@ export default function FeedRecordsPage() {
       return;
     }
 
+    if (!save.acquire()) return;
     try {
       const pondRef = doc(db, 'companies', companyId, 'ponds', formData.pondId);
       await runTransaction(db, async (transaction) => {
@@ -452,7 +457,7 @@ export default function FeedRecordsPage() {
             throw new Error('Feed cost is missing. Stock this feed with a price before recording usage.');
           }
 
-          transaction.update(feedRef, {
+          transaction.update(feedRef, removeUndefinedFields({
             totalStock: Math.max(0, currentStock - quantityDelta),
             totalCost: quantityDelta > 0
               ? Math.max(0, currentCost - (quantityDelta * unitPrice))
@@ -473,7 +478,7 @@ export default function FeedRecordsPage() {
               createdAt: Timestamp.now()
             }),
             lastUpdated: serverTimestamp()
-          });
+          }));
         };
 
         for (const feedId of feedIds) {
@@ -487,11 +492,11 @@ export default function FeedRecordsPage() {
           adjustFeedUsage(feedId, getDailyFeedUsageAdjustment(desiredAmount, alreadyDeducted));
         }
 
-        transaction.update(pondRef, {
+        transaction.update(pondRef, removeUndefinedFields({
           samplings,
           updatedAt: serverTimestamp(),
           updatedBy: user.uid
-        });
+        }));
       });
 
         setModalOpen(false);
@@ -506,6 +511,8 @@ export default function FeedRecordsPage() {
     } catch (error) {
       console.error('Error adding feed record:', error);
       alert(error instanceof Error ? error.message : 'Failed to update feed record.');
+    } finally {
+      save.release();
     }
   };
 
@@ -625,11 +632,13 @@ export default function FeedRecordsPage() {
   };
 
   const handleDeleteFeedRecord = async () => {
+    if (save.busy) return;
     if (!companyId || !user || !selectedPondForHistory || !deletingFeedRecord || !canEditFeed || isDeletingFeedRecord) return;
     if (!accessiblePonds.some((pond) => pond.id === selectedPondForHistory.id)) return;
     setIsDeletingFeedRecord(true);
     let missingInventory = false;
 
+    if (!save.acquire()) return;
     try {
       const pondRef = doc(db, 'companies', companyId, 'ponds', selectedPondForHistory.id);
       await runTransaction(db, async (transaction) => {
@@ -692,7 +701,7 @@ export default function FeedRecordsPage() {
           }
 
           const feedRef = doc(db, 'companies', companyId, 'feeds', feedId);
-          transaction.update(feedRef, {
+          transaction.update(feedRef, removeUndefinedFields({
             usageHistory: arrayUnion({
               id: `${feedRecordId}:${feedId}:deleted:${adjustmentTimestamp}`,
               date: deletingFeedRecord.date,
@@ -711,7 +720,7 @@ export default function FeedRecordsPage() {
             totalStock: currentStock + quantityToRestore,
             totalCost: currentCost + (quantityToRestore * unitPrice),
             lastUpdated: serverTimestamp(),
-          });
+          }));
         }
         missingInventory = restoredQuantity + 0.000001 < sumFeedAllocations(allocations);
 
@@ -719,11 +728,11 @@ export default function FeedRecordsPage() {
         delete samplingWithoutFeedData.feedData;
         samplingWithoutFeedData.feedEntryStatus = 'not_recorded';
         samplings[samplingIndex] = samplingWithoutFeedData;
-        transaction.update(pondRef, {
+        transaction.update(pondRef, removeUndefinedFields({
           samplings,
           updatedAt: serverTimestamp(),
           updatedBy: user.uid,
-        });
+        }));
       });
 
       setDeletingFeedRecord(null);
@@ -735,6 +744,7 @@ export default function FeedRecordsPage() {
       console.error('Error deleting feed record:', error);
       alert(error instanceof Error ? error.message : t.feedHistory.deleteFailed);
     } finally {
+      save.release();
       setIsDeletingFeedRecord(false);
     }
   };
@@ -781,7 +791,7 @@ export default function FeedRecordsPage() {
               });
               setModalOpen(true);
             }}
-            className="dashboard-action dashboard-action-primary"
+            className="dashboard-action dashboard-action-primary" disabled={savePending}
           >
             <Plus size={18} />
             <span>{t.feed.newFeedLog}</span>
@@ -836,7 +846,7 @@ export default function FeedRecordsPage() {
                     onClick={() => openHistoryDrawer(pond.id)}
                     className="feed-history-button"
                     aria-label={copy('View {pond} feed history', { pond: pond.pondName })}
-                    title={copy('View history')}
+                    title={copy('View history')} disabled={savePending}
                   >
                     <History size={17} />
                   </button>
@@ -872,7 +882,7 @@ export default function FeedRecordsPage() {
                         });
                         setModalOpen(true);
                       }}
-                      className="feed-quick-entry"
+                      className="feed-quick-entry" disabled={savePending}
                     >
                       <Plus size={15} /> {copy('Log')}
                     </button>
@@ -895,7 +905,7 @@ export default function FeedRecordsPage() {
                   <p>{t.feedHistory.title}</p>
                 </div>
               </div>
-              <button aria-label={copy('Close feed history')} onClick={closeHistoryDrawer} className="feed-modal-close">
+              <button aria-label={copy('Close feed history')} onClick={closeHistoryDrawer} className="feed-modal-close" disabled={savePending}>
                 <X size={18} />
               </button>
             </div>
@@ -931,7 +941,7 @@ export default function FeedRecordsPage() {
                             type="button"
                             aria-label={`${t.feedHistory.deleteAction}: ${log.date}`}
                             onClick={() => setDeletingFeedRecord(log)}
-                            style={{ position: 'absolute', inset: '0 0 0 auto', width: '104px', border: 'none', background: '#E74C3C', color: '#FFFFFF', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                            style={{ position: 'absolute', inset: '0 0 0 auto', width: '104px', border: 'none', background: '#E74C3C', color: '#FFFFFF', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }} disabled={savePending}
                           >
                             <Trash2 size={19} />
                             {t.feedHistory.deleteAction}
@@ -975,7 +985,7 @@ export default function FeedRecordsPage() {
                                   event.stopPropagation();
                                   setDeletingFeedRecord(log);
                                 }}
-                                onKeyDown={(event) => event.stopPropagation()}
+                                onKeyDown={(event) => event.stopPropagation()} disabled={savePending}
                               >
                                 <Trash2 size={17} />
                               </button>
@@ -1014,7 +1024,7 @@ export default function FeedRecordsPage() {
               <button
                 type="button"
                 onClick={() => setDeletingFeedRecord(null)}
-                disabled={isDeletingFeedRecord}
+                disabled={savePending || (isDeletingFeedRecord)}
                 style={{ flex: 1, minHeight: '48px', borderRadius: '12px', border: '1px solid var(--border)', background: '#FFFFFF', color: 'var(--text-muted)', fontWeight: 600, cursor: 'pointer' }}
               >
                 {t.actions.cancel}
@@ -1022,7 +1032,7 @@ export default function FeedRecordsPage() {
               <button
                 type="button"
                 onClick={handleDeleteFeedRecord}
-                disabled={isDeletingFeedRecord}
+                disabled={savePending || (isDeletingFeedRecord)}
                 style={{ flex: 1.4, minHeight: '48px', padding: '0 12px', borderRadius: '12px', border: 'none', background: '#E74C3C', color: '#FFFFFF', fontWeight: 600, cursor: isDeletingFeedRecord ? 'wait' : 'pointer', opacity: isDeletingFeedRecord ? 0.65 : 1 }}
               >
                 {isDeletingFeedRecord ? t.feedHistory.deleting : t.feedHistory.confirmDelete}
@@ -1045,10 +1055,10 @@ export default function FeedRecordsPage() {
                   </p>
                 </div>
               </div>
-              <button onClick={closeFeedModal} className="feed-modal-close" aria-label={copy('Close feed entry')}><X size={18} /></button>
+              <button onClick={closeFeedModal} className="feed-modal-close" aria-label={copy('Close feed entry')} disabled={savePending}><X size={18} /></button>
             </div>
 
-            <form className="responsive-modal-body feed-log-form" onSubmit={handleAddFeed}>
+            <form className="responsive-modal-body feed-log-form" onSubmit={handleAddFeed}><fieldset disabled={savePending} style={{ display: 'contents' }}>
               <div className="responsive-form-grid feed-log-grid">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
                   <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{copy('Select Pond')}</label>
@@ -1146,7 +1156,7 @@ export default function FeedRecordsPage() {
                           ...current,
                           feedAllocations: current.feedAllocations.filter((_, itemIndex) => itemIndex !== index),
                         }))}
-                        style={{ width: '40px', height: '40px', borderRadius: '10px', border: '1px solid var(--border)', background: 'white', color: '#e74c3c', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                        style={{ width: '40px', height: '40px', borderRadius: '10px', border: '1px solid var(--border)', background: 'white', color: '#e74c3c', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} disabled={savePending}
                       >
                         <X size={18} />
                       </button>
@@ -1154,7 +1164,7 @@ export default function FeedRecordsPage() {
                   ))}
                   <button
                     type="button"
-                    disabled={!hasUnusedInventoryFeed}
+                    disabled={savePending || (!hasUnusedInventoryFeed)}
                     onClick={() => {
                       const nextFeed = inventoryFeeds.find((feed) => !formData.feedAllocations.some((allocation) => allocation.inventoryFeedId === feed.id));
                       if (!nextFeed) return;
@@ -1196,7 +1206,7 @@ export default function FeedRecordsPage() {
                           onClick={() => setFormData((current) => ({
                             ...current,
                             feedingResponse: response,
-                          }))}
+                          }))} disabled={savePending}
                         >
                           {feedingResponseLabels[response]}
                         </button>
@@ -1208,10 +1218,10 @@ export default function FeedRecordsPage() {
               </div>
 
               <div className="feed-log-footer">
-                <button type="button" onClick={closeFeedModal} style={{ flex: 1, height: '44px', padding: '0 16px', borderRadius: '10px', border: '1px solid var(--border)', background: 'white', fontWeight: 500, fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s' }} onMouseOver={(e) => (e.currentTarget.style.background = 'var(--bg-mid)')} onMouseOut={(e) => (e.currentTarget.style.background = 'white')}>{t.actions.cancel}</button>
-                <button type="submit" className="feed-save-button">{editingFeedRecord ? t.feedHistory.updateFeed : t.feed.saveFeedData}</button>
+                <button type="button" onClick={closeFeedModal} style={{ flex: 1, height: '44px', padding: '0 16px', borderRadius: '10px', border: '1px solid var(--border)', background: 'white', fontWeight: 500, fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s' }} onMouseOver={(e) => (e.currentTarget.style.background = 'var(--bg-mid)')} onMouseOut={(e) => (e.currentTarget.style.background = 'white')} disabled={savePending}>{t.actions.cancel}</button>
+                <button type="submit" className="feed-save-button" disabled={savePending}>{editingFeedRecord ? t.feedHistory.updateFeed : t.feed.saveFeedData}</button>
               </div>
-            </form>
+            </fieldset></form>
           </div>
         </div>
       )}

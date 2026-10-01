@@ -1,3 +1,4 @@
+import { useSaveOperation } from '../shared/useSaveOperation';
 import { isSourceLinkedFinance, monetaryValue } from '../shared/financeIntegrity';
 // app/finance.tsx - Optimized with consistent Android styles
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -140,6 +141,7 @@ export default function FinancePage() {
     t.finance?.mobilePayment || 'Mobile Payment'
   ];
 
+  const { save, busy: savePending } = useSaveOperation();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [revenues, setRevenues] = useState<Revenue[]>([]);
   const [loading, setLoading] = useState(true);
@@ -237,8 +239,8 @@ export default function FinancePage() {
       return;
     }
 
-    const amount = parseFloat(formData.amount);
-    if (isNaN(amount) || amount <= 0) {
+    const amount = Number(formData.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
       Alert.alert(t.finance?.validationError || 'Validation Error', t.finance?.validAmount || 'Please enter a valid amount');
       return;
     }
@@ -254,6 +256,7 @@ export default function FinancePage() {
       return;
     }
 
+    if (!save.acquire()) return;
     setSubmitting(true);
     try {
       const baseData = {
@@ -275,7 +278,7 @@ export default function FinancePage() {
           await financeService.updateExpense(company.id, editingExpense.id, expenseData);
           Alert.alert('Success', `${t.finance?.expenses || 'Expense'} updated successfully`);
         } else {
-          await financeService.addExpense(company.id, expenseData, user.uid, user.name || user.email?.split('@')[0] || 'Unknown');
+          await financeService.addExpense(company.id, expenseData, user.uid, user.name || user.email?.split('@')[0] || 'Unknown', save.id(`finance:${company.id}:${formType}`));
           Alert.alert('Success', `${t.finance?.expenses || 'Expense'} added successfully`);
         }
       } else {
@@ -283,18 +286,20 @@ export default function FinancePage() {
           await revenueService.updateRevenue(company.id, editingRevenue.id, baseData);
           Alert.alert('Success', `${t.finance?.revenue || 'Revenue'} updated successfully`);
         } else {
-          await revenueService.addRevenue(company.id, baseData, user.uid, user.name || user.email?.split('@')[0] || 'Unknown');
+          await revenueService.addRevenue(company.id, baseData, user.uid, user.name || user.email?.split('@')[0] || 'Unknown', save.id(`finance:${company.id}:${formType}`));
           Alert.alert('Success', `${t.finance?.revenue || 'Revenue'} added successfully`);
         }
       }
 
-      await loadData();
+      save.complete();
       resetForm();
       setShowForm(false);
+      void loadData().catch(error => console.error('Saved, but refresh failed:', error));
     } catch (error: any) {
       console.error('Failed to save finance data:', error);
       Alert.alert('Error', 'Failed to save data. Please try again.');
     } finally {
+      save.release();
       setSubmitting(false);
     }
   };
@@ -310,6 +315,7 @@ export default function FinancePage() {
       return;
     }
 
+    if (!save.reset()) return;
     const isExpense = type === 'expense';
     setFormData({
       date: item.date, category: item.category, item: item.item, amount: item.amount.toString(),
@@ -447,14 +453,16 @@ export default function FinancePage() {
 
   const savePayment = async () => {
     if (!company?.id || !paymentTarget || !canManageFinance || savingPayment) return;
+    if (!save.acquire()) return;
     setSavingPayment(true);
     try {
-      const payment = { id: `payment-${Date.now()}-${Math.random().toString(36).slice(2)}`, date: paymentDate, amount: Number(paymentAmount) };
+      const payment = { id: save.id(`payment:${paymentTarget.item.id}`), date: paymentDate, amount: Number(paymentAmount) };
       if (paymentTarget.type === 'expense') await financeService.recordPayment(company.id, paymentTarget.item as Expense, payment);
       else await revenueService.recordPayment(company.id, paymentTarget.item as Revenue, payment);
-      setPaymentTarget(null); await loadData();
+      save.complete();
+      setPaymentTarget(null); void loadData().catch(error => console.error('Saved, but refresh failed:', error));
     } catch (error) { Alert.alert('Payment not saved', error instanceof Error ? error.message : 'Try again'); }
-    finally { setSavingPayment(false); }
+    finally { save.release(); setSavingPayment(false); }
   };
 
   const renderLedgerItem = (item: Expense | Revenue, type: 'expense' | 'revenue') => {
@@ -529,6 +537,7 @@ export default function FinancePage() {
           <Text style={styles.headerTitle}>{t.finance?.title || 'Finance'}</Text>
           {canManageFinance && <View style={styles.headerActions}>
             <TouchableOpacity onPress={() => {
+                if (!save.reset()) return;
                 resetForm();
                 setFormType('revenue');
                 setFormData(prev => ({ ...prev, category: REVENUE_CATEGORIES[0] }));
@@ -537,6 +546,7 @@ export default function FinancePage() {
               <Ionicons name="arrow-down-circle" size={28} color="#27AE60" />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => {
+                if (!save.reset()) return;
                 resetForm();
                 setFormType('expense');
                 setFormData(prev => ({ ...prev, category: CATEGORIES[0] }));
@@ -825,7 +835,7 @@ export default function FinancePage() {
         )}
       </ScrollView>
 
-      <Modal visible={Boolean(paymentTarget)} transparent animationType="slide" onRequestClose={() => setPaymentTarget(null)}>
+      <Modal visible={Boolean(paymentTarget)} transparent animationType="slide" onRequestClose={() => { if (!save.busy) setPaymentTarget(null); }}>
         <View style={{ flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#0008' }}>
           <View style={{ backgroundColor: '#fff', padding: 24, borderRadius: 16, gap: 16 }}>
             <Text style={{ fontSize: 18, fontWeight: '600' }}>Record confirmed payment</Text>
@@ -833,20 +843,20 @@ export default function FinancePage() {
             <TextInput accessibilityLabel="Payment amount" placeholder="Amount paid or received" keyboardType="decimal-pad" value={paymentAmount} onChangeText={setPaymentAmount} style={{ borderWidth: 1, borderColor: '#ccc', padding: 12 }} />
             <TextInput accessibilityLabel="Payment date" placeholder="YYYY-MM-DD" value={paymentDate} onChangeText={setPaymentDate} style={{ borderWidth: 1, borderColor: '#ccc', padding: 12 }} />
             <TouchableOpacity disabled={savingPayment} onPress={savePayment}><Text style={{ color: '#0F4C75' }}>{savingPayment ? 'Saving…' : 'Save payment'}</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => setPaymentTarget(null)}><Text>Cancel</Text></TouchableOpacity>
+            <TouchableOpacity disabled={savePending} onPress={() => { if (!save.busy) setPaymentTarget(null); }}><Text>Cancel</Text></TouchableOpacity>
           </View>
         </View>
       </Modal>
-      <Modal visible={showForm} animationType="slide" transparent onRequestClose={() => { resetForm(); setShowForm(false); }}>
+      <Modal visible={showForm} animationType="slide" transparent onRequestClose={() => { if (save.busy) return; save.reset(); resetForm(); setShowForm(false); }}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={styles.modalContent} pointerEvents={savePending ? 'none' : 'auto'}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {formType === 'expense'
                   ? (editingExpense ? t.finance?.editExpense || 'Edit Expense' : t.finance?.addExpense || 'Add Expense')
                   : (editingRevenue ? t.finance?.editRevenue || 'Edit Revenue' : t.finance?.addRevenue || 'Add Revenue')}
               </Text>
-              <TouchableOpacity onPress={() => { resetForm(); setShowForm(false); }}>
+              <TouchableOpacity onPress={() => { if (save.busy) return; save.reset(); resetForm(); setShowForm(false); }}>
                 <Ionicons name="close" size={28} color="#2C3E50" />
               </TouchableOpacity>
             </View>

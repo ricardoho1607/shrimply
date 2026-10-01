@@ -1,5 +1,9 @@
 "use client";
+import { startPondCycle, StartPondCycleError } from '@/lib/startPondCycle';
 
+import { useSaveOperation } from '../../../../../../shared/useSaveOperation';
+import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
+import { updateRecordOnline } from '@/lib/saveData';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ArrowLeft,
@@ -32,21 +36,17 @@ import { onAuthStateChanged } from 'firebase/auth';
 import {
   doc,
   onSnapshot,
-  updateDoc,
   runTransaction,
   deleteDoc,
   query,
   collection,
   orderBy,
   serverTimestamp,
-  arrayUnion,
-  addDoc,
   getDocs,
   where,
   writeBatch
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
-import { resolveCompanyPhysicalPond } from '@/lib/physicalPondIdentity';
 import { PHYSICAL_POND_LINK_ERROR } from '../../../../../../shared/physicalPondIdentity';
 import {
   calculateSamplingAdg,
@@ -87,7 +87,7 @@ interface Sampling {
   date: string;
   mbw: number;
   mortality: number;
-  feed: number;
+  feed?: number;
   cycleId?: string;
   cycleName?: string;
   pondCycleId?: string;
@@ -304,6 +304,7 @@ const GrowthChart = ({ data, emptyMessage }: { data: { x: number, y: number }[];
 };
 
 export default function PondDetailClient() {
+  const { save, busy: savePending } = useSaveOperation();
   const { company } = useAuth();
   const { t } = useLanguage();
   const copy = t.pondDetail;
@@ -457,10 +458,14 @@ export default function PondDetailClient() {
     if (!companyId || !pond || !canRecordPondData || !isActiveCycle(pond)) return;
     if (!window.confirm(copy.deleteSamplingConfirm)) return;
     try {
-      const updatedSamplings = (pond.samplings || []).filter((s) => s.id !== samplingId);
-      await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
-        samplings: updatedSamplings,
-        updatedAt: serverTimestamp(),
+      const reference = doc(db, 'companies', companyId, 'ponds', pond.id);
+      await runTransaction(db, async tx => {
+        const current = await tx.get(reference);
+        if (!current.exists()) throw new Error('Pond no longer exists');
+        tx.update(reference, removeUndefinedFields({
+          samplings: (current.data().samplings || []).filter((record: { id: string }) => record.id !== samplingId),
+          updatedAt: serverTimestamp(),
+        }));
       });
     } catch (error) {
       console.error('Error deleting sampling record:', error);
@@ -472,10 +477,14 @@ export default function PondDetailClient() {
     if (!companyId || !pond || !canRecordPondData || !isActiveCycle(pond)) return;
     if (!window.confirm(copy.deleteMortalityConfirm)) return;
     try {
-      const updatedRecords = (pond.mortalityRecords || []).filter((r) => r.id !== recordId);
-      await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
-        mortalityRecords: updatedRecords,
-        updatedAt: serverTimestamp(),
+      const reference = doc(db, 'companies', companyId, 'ponds', pond.id);
+      await runTransaction(db, async tx => {
+        const current = await tx.get(reference);
+        if (!current.exists()) throw new Error('Pond no longer exists');
+        tx.update(reference, removeUndefinedFields({
+          mortalityRecords: (current.data().mortalityRecords || []).filter((record: { id: string }) => record.id !== recordId),
+          updatedAt: serverTimestamp(),
+        }));
       });
     } catch (error) {
       console.error('Error deleting mortality record:', error);
@@ -485,16 +494,25 @@ export default function PondDetailClient() {
 
   const handleSaveSampling = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (save.busy) return;
     if (!companyId || !pond) return;
     if (!canRecordPondData || !isActiveCycle(pond)) return;
 
+    const mbw = Number(samplingForm.mbw);
+    const feed = samplingForm.feed.trim() ? Number(samplingForm.feed) : undefined;
+    if (!samplingForm.date || samplingForm.date > today || samplingForm.date < String(pond.docStart || '').slice(0, 10)
+      || !Number.isFinite(mbw) || mbw <= 0 || (feed !== undefined && (!Number.isFinite(feed) || feed < 0))) {
+      alert('Enter a valid sampling date, positive MBW, and non-negative feed amount.');
+      return;
+    }
     setIsSubmitting(true);
+    if (!save.acquire()) return;
     try {
       const newSampling: Sampling = {
-        id: editingSamplingId || `s-${Date.now()}`,
+        id: editingSamplingId || save.id(`sampling:${pond.id}`),
         date: samplingForm.date,
-        mbw: parseFloat(samplingForm.mbw) || 0,
-        feed: parseFloat(samplingForm.feed) || 0,
+        mbw,
+        ...(feed !== undefined ? { feed } : {}),
         mortality: parseInt(samplingForm.mortality) || 0,
         cycleId: pond.cycleId,
         cycleName: pond.cycleName,
@@ -507,11 +525,13 @@ export default function PondDetailClient() {
         if (!snapshot.exists() || snapshot.data().cycleStatus === 'ended') throw new Error('Pond cycle is unavailable');
         const records = (snapshot.data().samplings || []) as Sampling[];
         if (editingSamplingId && !records.some(record => record.id === editingSamplingId)) throw new Error('Sampling no longer exists');
+        if (!editingSamplingId && records.some(record => record.id === newSampling.id)) return;
         const updatedSamplings = editingSamplingId
           ? records.map(record => record.id === editingSamplingId ? { ...record, ...newSampling } : record)
           : [...records, newSampling];
-        transaction.update(reference, { samplings: updatedSamplings, updatedAt: serverTimestamp() });
+        transaction.update(reference, removeUndefinedFields({ samplings: updatedSamplings, updatedAt: serverTimestamp() }));
       });
+      save.complete();
       setSamplingModalOpen(false);
       setEditingSamplingId(null);
       setSamplingForm({
@@ -522,13 +542,16 @@ export default function PondDetailClient() {
       });
     } catch (error) {
       console.error("Error saving sampling:", error);
+      alert(t.messages.error || "Failed to save sampling. Your entries are still here; check your connection and retry.");
     } finally {
+      save.release();
       setIsSubmitting(false);
     }
   };
 
   const handleSaveMortality = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (save.busy) return;
     const recordedBy = auth.currentUser?.uid;
     if (!companyId || !pond || !canRecordPondData || !isActiveCycle(pond)) return;
 
@@ -554,6 +577,7 @@ export default function PondDetailClient() {
     }
 
     setIsSubmitting(true);
+    if (!save.acquire()) return;
     try {
       const mbwAtRecord = [...(pond.samplings || [])]
         .filter((sampling) => sampling.date <= mortalityForm.date && Number(sampling.mbw) > 0)
@@ -580,16 +604,17 @@ export default function PondDetailClient() {
           ...(pond.cycleId ? { cycleId: pond.cycleId } : {}),
           ...(pond.cycleName ? { cycleName: pond.cycleName } : {}),
         };
-        const updatedRecords = (pond.mortalityRecords || []).map((r) =>
-          r.id === editingMortalityId ? updatedRecord : r
-        );
-        await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
-          mortalityRecords: updatedRecords,
-          updatedAt: serverTimestamp(),
+        const reference = doc(db, 'companies', companyId, 'ponds', pond.id);
+        await runTransaction(db, async transaction => {
+          const snapshot = await transaction.get(reference);
+          if (!snapshot.exists()) throw new Error('Pond no longer exists');
+          const records = (snapshot.data().mortalityRecords || []) as SharedMortalityRecord[];
+          if (!records.some(record => record.id === editingMortalityId)) throw new Error('Mortality record no longer exists');
+          transaction.update(reference, removeUndefinedFields({ mortalityRecords: records.map(record => record.id === editingMortalityId ? updatedRecord : record), updatedAt: serverTimestamp() }));
         });
       } else {
         const newRecord: SharedMortalityRecord = {
-          id: `mortality-${Date.now()}`,
+          id: save.id(`mortality:${pond.id}`),
           date: mortalityForm.date,
           observationType: mortalityForm.observationType,
           count,
@@ -607,12 +632,17 @@ export default function PondDetailClient() {
           ...(pond.cycleName ? { cycleName: pond.cycleName } : {}),
         };
 
-        await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
-          mortalityRecords: arrayUnion(newRecord),
-          updatedAt: serverTimestamp(),
+        const reference = doc(db, 'companies', companyId, 'ponds', pond.id);
+        await runTransaction(db, async transaction => {
+          const snapshot = await transaction.get(reference);
+          if (!snapshot.exists() || snapshot.data().cycleStatus === 'ended') throw new Error('Pond cycle is unavailable');
+          const records = (snapshot.data().mortalityRecords || []) as SharedMortalityRecord[];
+          if (records.some(record => record.id === newRecord.id)) return;
+          transaction.update(reference, removeUndefinedFields({ mortalityRecords: [...records, newRecord], updatedAt: serverTimestamp() }));
         });
       }
 
+      save.complete();
       setMortalityModalOpen(false);
       setEditingMortalityId(null);
       setMortalityForm({
@@ -628,13 +658,16 @@ export default function PondDetailClient() {
       console.error('Error saving mortality:', error);
       alert(copy.mortalitySaveFailed);
     } finally {
+      save.release();
       setIsSubmitting(false);
     }
   };
 
   const handleEndCycle = async () => {
+    if (save.busy) return;
     if (!companyId || !pond) return;
     if (!canManagePond) return;
+    if (!save.acquire()) return;
     try {
       if (endCycleForm.cycleEndReason === 'harvested') {
         const harvestSnapshot = await getDocs(collection(db, 'companies', companyId, 'harvestRecords'));
@@ -689,6 +722,8 @@ export default function PondDetailClient() {
     } catch (error) {
       console.error('Error ending cycle:', error);
       alert(copy.endCycleFailed);
+    } finally {
+      save.release();
     }
   };
 
@@ -711,88 +746,34 @@ export default function PondDetailClient() {
 
   const handleStartCycle = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (save.busy) return;
     if (!companyId || !pond) return;
     if (!canManagePond || !canManageCycles) return;
     if (isEnterpriseTechnician && !cycles.some(isOpenFarmCycle)) {
       alert(t.enterprise.ownerMustStartCycle);
       return;
     }
+    if (!save.acquire()) return;
     try {
       const sameNamePonds = await getDocs(query(
         collection(db, 'companies', companyId, 'ponds'),
         where('pondName', '==', pond.pondName)
       ));
-      const hasActiveCycleForPond = sameNamePonds.docs.some((pondDoc) =>
-        pondDoc.id !== pond.id && pondDoc.data().cycleStatus !== 'ended'
-      );
-
-      if (hasActiveCycleForPond) {
-        alert(copy.activeCycleExists.replace('{{pond}}', pond.pondName));
-        return;
-      }
-
-      const newCyclePondRef = doc(collection(db, 'companies', companyId, 'ponds'));
-      const physicalPond = await resolveCompanyPhysicalPond(companyId, pond);
-      const initialPopulation = Number(pond.pondArea) * Number(startCycleForm.density);
-      const initialWeight = parseFloat(startCycleForm.plValue) / 10;
-      const activeCycle = cycles.find(isOpenFarmCycle);
-      let cycleForPond = activeCycle;
-      if (!cycleForPond) {
-        const cycleName = `Cycle ${cycles.length + 1}`;
-        const cycleRef = await addDoc(collection(db, 'companies', companyId, 'cycles'), {
-          cycleName,
-          status: 'stocking',
-          plannedStartDate: startCycleForm.docStart,
-          stockingStartDate: startCycleForm.docStart,
-          createdAt: serverTimestamp(),
-          createdBy: auth.currentUser?.uid || '',
-          updatedAt: serverTimestamp(),
-          updatedBy: auth.currentUser?.uid || '',
-        });
-        cycleForPond = { id: cycleRef.id, cycleName, status: 'stocking', plannedStartDate: startCycleForm.docStart, stockingStartDate: startCycleForm.docStart };
-      }
-
-      const batch = writeBatch(db);
-      batch.set(newCyclePondRef, {
-        id: newCyclePondRef.id,
-        pondName: physicalPond.pondName,
-        physicalPondId: physicalPond.id,
-        pondArea: Number(pond.pondArea),
-        blockId: pond.blockId,
-        blockName: pond.blockName,
-        density: Number(startCycleForm.density),
-        initialPopulation,
-        docStart: startCycleForm.docStart,
-        supplier: startCycleForm.plSupplier,
-        plSupplier: startCycleForm.plSupplier,
-        initialWeight,
-        samplings: [],
-        totalHarvestedBiomass: 0,
-        totalHarvestedPopulation: 0,
-        totalHarvestedFeed: 0,
-        cycleId: cycleForPond.id,
-        cycleName: cycleForPond.cycleName,
-        pondCycleId: newCyclePondRef.id,
-        cycleStatus: 'active',
-        cycleStartedAt: startCycleForm.docStart,
-        previousCyclePondId: pond.id,
-        createdAt: serverTimestamp(),
-        createdBy: auth.currentUser?.uid || '',
+      const result = await startPondCycle({
+        companyId, userId: auth.currentUser?.uid || '', pond, pondType: 'cycle',
+        activeCycle: cycles.find(isOpenFarmCycle), today,
+        activePonds: sameNamePonds.docs.map(item => ({ id: item.id, ...item.data() } as Pond)),
+        operationId: save.id(`pond-cycle:${companyId}:${pond.id}`),
+        form: { ...startCycleForm, cycleStartMode: 'new', baselineMbw: '', baselineEstimatedPopulation: '', baselineSurvivalRate: '', baselineCumulativeFeed: '', newCycleName: `Cycle ${cycles.length + 1}` },
       });
-      {
-        batch.update(doc(db, 'companies', companyId, 'physicalPonds', physicalPond.id), {
-          status: 'active',
-          activePondId: newCyclePondRef.id,
-          updatedAt: serverTimestamp(),
-          updatedBy: auth.currentUser?.uid || '',
-        });
-      }
-      await batch.commit();
+      save.complete();
       setStartCycleOpen(false);
-      router.push(`/dashboard/ponds/detail?id=${newCyclePondRef.id}`);
+      router.push(`/dashboard/ponds/detail?id=${result.pondId}`);
     } catch (error) {
       console.error('Error starting cycle:', error);
-      alert(error instanceof Error && error.message === PHYSICAL_POND_LINK_ERROR ? error.message : copy.startCycleFailed);
+      alert(error instanceof StartPondCycleError ? error.code === 'blockMismatch' ? t.enterpriseCycle.pondBlockMismatch : error.code === 'cycleMismatch' ? t.enterpriseCycle.pondCycleMismatch : t.startPondCycle.errors[error.code] : error instanceof Error && error.message === PHYSICAL_POND_LINK_ERROR ? error.message : copy.startCycleFailed);
+    } finally {
+      save.release();
     }
   };
 
@@ -855,7 +836,7 @@ export default function PondDetailClient() {
       : [baselineSampling, ...(pond.samplings || [])];
 
     try {
-      await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
+      await updateRecordOnline(db, doc(db, 'companies', companyId, 'ponds', pond.id), removeUndefinedFields({
         docStart: cycleStartDate,
         cycleStartedAt: cycleStartDate,
         cycleStartMode: 'midcycle',
@@ -869,7 +850,7 @@ export default function PondDetailClient() {
         samplings,
         updatedAt: serverTimestamp(),
         updatedBy: auth.currentUser?.uid || '',
-      });
+      }));
       setBaselineModalOpen(false);
     } catch (error) {
       console.error('Error updating baseline:', error);
@@ -979,13 +960,13 @@ export default function PondDetailClient() {
               <button onClick={() => {
                 setStartCycleForm(prev => ({ ...prev, docStart: today }));
                 setStartCycleOpen(true);
-              }} className="dashboard-action dashboard-action-primary">
+              }} className="dashboard-action dashboard-action-primary" disabled={savePending}>
                 <RotateCcw size={18} strokeWidth={2.5} />
                 <span>{copy.startNewCycle}</span>
               </button>
             )}
             {pond.cycleStartMode === 'midcycle' && isActiveCycle(pond) && canRecordPondData && (
-              <button onClick={openBaselineModal} className="pond-detail-icon-action" title={copy.editBaselineEstimates} aria-label={copy.editBaselineEstimates}>
+              <button onClick={openBaselineModal} className="pond-detail-icon-action" title={copy.editBaselineEstimates} aria-label={copy.editBaselineEstimates} disabled={savePending}>
                 <Settings size={16} />
               </button>
             )}
@@ -995,7 +976,7 @@ export default function PondDetailClient() {
                 className="pond-detail-record-trigger"
                 aria-expanded={isRecordMenuOpen}
                 aria-haspopup="menu"
-                disabled={!isActiveCycle(pond)}
+                disabled={savePending || (!isActiveCycle(pond))}
                 onClick={() => setRecordMenuOpen((open) => !open)}
               >
                 <Plus size={15} />
@@ -1011,7 +992,7 @@ export default function PondDetailClient() {
                       setEditingSamplingId(null);
                       setSamplingForm(prev => ({ ...prev, date: today }));
                       setSamplingModalOpen(true);
-                    }}
+                    }} disabled={savePending}
                   >
                     <Plus size={16} /><span><strong>{copy.sampling}</strong><small>{copy.samplingDescription}</small></span>
                   </button>
@@ -1022,7 +1003,7 @@ export default function PondDetailClient() {
                       setRecordMenuOpen(false);
                       setMortalityForm(prev => ({ ...prev, date: today }));
                       setMortalityModalOpen(true);
-                    }}
+                    }} disabled={savePending}
                   >
                     <Activity size={16} /><span><strong>{copy.mortality}</strong><small>{copy.mortalityDescription}</small></span>
                   </button>
@@ -1113,7 +1094,7 @@ export default function PondDetailClient() {
           <div className="glass-card pond-detail-sampling-history" style={{ padding: '0', overflow: 'hidden' }}>
             <div style={{ padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
               <h3 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600 }}>{copy.samplingHistory}</h3>
-              <button style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer' }}>{copy.viewAuditLog}</button>
+              <button style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer' }} disabled={savePending}>{copy.viewAuditLog}</button>
             </div>
             <div className="pond-detail-sampling-table-wrap">
               <table className="pond-detail-sampling-table">
@@ -1155,8 +1136,8 @@ export default function PondDetailClient() {
                                 setEditingSamplingId(s.id);
                                 setSamplingForm({ date: s.date, mbw: String(s.mbw || ''), feed: String(s.feed || ''), mortality: String(s.mortality || 0) });
                                 setSamplingModalOpen(true);
-                              }} style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: 'var(--primary)' }}><Pencil size={14} /></button>
-                              <button type="button" aria-label={copy.deleteSampling} onClick={() => handleDeleteSampling(s.id)} style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={14} /></button>
+                              }} style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: 'var(--primary)' }} disabled={savePending}><Pencil size={14} /></button>
+                              <button type="button" aria-label={copy.deleteSampling} onClick={() => handleDeleteSampling(s.id)} style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: '#ef4444' }} disabled={savePending}><Trash2 size={14} /></button>
                             </div>
                           </td>
                         )}
@@ -1226,7 +1207,7 @@ export default function PondDetailClient() {
                       display: 'flex',
                       alignItems: 'center',
                       gap: '4px',
-                    }}
+                    }} disabled={savePending}
                   >
                     <Plus size={14} />
                     <span>{copy.recordMortality}</span>
@@ -1243,7 +1224,7 @@ export default function PondDetailClient() {
                     display: 'flex',
                     alignItems: 'center',
                     padding: '4px',
-                  }}
+                  }} disabled={savePending}
                 >
                   {isMortalityHistoryOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                 </button>
@@ -1330,7 +1311,7 @@ export default function PondDetailClient() {
                                       });
                                       setMortalityModalOpen(true);
                                     }}
-                                    style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: 'var(--primary)' }}
+                                    style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: 'var(--primary)' }} disabled={savePending}
                                   >
                                     <Pencil size={14} />
                                   </button>
@@ -1338,7 +1319,7 @@ export default function PondDetailClient() {
                                     type="button"
                                     aria-label={copy.deleteMortality}
                                     onClick={() => handleDeleteMortality(record.id || '')}
-                                    style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: '#ef4444' }}
+                                    style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: '#ef4444' }} disabled={savePending}
                                   >
                                     <Trash2 size={14} />
                                   </button>
@@ -1479,7 +1460,7 @@ export default function PondDetailClient() {
             <button
               type="button"
               onClick={handleDeletePond}
-              disabled={!canManagePond || isDeletingPond}
+              disabled={savePending || (!canManagePond || isDeletingPond)}
             >
               {isDeletingPond ? copy.deleting : copy.deletePond}
             </button>
@@ -1496,7 +1477,7 @@ export default function PondDetailClient() {
                 <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>{copy.endCycle}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{copy.historyRemains.replace('{{pond}}', pond.pondName)}</p>
               </div>
-              <button onClick={() => setEndCycleOpen(false)} className="feed-modal-close" aria-label={copy.cancel}>
+              <button onClick={() => setEndCycleOpen(false)} className="feed-modal-close" aria-label={copy.cancel} disabled={savePending}>
                 <X size={20} />
               </button>
             </div>
@@ -1515,8 +1496,8 @@ export default function PondDetailClient() {
                 </select>
               </label>
               <div className="responsive-modal-footer feed-log-footer pond-detail-form-actions">
-                <button type="button" onClick={() => setEndCycleOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{copy.cancel}</button>
-                <button type="button" onClick={handleEndCycle} className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>{copy.endCycle}</button>
+                <button type="button" onClick={() => setEndCycleOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }} disabled={savePending}>{copy.cancel}</button>
+                <button type="button" onClick={handleEndCycle} className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }} disabled={savePending}>{copy.endCycle}</button>
               </div>
             </div>
           </div>
@@ -1531,11 +1512,11 @@ export default function PondDetailClient() {
                 <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>{copy.editBaseline}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{copy.baselineDescription}</p>
               </div>
-              <button onClick={() => setBaselineModalOpen(false)} className="feed-modal-close" aria-label={copy.cancel}>
+              <button onClick={() => setBaselineModalOpen(false)} className="feed-modal-close" aria-label={copy.cancel} disabled={savePending}>
                 <X size={20} />
               </button>
             </div>
-            <form onSubmit={handleUpdateBaseline} className="responsive-modal-body feed-log-form pond-detail-form-modal-form pond-detail-form-grid">
+            <form onSubmit={handleUpdateBaseline} className="responsive-modal-body feed-log-form pond-detail-form-modal-form pond-detail-form-grid"><fieldset disabled={savePending} style={{ display: 'contents' }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {copy.baselineDate}
                 <input required type="date" value={baselineForm.baselineDate} onChange={e => setBaselineForm(prev => ({ ...prev, baselineDate: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
@@ -1557,10 +1538,10 @@ export default function PondDetailClient() {
                 <input type="number" step="0.01" value={baselineForm.baselineCumulativeFeed} onChange={e => setBaselineForm(prev => ({ ...prev, baselineCumulativeFeed: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <div className="responsive-modal-footer feed-log-footer pond-detail-form-actions" style={{ gridColumn: '1 / -1' }}>
-                <button type="button" onClick={() => setBaselineModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{copy.cancel}</button>
-                <button type="submit" className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>{copy.saveBaseline}</button>
+                <button type="button" onClick={() => setBaselineModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }} disabled={savePending}>{copy.cancel}</button>
+                <button type="submit" className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }} disabled={savePending}>{copy.saveBaseline}</button>
               </div>
-            </form>
+            </fieldset></form>
           </div>
         </div>
       )}
@@ -1573,11 +1554,11 @@ export default function PondDetailClient() {
                 <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>{copy.startNewCycle}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{copy.startCycleDescription.replace('{{pond}}', pond.pondName).replace('{{area}}', String(pond.pondArea))}</p>
               </div>
-              <button onClick={() => setStartCycleOpen(false)} className="feed-modal-close" aria-label={copy.cancel}>
+              <button onClick={() => setStartCycleOpen(false)} className="feed-modal-close" aria-label={copy.cancel} disabled={savePending}>
                 <X size={20} />
               </button>
             </div>
-            <form onSubmit={handleStartCycle} className="responsive-modal-body feed-log-form pond-detail-form-modal-form pond-detail-form-grid">
+            <form onSubmit={handleStartCycle} className="responsive-modal-body feed-log-form pond-detail-form-modal-form pond-detail-form-grid"><fieldset disabled={savePending} style={{ display: 'contents' }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {copy.density}
                 <input required type="number" value={startCycleForm.density} onChange={e => setStartCycleForm(prev => ({ ...prev, density: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
@@ -1595,10 +1576,10 @@ export default function PondDetailClient() {
                 <input required value={startCycleForm.plSupplier} onChange={e => setStartCycleForm(prev => ({ ...prev, plSupplier: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <div className="responsive-modal-footer feed-log-footer pond-detail-form-actions" style={{ gridColumn: '1 / -1' }}>
-                <button type="button" onClick={() => setStartCycleOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{copy.cancel}</button>
-                <button type="submit" className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>{copy.startCycle}</button>
+                <button type="button" onClick={() => setStartCycleOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }} disabled={savePending}>{copy.cancel}</button>
+                <button type="submit" className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }} disabled={savePending}>{copy.startCycle}</button>
               </div>
-            </form>
+            </fieldset></form>
           </div>
         </div>
       )}
@@ -1606,6 +1587,7 @@ export default function PondDetailClient() {
       <SamplingModal
         isOpen={isSamplingModalOpen}
         onClose={() => {
+          if (save.busy) return;
           setSamplingModalOpen(false);
           setEditingSamplingId(null);
         }}
@@ -1618,6 +1600,7 @@ export default function PondDetailClient() {
       <MortalityModal
         isOpen={isMortalityModalOpen}
         onClose={() => {
+          if (save.busy) return;
           setMortalityModalOpen(false);
           setEditingMortalityId(null);
         }}
@@ -1706,13 +1689,13 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting,
           <button
             onClick={onClose}
             className="feed-modal-close"
-            aria-label={copy.cancel}
+            aria-label={copy.cancel} disabled={isSubmitting}
           >
             <X size={24} />
           </button>
         </div>
 
-        <form className="responsive-modal-body feed-log-form pond-detail-form-modal-form" onSubmit={onSubmit} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <form className="responsive-modal-body feed-log-form pond-detail-form-modal-form" onSubmit={onSubmit} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}><fieldset disabled={isSubmitting} style={{ display: 'contents' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{copy.samplingDate}</label>
             <input
@@ -1777,12 +1760,12 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting,
             <button type="button" onClick={onClose} style={{
               flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)',
               background: 'transparent', fontWeight: 600, cursor: 'pointer'
-            }}>{copy.cancel}</button>
+            }} disabled={isSubmitting}>{copy.cancel}</button>
             <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : isEditing ? copy.updateRecord : copy.saveRecord}
             </button>
           </div>
-        </form>
+        </fieldset></form>
       </div>
     </div>
   );
@@ -1816,12 +1799,12 @@ function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting
             <h3 style={{ fontSize: '1.5rem', fontWeight: 600 }}>{isEditing ? copy.editMortalityTitle : copy.dailyMortality}</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{copy.mortalityModalDescription}</p>
           </div>
-          <button onClick={onClose} className="feed-modal-close" aria-label={copy.cancel}>
+          <button onClick={onClose} className="feed-modal-close" aria-label={copy.cancel} disabled={isSubmitting}>
             <X size={24} />
           </button>
         </div>
 
-        <form className="responsive-modal-body feed-log-form pond-detail-form-modal-form" onSubmit={onSubmit} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <form className="responsive-modal-body feed-log-form pond-detail-form-modal-form" onSubmit={onSubmit} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px' }}><fieldset disabled={isSubmitting} style={{ display: 'contents' }}>
           <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {copy.recordType}
             <select value={form.observationType} onChange={(event) => setForm({ ...form, observationType: event.target.value as MortalityObservationType })} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }}>
@@ -1869,12 +1852,12 @@ function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting
           </label>
 
           <div className="feed-log-footer pond-detail-form-actions" style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
-            <button type="button" onClick={onClose} style={{ flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{copy.cancel}</button>
+            <button type="button" onClick={onClose} style={{ flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }} disabled={isSubmitting}>{copy.cancel}</button>
             <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : isEditing ? copy.updateRecord : copy.saveMortality}
             </button>
           </div>
-        </form>
+        </fieldset></form>
       </div>
     </div>
   );

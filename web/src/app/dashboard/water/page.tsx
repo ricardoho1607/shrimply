@@ -1,5 +1,9 @@
 "use client";
 
+import { useSaveOperation } from '../../../../../shared/useSaveOperation';
+import { createRecordOnce } from '@/lib/saveData';
+import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
+import { updateRecordOnline, uploadSaveFile } from '@/lib/saveData';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Plus,
@@ -22,9 +26,9 @@ import {
   type LucideIcon
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, runTransaction } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, getDownloadURL } from 'firebase/storage';
 import { app, auth, db, storage } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -240,6 +244,7 @@ export default function WaterQualityPage() {
   const { t } = useLanguage();
   const today = useFarmDateKey(company?.timeZone);
   const [activeView, setActiveView] = useState<WaterPageView>('daily');
+  const { save, busy: savePending } = useSaveOperation();
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [downloadingLabReportId, setDownloadingLabReportId] = useState<string | null>(null);
   const [labReports, setLabReports] = useState<LabReport[]>([]);
@@ -369,22 +374,26 @@ export default function WaterQualityPage() {
     return initializeWaterDraft(pondId, date, pond?.samplings || []);
   };
   const openWaterRecord = (pondId = '') => {
+    if (!save.reset()) return;
     waterDrafts.current.clear();
     setFormData(createWaterDraft(pondId, today));
     setModalOpen(true);
   };
   const selectWaterRecord = (pondId: string, date: string) => {
+    if (save.busy) return;
     waterDrafts.current.set(`${formData.pondId}:${formData.date}`, formData);
     setFormData(waterDrafts.current.get(`${pondId}:${date}`) || createWaterDraft(pondId, date));
   };
 
   const handleAddWQ = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (save.busy) return;
     if (!companyId || !formData.pondId || !user || waterSubmitting) return;
     if (!canEditWater) return;
     if (!accessiblePonds.some((pond) => pond.id === formData.pondId)) return;
 
     setWaterSubmitting(true);
+    if (!save.acquire()) return;
     try {
       const pondRef = doc(db, 'companies', companyId, 'ponds', formData.pondId);
       await runTransaction(db, async transaction => {
@@ -438,11 +447,11 @@ export default function WaterQualityPage() {
           });
         }
 
-        transaction.update(pondRef, {
+        transaction.update(pondRef, removeUndefinedFields({
           samplings,
           updatedAt: serverTimestamp(),
           updatedBy: user.uid
-        });
+        }));
 
       });
       setModalOpen(false);
@@ -451,6 +460,7 @@ export default function WaterQualityPage() {
       console.error('Error adding water quality:', error);
       alert(copy('Failed to update water quality.'));
     } finally {
+      save.release();
       setWaterSubmitting(false);
     }
   };
@@ -729,12 +739,14 @@ export default function WaterQualityPage() {
   };
 
   const openNewLabReport = (reportType: Exclude<LabReportType, 'combined'> = 'water_quality') => {
+    if (!save.reset()) return;
     resetLabModal();
     setLabForm(prev => ({ ...prev, reportType }));
     setLabModalOpen(true);
   };
 
   const openLabPdfUpload = (reportType: Exclude<LabReportType, 'combined'>) => {
+    if (!save.reset()) return;
     const pdfActionState = getPdfActionState(reportType);
     if (pdfActionState.disabled) {
       alert(pdfActionState.message);
@@ -751,6 +763,7 @@ export default function WaterQualityPage() {
   };
 
   const openLabReportReview = (report: LabReport) => {
+    if (!save.reset()) return;
     setLabEntryMode(report.entryMode || 'manual');
     setEditingLabReportId(report.id);
     setLabPdfFile(null);
@@ -782,6 +795,7 @@ export default function WaterQualityPage() {
   };
 
   const handleUploadLabPdf = async () => {
+    if (save.busy) return;
     if (!companyId || !canManageLabReports || !user || !labPdfFile) return;
     const pdfActionState = getPdfActionState(labForm.reportType === 'plankton' ? 'plankton' : 'water_quality');
     if (pdfActionState.disabled) {
@@ -794,9 +808,11 @@ export default function WaterQualityPage() {
     }
 
     setLabSubmitting(true);
+    if (!save.acquire()) return;
     try {
       const sourceFileHash = await getFileHash(labPdfFile);
-      const reportRef = await addDoc(collection(db, 'companies', companyId, 'labReports'), {
+      const reportRef = doc(db, 'companies', companyId, 'labReports', save.id(`lab-pdf:${companyId}:${sourceFileHash}`));
+      await createRecordOnce(db, reportRef, {
         companyId,
         reportType: labForm.reportType,
         entryMode: 'pdf_upload',
@@ -817,17 +833,17 @@ export default function WaterQualityPage() {
 
       const sourcePdfPath = `companies/${companyId}/labReports/${reportRef.id}/source.pdf`;
       const sourceRef = ref(storage, sourcePdfPath);
-      await uploadBytes(sourceRef, labPdfFile, {
+      await uploadSaveFile(sourceRef, labPdfFile, {
         contentType: 'application/pdf',
         customMetadata: { companyId, labReportId: reportRef.id, sourceFileHash },
       });
       const sourcePdfUrl = await getDownloadURL(sourceRef);
 
-      await updateDoc(reportRef, {
+      await updateRecordOnline(db, reportRef, removeUndefinedFields({
         sourcePdfPath,
         sourcePdfUrl,
         updatedAt: serverTimestamp(),
-      });
+      }));
 
       const result = await extractLabReportFromPdf(reportRef.id);
       const rows = (result.data.pondResults || []).map(denormalizeLabRow);
@@ -846,12 +862,14 @@ export default function WaterQualityPage() {
         alert(copy('Failed to upload or extract the lab report.'));
       }
     } finally {
+      save.release();
       setLabSubmitting(false);
     }
   };
 
   const handleCreateManualLabReport = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (save.busy) return;
     if (!companyId || !canManageLabReports || selectedLabPondIds.length === 0 || !user) return;
     const accessiblePondIds = new Set(accessiblePonds.map((pond) => pond.id));
     const permittedLabRows = labRows.filter((row) => accessiblePondIds.has(row.pondId));
@@ -860,6 +878,7 @@ export default function WaterQualityPage() {
     if (issues.length) { alert(issues.join('\n')); return; }
     setLabSubmitting(true);
 
+    if (!save.acquire()) return;
     try {
       const payload: Record<string, unknown> = {
         companyId,
@@ -882,19 +901,21 @@ export default function WaterQualityPage() {
       }
 
       if (editingLabReportId) {
-        await updateDoc(doc(db, 'companies', companyId, 'labReports', editingLabReportId), payload);
+        await updateRecordOnline(db, doc(db, 'companies', companyId, 'labReports', editingLabReportId), removeUndefinedFields(payload));
       } else {
         payload.createdAt = serverTimestamp();
         payload.createdBy = user.uid;
-        await addDoc(collection(db, 'companies', companyId, 'labReports'), payload);
+        await createRecordOnce(db, doc(db, 'companies', companyId, 'labReports', save.id(`lab-manual:${companyId}`)), payload);
       }
 
+      save.complete();
       setLabModalOpen(false);
       resetLabModal();
     } catch (error) {
       console.error('Error creating lab report:', error);
       alert(copy('Failed to create lab report.'));
     } finally {
+      save.release();
       setLabSubmitting(false);
     }
   };
@@ -1011,7 +1032,7 @@ export default function WaterQualityPage() {
               role="tab"
               aria-selected={active}
               onClick={() => setActiveView(item.id)}
-              className={active ? 'is-active' : ''}
+              className={active ? 'is-active' : ''} disabled={savePending}
             >
               <Icon size={15} />
               {copy(item.label)}
@@ -1035,7 +1056,7 @@ export default function WaterQualityPage() {
             onClick={() => {
               openWaterRecord();
             }}
-            className="dashboard-action dashboard-action-primary"
+            className="dashboard-action dashboard-action-primary" disabled={savePending}
           >
             <Plus size={18} />
             <span>{copy('New Parameter Log')}</span>
@@ -1045,7 +1066,7 @@ export default function WaterQualityPage() {
           <button
             type="button"
             onClick={() => setLabActionModalOpen(true)}
-            className="dashboard-action dashboard-action-primary"
+            className="dashboard-action dashboard-action-primary" disabled={savePending}
           >
             <Plus size={18} />
             <span>{copy('Add Lab Report')}</span>
@@ -1084,7 +1105,7 @@ export default function WaterQualityPage() {
                     onClick={() => setSelectedPondForHistory(pond)}
                     className="water-history-button"
                     aria-label={copy('View {pond} water quality history', { pond: pond.pondName })}
-                    title={copy('View history')}
+                    title={copy('View history')} disabled={savePending}
                   >
                     <History size={17} />
                   </button>
@@ -1165,7 +1186,7 @@ export default function WaterQualityPage() {
                   <div className="water-pond-actions">
                     <button
                       onClick={() => openWaterRecord(pond.id)}
-                      className="water-quick-log"
+                      className="water-quick-log" disabled={savePending}
                     >
                       <Plus size={15} /> {copy('Log')}
                     </button>
@@ -1195,7 +1216,7 @@ export default function WaterQualityPage() {
                   cursor: 'pointer',
                   boxShadow: '0 8px 24px rgba(15, 76, 117, 0.05)',
                   textAlign: 'left',
-                }}
+                }} disabled={savePending}
               >
                 <div>
                   <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0' }}>{group.label}</h3>
@@ -1295,7 +1316,7 @@ export default function WaterQualityPage() {
                       type="button"
                       onClick={() => setExpandedLabReportId(isExpanded ? null : report.id)}
                       className="btn-secondary"
-                      style={{ padding: '8px 12px', fontSize: '0.76rem' }}
+                      style={{ padding: '8px 12px', fontSize: '0.76rem' }} disabled={savePending}
                     >
                       {copy(isExpanded ? 'Hide Details' : 'Details')}
                     </button>
@@ -1304,14 +1325,14 @@ export default function WaterQualityPage() {
                         type="button"
                         onClick={() => openLabReportReview(report)}
                         className="btn-secondary"
-                        style={{ padding: '8px 12px', fontSize: '0.76rem' }}
+                        style={{ padding: '8px 12px', fontSize: '0.76rem' }} disabled={savePending}
                       >
                         {copy('Review & Confirm')}
                       </button>
                     )}
                     {(report.entryMode || 'manual') === 'manual' && report.reportType === 'plankton' && (
                       <button type="button" className="btn-secondary"
-                        disabled={downloadingLabReportId !== null}
+                        disabled={savePending || (downloadingLabReportId !== null)}
                         onClick={() => handleDownloadLabReport(report)}
                         style={{ padding: '8px 12px', fontSize: '0.76rem' }}>
                         {copy(downloadingLabReportId === report.id ? 'Generating PDF...' : 'Download PDF')}
@@ -1425,7 +1446,7 @@ export default function WaterQualityPage() {
                   {copy('Historical environmental logs and parameter readings')}
                 </p>
               </div>
-              <button onClick={() => setSelectedPondForHistory(null)} className="icon-btn-modern">
+              <button onClick={() => setSelectedPondForHistory(null)} className="icon-btn-modern" disabled={savePending}>
                 <X size={20} />
               </button>
             </div>
@@ -1526,7 +1547,7 @@ export default function WaterQualityPage() {
                 <h2>{copy('Add Lab Report')}</h2>
                 <p>{copy('Upload a PDF or enter results manually.')}</p>
               </div>
-              <button onClick={() => setLabActionModalOpen(false)} className="water-modal-close" aria-label={copy('Close lab report options')}>
+              <button onClick={() => setLabActionModalOpen(false)} className="water-modal-close" aria-label={copy('Close lab report options')} disabled={savePending}>
                 <X size={18} />
               </button>
             </div>
@@ -1536,7 +1557,7 @@ export default function WaterQualityPage() {
                 <div className="water-lab-action-grid">
                   <button
                     type="button"
-                    disabled={mineralPdfActionState.disabled}
+                    disabled={savePending || (mineralPdfActionState.disabled)}
                     onClick={() => {
                       setLabActionModalOpen(false);
                       openLabPdfUpload('water_quality');
@@ -1552,7 +1573,7 @@ export default function WaterQualityPage() {
                   </button>
                   <button
                     type="button"
-                    disabled={planktonPdfActionState.disabled}
+                    disabled={savePending || (planktonPdfActionState.disabled)}
                     onClick={() => {
                       setLabActionModalOpen(false);
                       openLabPdfUpload('plankton');
@@ -1577,7 +1598,7 @@ export default function WaterQualityPage() {
                       setLabActionModalOpen(false);
                       openNewLabReport('water_quality');
                     }}
-                    className="water-lab-action-option"
+                    className="water-lab-action-option" disabled={savePending}
                   >
                     <Plus size={16} />
                     <span>{copy('Manual Mineral')}</span>
@@ -1588,7 +1609,7 @@ export default function WaterQualityPage() {
                       setLabActionModalOpen(false);
                       openNewLabReport('plankton');
                     }}
-                    className="water-lab-action-option"
+                    className="water-lab-action-option" disabled={savePending}
                   >
                     <Plus size={16} />
                     <span>{copy('Manual Plankton')}</span>
@@ -1609,12 +1630,12 @@ export default function WaterQualityPage() {
                 <h2>{copy(editingLabReportId ? 'Review Lab Report' : 'Add Lab Report')}</h2>
                 <p>{copy('Enter results manually or upload a lab PDF, then review before confirmation.')}</p>
               </div>
-              <button onClick={() => setLabModalOpen(false)} className="water-modal-close" aria-label={copy('Close lab report form')}>
+              <button onClick={() => setLabModalOpen(false)} className="water-modal-close" aria-label={copy('Close lab report form')} disabled={savePending}>
                 <X size={18} />
               </button>
             </div>
 
-            <form className="responsive-modal-body water-lab-form-body" onSubmit={handleCreateManualLabReport}>
+            <form className="responsive-modal-body water-lab-form-body" onSubmit={handleCreateManualLabReport}><fieldset disabled={savePending} style={{ display: 'contents' }}>
               <div className="water-lab-form-fields">
                 <div className="water-lab-form-field">
                   <label className="form-label">{copy('Entry Mode')}</label>
@@ -1626,7 +1647,7 @@ export default function WaterQualityPage() {
                       <button
                         key={mode}
                         type="button"
-                        disabled={Boolean(editingLabReportId)}
+                        disabled={savePending || (Boolean(editingLabReportId))}
                         onClick={() => setLabEntryMode(mode)}
                         className={labEntryMode === mode ? 'is-active' : ''}
                         style={{ cursor: editingLabReportId ? 'default' : 'pointer' }}
@@ -1675,7 +1696,7 @@ export default function WaterQualityPage() {
                   </div>
                   <button
                     type="button"
-                    disabled={labSubmitting || !labPdfFile || activePdfActionState.disabled}
+                    disabled={savePending || (labSubmitting || !labPdfFile || activePdfActionState.disabled)}
                     onClick={handleUploadLabPdf}
                     className="water-lab-primary-button water-upload-extract-button"
                   >
@@ -1700,7 +1721,7 @@ export default function WaterQualityPage() {
                         key={pond.id}
                         type="button"
                         onClick={() => toggleLabPond(pond)}
-                        className={selected ? 'is-selected' : ''}
+                        className={selected ? 'is-selected' : ''} disabled={savePending}
                       >
                         <span>{pond.pondName}</span>
                         {selected && <CheckCircle2 size={16} />}
@@ -1775,12 +1796,12 @@ export default function WaterQualityPage() {
               )}
 
               <div className="water-lab-form-footer">
-                <button type="button" onClick={() => setLabModalOpen(false)} className="water-lab-cancel-button">{copy('Cancel')}</button>
-                <button type="submit" disabled={labSubmitting || selectedLabPondIds.length === 0 || labRows.some(row => validateLabRow(labEntryMode === 'manual' ? { ...row, measurementUnits: getManualLabInputUnits(row.measurementUnits) } : row).length > 0)} className="water-lab-primary-button water-confirm-lab-button">
+                <button type="button" onClick={() => setLabModalOpen(false)} className="water-lab-cancel-button" disabled={savePending}>{copy('Cancel')}</button>
+                <button type="submit" disabled={savePending || (labSubmitting || selectedLabPondIds.length === 0 || labRows.some(row => validateLabRow(labEntryMode === 'manual' ? { ...row, measurementUnits: getManualLabInputUnits(row.measurementUnits) } : row).length > 0))} className="water-lab-primary-button water-confirm-lab-button">
                   {copy(labSubmitting ? 'Saving...' : 'Confirm Lab Report')}
                 </button>
               </div>
-            </form>
+            </fieldset></form>
           </div>
         </div>
       )}
@@ -1794,12 +1815,12 @@ export default function WaterQualityPage() {
                 <h2>{copy('Log Parameters')}</h2>
                 <p>{copy('Sync environmental readings with Orson AI.')}</p>
               </div>
-              <button onClick={() => setModalOpen(false)} className="water-modal-close" aria-label={copy('Close parameter log')}>
+              <button onClick={() => setModalOpen(false)} className="water-modal-close" aria-label={copy('Close parameter log')} disabled={savePending}>
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleAddWQ} className="water-log-form">
+            <form onSubmit={handleAddWQ} className="water-log-form"><fieldset disabled={savePending} style={{ display: 'contents' }}>
               <div className="responsive-modal-body water-log-form-grid">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', gridColumn: 'span 2' }}>
                   <label className="form-label">{copy('Target Pond')}</label>
@@ -1912,7 +1933,7 @@ export default function WaterQualityPage() {
                         type="button"
                         key={value}
                         className={`water-condition-option ${formData.weatherEvent === value ? 'selected' : ''}`}
-                        onClick={() => setFormData(prev => ({ ...prev, weatherEvent: prev.weatherEvent === value ? null : value }))}
+                        onClick={() => setFormData(prev => ({ ...prev, weatherEvent: prev.weatherEvent === value ? null : value }))} disabled={savePending}
                       >{copy(label)}</button>
                     ))}
                   </div>
@@ -1926,7 +1947,7 @@ export default function WaterQualityPage() {
                         type="button"
                         key={value}
                         className={`water-condition-option ${formData.sludgeLoad === value ? 'selected' : ''}`}
-                        onClick={() => setFormData(prev => ({ ...prev, sludgeLoad: prev.sludgeLoad === value ? null : value }))}
+                        onClick={() => setFormData(prev => ({ ...prev, sludgeLoad: prev.sludgeLoad === value ? null : value }))} disabled={savePending}
                       >{copy(label)}</button>
                     ))}
                   </div>
@@ -1940,7 +1961,7 @@ export default function WaterQualityPage() {
                         type="button"
                         key={String(value)}
                         className={`water-condition-option ${formData.surfaceScum === value ? 'selected' : ''}`}
-                        onClick={() => setFormData(prev => ({ ...prev, surfaceScum: prev.surfaceScum === value ? null : value }))}
+                        onClick={() => setFormData(prev => ({ ...prev, surfaceScum: prev.surfaceScum === value ? null : value }))} disabled={savePending}
                       >{copy(label)}</button>
                     ))}
                   </div>
@@ -1954,7 +1975,7 @@ export default function WaterQualityPage() {
                         type="button"
                         key={value}
                         className={`water-condition-option ${formData.shrimpBehaviour === value ? 'selected' : ''}`}
-                        onClick={() => setFormData(prev => ({ ...prev, shrimpBehaviour: prev.shrimpBehaviour === value ? null : value }))}
+                        onClick={() => setFormData(prev => ({ ...prev, shrimpBehaviour: prev.shrimpBehaviour === value ? null : value }))} disabled={savePending}
                       >{copy(label)}</button>
                     ))}
                   </div>
@@ -1977,10 +1998,10 @@ export default function WaterQualityPage() {
                 <button type="button" onClick={() => setModalOpen(false)} style={{
                   flex: 1, borderRadius: '10px', border: '1px solid var(--border)',
                   background: 'transparent', fontWeight: 600, cursor: 'pointer'
-                }}>{copy('Cancel')}</button>
-                <button type="submit" disabled={!formData.pondId || waterSubmitting} className="water-save-log-button">{copy('Save Log Entry')}</button>
+                }} disabled={savePending}>{copy('Cancel')}</button>
+                <button type="submit" disabled={savePending || (!formData.pondId || waterSubmitting)} className="water-save-log-button">{copy('Save Log Entry')}</button>
               </div>
-            </form>
+            </fieldset></form>
           </div>
         </div>
       )}

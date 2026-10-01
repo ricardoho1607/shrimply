@@ -1,3 +1,4 @@
+import { useSaveOperation } from '../../shared/useSaveOperation';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -52,6 +53,7 @@ export default function TreatmentMixesScreen({ embedded = false }: { embedded?: 
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [pondId, setPondId] = useState('');
   const [ppm, setPpm] = useState('');
+  const { save } = useSaveOperation();
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -77,6 +79,8 @@ export default function TreatmentMixesScreen({ embedded = false }: { embedded?: 
   }, [ppm, selectedPond]);
 
   const resetModal = () => {
+    if (save.busy) return;
+    save.reset();
     setModalMode(null);
     setSelectedMix(null);
     setName('');
@@ -103,15 +107,19 @@ export default function TreatmentMixesScreen({ embedded = false }: { embedded?: 
     if (finalYield <= 0) return Alert.alert(mixT.missingVolume, mixT.missingVolumeMessage);
     if (components.length === 0) return Alert.alert(mixT.missingIngredients, mixT.missingIngredientsMessage);
 
+    if (!save.acquire()) return;
     setSaving(true);
     try {
-      await store.createTreatmentMix({ name, yieldLiters: finalYield, components, notes });
+      await store.createTreatmentMix({ name, yieldLiters: finalYield, components, notes, operationId: save.id(`mix:${company?.id}`) });
+      save.complete();
+      save.release();
       resetModal();
       Alert.alert(mixT.created, mixT.createdMessage);
     } catch (error) {
       Alert.alert(mixT.createFailed, errorMessage(error, mixT.unknownError));
       setSaving(false);
     }
+    finally { save.release(); setSaving(false); }
   };
 
   const makeBatch = (mix: Additive) => {
@@ -126,12 +134,16 @@ export default function TreatmentMixesScreen({ embedded = false }: { embedded?: 
         {
           text: mixT.makeBatch,
           onPress: async () => {
+            if (!save.acquire()) return;
+            setSaving(true);
             try {
-              await store.makeTreatmentMixBatch(mix.id);
+              await store.makeTreatmentMixBatch(mix.id, save.id(`batch:${mix.id}`));
+              save.complete();
               Alert.alert(mixT.batchCreated, interpolate(mixT.batchAdded, { amount: recipe.yieldLiters }));
             } catch (error) {
               Alert.alert(mixT.batchFailed, errorMessage(error, mixT.unknownError));
             }
+            finally { save.release(); setSaving(false); }
           },
         },
       ],
@@ -142,6 +154,7 @@ export default function TreatmentMixesScreen({ embedded = false }: { embedded?: 
     if (!selectedMix || !selectedPond) return Alert.alert(mixT.selectPond, mixT.selectPondMessage);
     const parsedPpm = parsePositiveNumber(ppm);
     if (parsedPpm <= 0) return Alert.alert(mixT.enterPpm, mixT.enterPpmMessage);
+    if (!save.acquire()) return;
     setSaving(true);
     try {
       const result = await store.useTreatmentMix(
@@ -149,16 +162,21 @@ export default function TreatmentMixesScreen({ embedded = false }: { embedded?: 
         { id: selectedPond.id, name: selectedPond.pondName, areaM2: selectedPond.pondArea },
         parsedPpm,
         notes,
+        save.id(`treatment:${selectedMix.id}`),
       );
+      save.complete();
+      save.release();
       resetModal();
       Alert.alert(mixT.treatmentRecorded, interpolate(mixT.treatmentDeducted, { amount: result.quantityLiters }));
     } catch (error) {
       Alert.alert(mixT.useFailed, errorMessage(error, mixT.unknownError));
       setSaving(false);
     }
+    finally { save.release(); setSaving(false); }
   };
 
   const openUse = (mix: Additive) => {
+    if (!save.reset()) return;
     setSelectedMix(mix);
     setNotes('');
     setPondId('');
@@ -231,6 +249,7 @@ export default function TreatmentMixesScreen({ embedded = false }: { embedded?: 
         <SafeAreaView
           style={[styles.modalSafeArea, { paddingTop: Math.max(insets.top, 16) }]}
           edges={['left', 'right', 'bottom']}
+          pointerEvents={saving ? 'none' : 'auto'}
         >
           <View style={styles.modalHeader}>
             <View>

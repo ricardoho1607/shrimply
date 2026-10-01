@@ -1,6 +1,9 @@
 "use client";
 import { requireAvailableStock } from '../../../../../../shared/financeIntegrity';
 
+import { useSaveOperation } from '../../../../../../shared/useSaveOperation';
+import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
+import { updateRecordOnline } from '@/lib/saveData';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -16,9 +19,7 @@ import {
   Trash2
 } from 'lucide-react';
 import {
-  collection,
   doc,
-  updateDoc,
   serverTimestamp,
   runTransaction,
   arrayUnion,
@@ -146,6 +147,7 @@ export default function InventoryFeedsPage() {
   const userUid = user?.uid ?? '';
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'feed' | 'additive'>('dashboard');
+  const { save, busy: savePending } = useSaveOperation();
   const { feeds, additives: allAdditives, ponds, loading, companyId } = useInventoryFeeds<InventoryItem, InventoryItem, { id: string; pondName: string; cycleStatus?: string; cycleId?: string; cycleName?: string; pondCycleId?: string }>();
   const additives = useMemo(() => allAdditives.filter((item) => item.inventoryKind !== 'treatmentMix'), [allAdditives]);
 
@@ -370,8 +372,9 @@ export default function InventoryFeedsPage() {
   }).slice(0, 6) : [];
 
   const handleOpenModal = (type: typeof modalType, item?: InventoryItem, iType?: typeof itemType) => {
+    if (!save.reset()) return;
     if (!canEditInventory && type !== 'history') return;
-    if (voidActionLock.current || agent.busy) return;
+    if (save.busy || voidActionLock.current || agent.busy) return;
     if (!acceptedVoidRef.current) setVoidPreparationError('');
     const effectiveItemType = iType || itemType;
     setModalType(type);
@@ -419,7 +422,7 @@ export default function InventoryFeedsPage() {
   };
 
   const closeInventoryModal = () => {
-    if (voidActionLock.current || agent.busy) return;
+    if (save.busy || voidActionLock.current || agent.busy) return;
     setModalOpen(false);
   };
 
@@ -548,6 +551,7 @@ export default function InventoryFeedsPage() {
 
   const handleAction = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (save.busy) return;
     if (!companyId) return;
     if (!canEditInventory) return;
 
@@ -565,6 +569,7 @@ export default function InventoryFeedsPage() {
       }
     }
 
+    if (!save.acquire()) return;
     try {
       const qty = Number(formData.quantity);
       const price = Number(formData.unitPrice);
@@ -581,8 +586,8 @@ export default function InventoryFeedsPage() {
       if (modalType === 'add') {
         const collectionName = itemType === 'feed' ? 'feeds' : 'additives';
         const now = serverTimestamp();
-        const itemRef = doc(collection(db, 'companies', companyId, collectionName));
-        const stockId = crypto.randomUUID();
+        const itemRef = doc(db, 'companies', companyId, collectionName, save.id(`item:${companyId}:${itemType}`));
+        const stockId = save.id(`initial-stock:${companyId}:${itemType}`);
         const stockDate = formData.stockDate;
         const productLabel = itemType === 'additive' ? buildInventoryProductLabel({
           manufacturer: formData.manufacturer,
@@ -625,8 +630,9 @@ export default function InventoryFeedsPage() {
           notes: formData.notes,
         });
         await runTransaction(db, async (tx) => {
-          tx.set(itemRef, { ...itemData, financeEntries: { [financeSyncDocumentId(expense.reference)]: financeSourceEntry(expense) } });
-          tx.set(doc(db, 'companies', companyId, 'expenses', financeSyncDocumentId(expense.reference)), {
+          if ((await tx.get(itemRef)).exists()) return;
+          tx.set(itemRef, removeUndefinedFields({ ...itemData, financeEntries: { [financeSyncDocumentId(expense.reference)]: financeSourceEntry(expense) } }));
+          tx.set(doc(db, 'companies', companyId, 'expenses', financeSyncDocumentId(expense.reference)), removeUndefinedFields({
             ...expense,
             companyId,
             addedBy: user?.uid || '',
@@ -634,13 +640,13 @@ export default function InventoryFeedsPage() {
             timestamp: Date.now(),
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-          }, { merge: true });
+          }), { merge: true });
         });
       }
       else if (modalType === 'stockIn' && selectedItem) {
         const collectionName = itemType === 'feed' ? 'feeds' : 'additives';
         const ref = doc(db, 'companies', companyId, collectionName, selectedItem.id);
-        const stockId = crypto.randomUUID();
+        const stockId = save.id(`stock:${selectedItem.id}`);
         const stockDate = formData.stockDate;
         const expense = buildInventoryExpense({
           id: stockId,
@@ -658,12 +664,13 @@ export default function InventoryFeedsPage() {
           const snapshot = await tx.get(ref);
           if (!snapshot.exists()) throw new Error('Item not found');
           const data = snapshot.data();
+          if ((data.stockInHistory || []).some((entry: { id?: string }) => entry.id === stockId)) return;
           expense.sourceStockIndex = (data.stockInHistory || []).length;
 
           const newStock = (data.totalStock || 0) + qty;
           const newCost = (data.totalCost || 0) + (qty * price);
 
-          tx.update(ref, {
+          tx.update(ref, removeUndefinedFields({
             archived: false,
             financeEntries: { ...(data.financeEntries || {}), [financeSyncDocumentId(expense.reference)]: financeSourceEntry(expense) },
             totalStock: newStock,
@@ -678,8 +685,8 @@ export default function InventoryFeedsPage() {
               createdAt: Timestamp.now()
             }),
             lastUpdated: serverTimestamp()
-          });
-          tx.set(doc(db, 'companies', companyId, 'expenses', financeSyncDocumentId(expense.reference)), {
+          }));
+          tx.set(doc(db, 'companies', companyId, 'expenses', financeSyncDocumentId(expense.reference)), removeUndefinedFields({
             ...expense,
             companyId,
             addedBy: user?.uid || '',
@@ -687,22 +694,20 @@ export default function InventoryFeedsPage() {
             timestamp: Date.now(),
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-          }, { merge: true });
+          }), { merge: true });
         });
       }
       else if (modalType === 'usage' && selectedItem) {
-        if (qty > selectedItem.totalStock) {
-          alert(copy('Insufficient stock!'));
-          return;
-        }
         const collectionName = itemType === 'feed' ? 'feeds' : 'additives';
         const ref = doc(db, 'companies', companyId, collectionName, selectedItem.id);
         const selectedPond = activePonds.find((pond) => pond.id === formData.pondId);
+        const usageId = save.id(`usage:${selectedItem.id}`);
 
         await runTransaction(db, async (tx) => {
           const snapshot = await tx.get(ref);
           if (!snapshot.exists()) throw new Error('Item not found');
           const data = snapshot.data();
+          if ((data.usageHistory || []).some((entry: { id?: string }) => entry.id === usageId)) return;
 
           const newStock = requireAvailableStock(data.totalStock, qty);
           const currentStock = data.totalStock || 0;
@@ -712,11 +717,11 @@ export default function InventoryFeedsPage() {
             throw new Error('Item cost is missing. Stock this item with a price before recording usage.');
           }
 
-          tx.update(ref, {
+          tx.update(ref, removeUndefinedFields({
             totalStock: newStock,
             totalCost: Math.max(0, currentCost - (qty * unitPrice)),
             usageHistory: arrayUnion({
-              id: Date.now().toString(),
+              id: usageId,
               date: getFarmDateKey(new Date(), company?.timeZone),
               quantity: qty,
               unitPrice,
@@ -729,13 +734,13 @@ export default function InventoryFeedsPage() {
               createdAt: Timestamp.now()
             }),
             lastUpdated: serverTimestamp()
-          });
+          }));
         });
       }
       else if (modalType === 'editReorder' && selectedItem) {
         const collectionName = itemType === 'feed' ? 'feeds' : 'additives';
         const ref = doc(db, 'companies', companyId, collectionName, selectedItem.id);
-        await updateDoc(ref, {
+        await updateRecordOnline(db, ref, removeUndefinedFields({
           reorderLevel: isNaN(reorder) ? 0 : reorder,
           ...(itemType === 'additive' ? {
             productLabel: buildInventoryProductLabel({
@@ -746,13 +751,16 @@ export default function InventoryFeedsPage() {
             }) || null,
           } : {}),
           lastUpdated: serverTimestamp()
-        });
+        }));
       }
 
+      save.complete();
       setModalOpen(false);
     } catch (err) {
       console.error('Inventory action failed:', err);
       alert(copy('Operation failed. Please try again.'));
+    } finally {
+      save.release();
     }
   };
 
@@ -766,7 +774,7 @@ export default function InventoryFeedsPage() {
         const snapshot = await tx.get(itemRef);
         if (!snapshot.exists()) return;
         if (!item.archived && Number(snapshot.data().totalStock) > 0) throw new Error('Use or correct the remaining stock before archiving.');
-        tx.update(itemRef, { archived: !item.archived, lastUpdated: serverTimestamp() });
+        tx.update(itemRef, removeUndefinedFields({ archived: !item.archived, lastUpdated: serverTimestamp() }));
       });
     } catch (err) {
       console.error('Delete failed:', err);
@@ -801,7 +809,7 @@ export default function InventoryFeedsPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={`inventory-section-tab ${activeTab === tab.id ? 'active' : ''}`}
+              className={`inventory-section-tab ${activeTab === tab.id ? 'active' : ''}`} disabled={savePending}
             >
               <tab.icon size={18} style={{ opacity: activeTab === tab.id ? 1 : 0.6 }} />
               {tab.label}
@@ -809,7 +817,7 @@ export default function InventoryFeedsPage() {
           ))}
         </div>
 
-        <button type="button" className="btn-secondary" onClick={() => setShowArchived(value => !value)}>{showArchived ? 'Hide archived' : 'Show archived'}</button>
+        <button type="button" className="btn-secondary" onClick={() => setShowArchived(value => !value)} disabled={savePending}>{showArchived ? 'Hide archived' : 'Show archived'}</button>
         {canEditInventory && (
           <div className="pond-detail-record-menu inventory-input-menu" ref={inputMenuRef}>
             <button
@@ -821,7 +829,7 @@ export default function InventoryFeedsPage() {
               onClick={() => {
                 setTransactionFilterOpen(false);
                 setInputMenuOpen((open) => !open);
-              }}
+              }} disabled={savePending}
             >
               <Plus size={15} />
               <span>{copy('Input')}</span>
@@ -839,14 +847,14 @@ export default function InventoryFeedsPage() {
                 <button type="button" role="menuitem" onClick={() => {
                   setInputMenuOpen(false);
                   handleOpenModal('add', undefined, 'feed');
-                }}>
+                }} disabled={savePending}>
                   <Box size={16} />
                   <span><strong>{t.inventory.addFeed}</strong><small>{copy('Add feed stock to inventory')}</small></span>
                 </button>
                 <button type="button" role="menuitem" onClick={() => {
                   setInputMenuOpen(false);
                   handleOpenModal('add', undefined, 'additive');
-                }}>
+                }} disabled={savePending}>
                   <FlaskConical size={16} />
                   <span><strong>{t.inventory.addAdditive}</strong><small>{copy('Add an inventory additive')}</small></span>
                 </button>
@@ -894,7 +902,7 @@ export default function InventoryFeedsPage() {
                         <button
                           type="button"
                           className={styles.inventoryCardSecondaryAction}
-                          onClick={() => handleOpenModal('stockIn', item, item.feedType ? 'feed' : 'additive')}
+                          onClick={() => handleOpenModal('stockIn', item, item.feedType ? 'feed' : 'additive')} disabled={savePending}
                         >
                           {copy('Restock now')}
                         </button>
@@ -903,7 +911,7 @@ export default function InventoryFeedsPage() {
                   ))}
                 </div>
                 {metrics.lowStockItems.length > 5 && (
-                  <button type="button" className={styles.overviewExpand} aria-expanded={showAllStockAlerts} onClick={() => setShowAllStockAlerts(value => !value)}>
+                  <button type="button" className={styles.overviewExpand} aria-expanded={showAllStockAlerts} onClick={() => setShowAllStockAlerts(value => !value)} disabled={savePending}>
                     {copy(showAllStockAlerts ? 'Show less' : 'Show all')} {!showAllStockAlerts && `(${metrics.lowStockItems.length})`}
                   </button>
                 )}
@@ -923,7 +931,7 @@ export default function InventoryFeedsPage() {
                       onClick={() => {
                         setInputMenuOpen(false);
                         setTransactionFilterOpen((open) => !open);
-                      }}
+                      }} disabled={savePending}
                     >
                       <ArrowUpDown size={17} />
                     </button>
@@ -947,7 +955,7 @@ export default function InventoryFeedsPage() {
                             onClick={() => {
                               setRecentActivityFilter(filter.id);
                               setTransactionFilterOpen(false);
-                            }}
+                            }} disabled={savePending}
                           >
                             <span><strong>{copy(filter.label)}</strong><small>{copy(filter.description)}</small></span>
                           </button>
@@ -1032,7 +1040,7 @@ export default function InventoryFeedsPage() {
                     color: !categoryFilter ? 'var(--primary)' : 'var(--text-muted)',
                     boxShadow: !categoryFilter ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
                     border: 'none', cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                  }}
+                  }} disabled={savePending}
                 >{copy('All Categories')}</button>
                 {(activeTab === 'feed' ? FEED_CATEGORIES : ADDITIVE_CATEGORIES).map(cat => (
                   <button
@@ -1044,7 +1052,7 @@ export default function InventoryFeedsPage() {
                       color: categoryFilter === cat ? 'var(--primary)' : 'var(--text-muted)',
                       boxShadow: categoryFilter === cat ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
                       border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                    }}
+                    }} disabled={savePending}
                   >{copy(cat)}</button>
                 ))}
               </div>
@@ -1053,7 +1061,7 @@ export default function InventoryFeedsPage() {
             {/* Dynamic Inventory Grid */}
             <div role="group" aria-label={copy('Stock availability')} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
               {(['in', 'out', 'all'] as const).map(status => (
-                <button key={status} type="button" aria-pressed={stockFilter === status} onClick={() => setStockFilter(status)} style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid var(--border)', background: stockFilter === status ? 'var(--primary)' : 'white', color: stockFilter === status ? 'white' : 'var(--text-muted)' }}>
+                <button key={status} type="button" aria-pressed={stockFilter === status} onClick={() => setStockFilter(status)} style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid var(--border)', background: stockFilter === status ? 'var(--primary)' : 'white', color: stockFilter === status ? 'white' : 'var(--text-muted)' }} disabled={savePending}>
                   {copy(status === 'in' ? 'In stock' : status === 'out' ? 'Out of stock' : 'All')} ({(activeTab === 'feed' ? feeds : additives).filter(item => status === 'all' || (status === 'in' ? item.totalStock > 0 : item.totalStock === 0)).length})
                 </button>
               ))}
@@ -1073,7 +1081,7 @@ export default function InventoryFeedsPage() {
                   <button
                     className="btn-primary"
                     onClick={() => handleOpenModal('add', undefined, activeTab)}
-                    style={{ height: '44px', padding: '0 20px', borderRadius: '10px', fontWeight: 500, fontSize: '14px', letterSpacing: 0, textTransform: 'none', boxShadow: 'var(--shadow-glow)' }}
+                    style={{ height: '44px', padding: '0 20px', borderRadius: '10px', fontWeight: 500, fontSize: '14px', letterSpacing: 0, textTransform: 'none', boxShadow: 'var(--shadow-glow)' }} disabled={savePending}
                   >
                     <Plus size={22} />
                     {copy(activeTab === 'feed' ? 'Add Feed' : 'Add Additive')}
@@ -1088,8 +1096,8 @@ export default function InventoryFeedsPage() {
                       <strong>{item.itemName}</strong>
                       <p>{item.brand || item.productLabel?.manufacturer} · {copy('Out of stock')}</p>
                       <div style={{ display: 'flex', gap: 16 }}>
-                        {canEditInventory && <button type="button" onClick={() => handleOpenModal('stockIn', item, activeTab)}>{copy('Restock now')}</button>}
-                        <button type="button" onClick={() => handleOpenModal('history', item, activeTab)}>{copy('History')}</button>
+                        {canEditInventory && <button type="button" onClick={() => handleOpenModal('stockIn', item, activeTab)} disabled={savePending}>{copy('Restock now')}</button>}
+                        <button type="button" onClick={() => handleOpenModal('history', item, activeTab)} disabled={savePending}>{copy('History')}</button>
                       </div>
                     </div>
                   );
@@ -1125,7 +1133,7 @@ export default function InventoryFeedsPage() {
                           <button
                             type="button"
                             className={styles.inventoryCardHeaderAction}
-                            onClick={() => handleOpenModal('history', item, activeTab)}
+                            onClick={() => handleOpenModal('history', item, activeTab)} disabled={savePending}
                           >
                             {copy('History')}
                           </button>
@@ -1133,7 +1141,7 @@ export default function InventoryFeedsPage() {
                             <button
                               type="button"
                               className={`${styles.inventoryCardHeaderAction} ${styles.inventoryCardDeleteAction}`}
-                              onClick={() => handleDeleteItem(item, activeTab)}
+                              onClick={() => handleDeleteItem(item, activeTab)} disabled={savePending}
                             >
                               {copy('Delete')}
                             </button>
@@ -1180,21 +1188,21 @@ export default function InventoryFeedsPage() {
                           <button
                             type="button"
                             className={styles.inventoryCardPrimaryAction}
-                            onClick={() => handleOpenModal('stockIn', item, activeTab)}
+                            onClick={() => handleOpenModal('stockIn', item, activeTab)} disabled={savePending}
                           >
                             {t.inventory.stockIn}
                           </button>
                           <button
                             type="button"
                             className={styles.inventoryCardSecondaryAction}
-                            onClick={() => handleOpenModal('usage', item, activeTab)}
+                            onClick={() => handleOpenModal('usage', item, activeTab)} disabled={savePending}
                           >
                             {t.inventory.use}
                           </button>
                           <button
                             type="button"
                             className={styles.inventoryCardSecondaryAction}
-                            onClick={() => handleOpenModal('editReorder', item, activeTab)}
+                            onClick={() => handleOpenModal('editReorder', item, activeTab)} disabled={savePending}
                           >
                             {copy(activeTab === 'additive' ? 'Product' : 'Threshold')}
                           </button>
@@ -1249,7 +1257,7 @@ export default function InventoryFeedsPage() {
               </div>
               <button
                 onClick={closeInventoryModal}
-                disabled={agent.busy || voidActionBusy}
+                disabled={savePending || (agent.busy || voidActionBusy)}
                 aria-label={copy('Close inventory dialog')}
                 style={{
                   width: '36px', height: '36px', background: 'var(--bg-mid)', border: '1px solid transparent', borderRadius: '10px',
@@ -1290,7 +1298,7 @@ export default function InventoryFeedsPage() {
                             <p key={index} className={styles.historyNote}>{copy(receipt.status)}: {receipt.message}</p>
                           ))}
                           <button type="button" onClick={() => void (canRetryVoid ? retryVoidStockIn() : recoverVoidStockIn())}
-                            disabled={agent.busy || voidActionBusy || (canRetryVoid && (!canEditInventory || !canUseOrson))}>
+                            disabled={savePending || (agent.busy || voidActionBusy || (canRetryVoid && (!canEditInventory || !canUseOrson)))}>
                             {copy(canRetryVoid ? 'Retry removal' : 'Check save status')}
                           </button>
                         </>
@@ -1320,7 +1328,7 @@ export default function InventoryFeedsPage() {
                                     <button
                                       type="button"
                                       onClick={() => void prepareVoidStockIn(h)}
-                                      disabled={agent.busy || voidActionBusy || hasOpenVoidOperation}
+                                      disabled={savePending || (agent.busy || voidActionBusy || hasOpenVoidOperation)}
                                       aria-label={`${t.companyDetails.remove} ${formatDate(h.date)}`}
                                       title={copy('Remove this stock-in purchase from active inventory and finance')}
                                       style={{
@@ -1406,7 +1414,7 @@ export default function InventoryFeedsPage() {
 
                 </div>
               ) : (
-                <form id="inventoryForm" className="inventory-form" onSubmit={handleAction} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <form id="inventoryForm" className="inventory-form" onSubmit={handleAction} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}><fieldset disabled={savePending} style={{ display: 'contents' }}>
                   {modalType === 'add' && (
                     <div className="responsive-form-grid inventory-add-details" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       <div className="inventory-full-row" style={{ gridColumn: 'span 2' }}>
@@ -1421,7 +1429,7 @@ export default function InventoryFeedsPage() {
                         <div className="inventory-full-row" style={{ gridColumn: 'span 2', padding: 14, border: '1px solid var(--border)', borderRadius: 12 }}>
                           <strong>{copy('Restock an existing item')}</strong>
                           {itemSuggestions.map(item => (
-                            <button key={item.id} type="button" onClick={() => handleOpenModal('stockIn', item, itemType)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 0', color: 'var(--primary)', borderBottom: '1px solid var(--border)' }}>
+                            <button key={item.id} type="button" onClick={() => handleOpenModal('stockIn', item, itemType)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 0', color: 'var(--primary)', borderBottom: '1px solid var(--border)' }} disabled={savePending}>
                               {item.itemName} · {item.brand || item.productLabel?.manufacturer || copy('No Brand')} · {copy(item.feedType || item.category)} · {formatQuantity(item.totalStock)} {item.unit}
                             </button>
                           ))}
@@ -1478,7 +1486,7 @@ export default function InventoryFeedsPage() {
                                 background: formData.pondId === '' ? 'var(--primary)' : 'var(--bg-mid)',
                                 color: formData.pondId === '' ? 'white' : 'var(--text-muted)',
                                 border: '1px solid var(--border)', transition: 'all 0.3s'
-                              }}
+                              }} disabled={savePending}
                             >{copy('General Use')}</button>
                             {activePonds.map((p) => (
                               <button
@@ -1491,7 +1499,7 @@ export default function InventoryFeedsPage() {
                                   color: formData.pondId === p.id ? 'white' : 'var(--text-muted)',
                                   border: '1px solid var(--border)', transition: 'all 0.3s',
                                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                                }}
+                                }} disabled={savePending}
                               >{p.pondName}</button>
                             ))}
                           </div>
@@ -1544,7 +1552,7 @@ export default function InventoryFeedsPage() {
                       <textarea rows={2} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder={copy('Any specific details about this transaction...')} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none', resize: 'none' }} />
                     </div>
                   )}
-                </form>
+                </fieldset></form>
               )}
             </div>
 
@@ -1554,12 +1562,12 @@ export default function InventoryFeedsPage() {
                   type="button"
                   className="btn-secondary"
                   onClick={closeInventoryModal}
-                  disabled={agent.busy || voidActionBusy}
+                  disabled={savePending || (agent.busy || voidActionBusy)}
                 >{copy('Cancel')}</button>
                 <button
                   form="inventoryForm"
                   type="submit"
-                  className="btn-primary"
+                  className="btn-primary" disabled={savePending}
                 >
                   {modalType === 'add' ? `${copy('Add')} ${copy(itemType === 'feed' ? 'Feed' : 'Additive')}` :
                    modalType === 'stockIn' ? copy('Confirm stock in') :

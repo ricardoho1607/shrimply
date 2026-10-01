@@ -1,5 +1,9 @@
 "use client";
 
+import { useSaveOperation } from '../../../../../shared/useSaveOperation';
+import { createRecordOnce } from '@/lib/saveData';
+import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
+import { updateRecordOnline } from '@/lib/saveData';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, 
@@ -25,7 +29,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, onSnapshot, doc, addDoc, serverTimestamp, increment, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, serverTimestamp, increment, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -92,6 +96,7 @@ export default function MarketplacePage() {
   const hasPermission = useFarmPermissions();
   const canManageMarketplace = hasPermission('manageMarketplace');
   const [listings, setListings] = useState<BuyerListing[]>([]);
+  const { save, busy: savePending } = useSaveOperation();
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedListing, setSelectedListing] = useState<BuyerListing | null>(null);
@@ -189,6 +194,7 @@ export default function MarketplacePage() {
   };
 
   const handleEditListing = (listing: BuyerListing) => {
+    if (!save.reset()) return;
     if (!canManageMarketplace) return;
     setEditingId(listing.id);
     setNewListing({
@@ -223,6 +229,7 @@ export default function MarketplacePage() {
 
   const handlePostListing = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (save.busy) return;
     if (!user || !canManageMarketplace) {
       alert(copy('You must be logged in to post.'));
       return;
@@ -230,6 +237,7 @@ export default function MarketplacePage() {
     
     setIsSubmitting(true);
 
+    if (!save.acquire()) return;
     try {
       // Sanitize priceList: remove undefined values as Firestore doesn't accept them
       const sanitizedPriceList = Object.fromEntries(
@@ -263,16 +271,16 @@ export default function MarketplacePage() {
       };
 
       if (editingId) {
-        await updateDoc(doc(db, 'marketplace_listings', editingId), {
+        await updateRecordOnline(db, doc(db, 'marketplace_listings', editingId), removeUndefinedFields({
           ...listingData,
           updatedAt: serverTimestamp()
-        });
+        }));
       } else {
         // If company is missing (common for new buyers), fallback to user details
         const finalCompanyId = company?.id || user.uid;
         const finalCompanyName = company?.companyName || newListing.buyerName || user.name || 'Verified Buyer';
 
-        await addDoc(collection(db, 'marketplace_listings'), {
+        await createRecordOnce(db, doc(db, 'marketplace_listings', save.id(`listing:${user.uid}`)), {
           ...listingData,
           companyId: finalCompanyId,
           userId: user.uid,
@@ -285,6 +293,7 @@ export default function MarketplacePage() {
         });
       }
 
+      save.complete();
       setPostModalOpen(false);
       setEditingId(null);
       setNewListing(emptyListingForm);
@@ -292,6 +301,7 @@ export default function MarketplacePage() {
       console.error("Error saving listing:", error);
       alert(copy('Failed to save listing. Make sure all price fields are valid numbers.'));
     } finally {
+      save.release();
       setIsSubmitting(false);
     }
   };
@@ -312,9 +322,10 @@ export default function MarketplacePage() {
               contactEmail: user?.email || '',
               expiryDate: getDefaultMarketplaceExpiry(),
             });
+            if (!save.reset()) return;
             setPostModalOpen(true);
           }}
-          className="btn-primary" 
+          className="btn-primary" disabled={savePending}
         >
           <Plus size={20} /> {t.MarketplaceScreen.createListing}
         </button>}
@@ -371,11 +382,11 @@ export default function MarketplacePage() {
             <div style={{ display: 'flex', background: 'var(--bg-mid)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border)' }}>
               <button 
                 onClick={() => setActiveFilter('all')}
-                style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: activeFilter === 'all' ? '#FFF' : 'transparent', fontSize: '13px', fontWeight: 600, cursor: 'pointer', boxShadow: activeFilter === 'all' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none', color: activeFilter === 'all' ? 'var(--primary)' : 'var(--text-muted)' }}
+                style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: activeFilter === 'all' ? '#FFF' : 'transparent', fontSize: '13px', fontWeight: 600, cursor: 'pointer', boxShadow: activeFilter === 'all' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none', color: activeFilter === 'all' ? 'var(--primary)' : 'var(--text-muted)' }} disabled={savePending}
               >{t.MarketplaceScreen.allListings}</button>
               <button 
                 onClick={() => setActiveFilter('my')}
-                style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: activeFilter === 'my' ? '#FFF' : 'transparent', fontSize: '13px', fontWeight: 600, cursor: 'pointer', boxShadow: activeFilter === 'my' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none', color: activeFilter === 'my' ? 'var(--primary)' : 'var(--text-muted)' }}
+                style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: activeFilter === 'my' ? '#FFF' : 'transparent', fontSize: '13px', fontWeight: 600, cursor: 'pointer', boxShadow: activeFilter === 'my' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none', color: activeFilter === 'my' ? 'var(--primary)' : 'var(--text-muted)' }} disabled={savePending}
               >{t.MarketplaceScreen.myPosts}</button>
             </div>
           </div>
@@ -418,13 +429,13 @@ export default function MarketplacePage() {
                         <div style={{ display: 'flex', gap: '4px' }}>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleEditListing(listing); }}
-                            style={{ padding: '4px', borderRadius: '6px', background: 'var(--bg-mid)', border: 'none', color: 'var(--primary)', cursor: 'pointer' }}
+                            style={{ padding: '4px', borderRadius: '6px', background: 'var(--bg-mid)', border: 'none', color: 'var(--primary)', cursor: 'pointer' }} disabled={savePending}
                           >
                             <Edit size={14} />
                           </button>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleDeleteListing(listing.id); }}
-                            style={{ padding: '4px', borderRadius: '6px', background: 'var(--bg-mid)', border: 'none', color: '#EF4444', cursor: 'pointer' }}
+                            style={{ padding: '4px', borderRadius: '6px', background: 'var(--bg-mid)', border: 'none', color: '#EF4444', cursor: 'pointer' }} disabled={savePending}
                           >
                             <Trash2 size={14} />
                           </button>
@@ -450,7 +461,7 @@ export default function MarketplacePage() {
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Clock size={12} /> {new Date(listing.postedDate).toLocaleDateString()}</span>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Eye size={12} /> {listing.viewCount}</span>
                     </div>
-                    <button style={{ color: 'var(--primary)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <button style={{ color: 'var(--primary)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }} disabled={savePending}>
                       {t.MarketplaceScreen.details || 'Details'} <ArrowUpRight size={12} />
                     </button>
                   </div>
@@ -525,10 +536,10 @@ export default function MarketplacePage() {
                 </div>
                 <h2 style={{ fontSize: '20px', fontWeight: 600 }}>{editingId ? t.CreateBuyerListingScreen.updateListing : t.CreateBuyerListingScreen.publishRequirement}</h2>
               </div>
-              <button onClick={() => { setPostModalOpen(false); setEditingId(null); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={24} /></button>
+              <button onClick={() => { setPostModalOpen(false); setEditingId(null); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }} disabled={savePending}><X size={24} /></button>
             </div>
 
-            <form className="responsive-modal-body marketplace-post-form" onSubmit={handlePostListing} style={{ flex: 1, overflowY: 'auto', padding: '32px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            <form className="responsive-modal-body marketplace-post-form" onSubmit={handlePostListing} style={{ flex: 1, overflowY: 'auto', padding: '32px', display: 'flex', flexDirection: 'column', gap: '32px' }}><fieldset disabled={savePending} style={{ display: 'contents' }}>
               
               {/* Basic Info */}
               <div className="marketplace-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
@@ -613,12 +624,12 @@ export default function MarketplacePage() {
               </div>
 
               <div className="responsive-modal-footer marketplace-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
-                <button type="button" onClick={() => setPostModalOpen(false)} className="btn-secondary" style={{ padding: '12px 24px', borderRadius: '12px' }}>{t.actions.cancel}</button>
-                <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '12px' }}>
+                <button type="button" onClick={() => setPostModalOpen(false)} className="btn-secondary" style={{ padding: '12px 24px', borderRadius: '12px' }} disabled={savePending}>{t.actions.cancel}</button>
+                <button type="submit" disabled={savePending || (isSubmitting)} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '12px' }}>
                   {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : (editingId ? t.CreateBuyerListingScreen.updateListing : t.CreateBuyerListingScreen.publishRequirement)}
                 </button>
               </div>
-            </form>
+            </fieldset></form>
           </div>
         </div>
       )}
@@ -639,7 +650,7 @@ export default function MarketplacePage() {
                   <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{copy('Buyer Requirement • ID:')} {selectedListing.id.slice(-6)}</p>
                 </div>
               </div>
-              <button onClick={() => setSelectedListing(null)} style={{ background: 'var(--bg-mid)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}>
+              <button onClick={() => setSelectedListing(null)} style={{ background: 'var(--bg-mid)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }} disabled={savePending}>
                 <X size={20} />
               </button>
             </div>
@@ -718,22 +729,22 @@ export default function MarketplacePage() {
                   <button 
                     onClick={() => handleDeleteListing(selectedListing.id)}
                     className="btn-secondary" 
-                    style={{ flex: 1, height: '48px', color: '#ef4444', borderColor: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                    style={{ flex: 1, height: '48px', color: '#ef4444', borderColor: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} disabled={savePending}
                   >
                     <Trash2 size={18} /> {copy('Delete')}
                   </button>
                   <button 
                     onClick={() => handleEditListing(selectedListing)}
                     className="btn-primary" 
-                    style={{ flex: 1, height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                    style={{ flex: 1, height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} disabled={savePending}
                   >
                     <Edit size={18} /> {copy('Edit Post')}
                   </button>
                 </>
               ) : (
                 <>
-                  <button className="btn-secondary" style={{ flex: 1, height: '48px' }}>{copy('Save Listing')}</button>
-                  <button className="btn-primary" style={{ flex: 2, height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                  <button className="btn-secondary" style={{ flex: 1, height: '48px' }} disabled={savePending}>{copy('Save Listing')}</button>
+                  <button className="btn-primary" style={{ flex: 2, height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }} disabled={savePending}>
                     <MessageSquare size={18} /> {copy('Send Offer')}
                   </button>
                 </>

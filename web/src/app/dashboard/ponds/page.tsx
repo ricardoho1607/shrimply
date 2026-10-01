@@ -1,5 +1,8 @@
 "use client";
 
+import { useSaveOperation } from '../../../../../shared/useSaveOperation';
+import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
+import { createRecordOnce, updateRecordOnline } from '@/lib/saveData';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   Plus,
@@ -19,7 +22,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { collection, doc, addDoc, serverTimestamp, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { doc, serverTimestamp, deleteDoc, writeBatch } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -152,15 +155,7 @@ const getLatestSamplingDate = (samplings: Sampling[] = []): string | null => {
   return getLatestGrowthSampling({ samplings })?.date || null;
 };
 
-const removeUndefinedFields = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(removeUndefinedFields);
-  if (!value || typeof value !== 'object') return value;
 
-  return Object.entries(value).reduce((cleaned, [key, entry]) => {
-    if (entry !== undefined) cleaned[key] = removeUndefinedFields(entry);
-    return cleaned;
-  }, {} as Record<string, unknown>);
-};
 
 export default function PondsPage() {
   const copy = useDashboardCopy();
@@ -177,6 +172,7 @@ export default function PondsPage() {
   const isPondsPageLoading = pondsLoading || physicalPondsLoading || cyclesLoading;
 
   const [isModalOpen, setModalOpen] = useState(false);
+  const { save, busy: savePending } = useSaveOperation();
   const [cycleFilter, setCycleFilter] = useState<'active' | 'inactive' | 'ended'>('active');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const startRequestHandledRef = useRef(false);
@@ -314,7 +310,8 @@ export default function PondsPage() {
     }
 
     const cycleName = `${copy('Cycle')} ${cycles.length + 1}`;
-    const docRef = await addDoc(collection(db, 'companies', companyId, 'cycles'), {
+    const docRef = doc(db, 'companies', companyId, 'cycles', save.id(`farm-cycle:${companyId}`));
+    await createRecordOnce(db, docRef, {
       cycleName,
       status: 'stocking',
       plannedStartDate: stockingDate,
@@ -348,11 +345,11 @@ export default function PondsPage() {
         });
         await batch.commit();
       }
-      await updateDoc(doc(db, 'companies', companyId, 'cycles', activeFarmCycle.id), {
+      await updateRecordOnline(db, doc(db, 'companies', companyId, 'cycles', activeFarmCycle.id), removeUndefinedFields({
         cycleName: nextName,
         updatedAt: serverTimestamp(),
         updatedBy: user.uid,
-      });
+      }));
     } catch (error) {
       console.error('Error renaming cycle:', error);
       alert(t.messages.error || 'Failed to rename cycle.');
@@ -410,13 +407,13 @@ export default function PondsPage() {
         });
         await batch.commit();
       }
-      await updateDoc(doc(db, 'companies', companyId, 'cycles', activeFarmCycle.id), {
+      await updateRecordOnline(db, doc(db, 'companies', companyId, 'cycles', activeFarmCycle.id), removeUndefinedFields({
         status: 'closed',
         closedAt: today,
         stockingEndDate: activeFarmCycle.stockingEndDate || today,
         updatedAt: serverTimestamp(),
         updatedBy: user.uid,
-      });
+      }));
 
       setCycleFilter('ended');
       const openReport = window.confirm(
@@ -431,9 +428,11 @@ export default function PondsPage() {
 
   const handleAddPond = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (save.busy) return;
     if (!companyId || !user) return;
     if (!canEditPonds) return;
 
+    if (!save.acquire()) return;
     try {
       const pondName = formData.pondName.trim();
       const pondArea = Number(formData.pondArea);
@@ -451,7 +450,7 @@ export default function PondsPage() {
         return;
       }
 
-      const physicalPondRef = doc(collection(db, 'companies', companyId, 'physicalPonds'));
+      const physicalPondRef = doc(db, 'companies', companyId, 'physicalPonds', save.id(`physical-pond:${companyId}`));
       const pendingPond: PhysicalPond = {
         id: physicalPondRef.id,
         pondName,
@@ -461,6 +460,21 @@ export default function PondsPage() {
         status: 'idle',
       };
       setPendingPhysicalPonds((pending) => [...pending, pendingPond]);
+      const createPhysicalPond = httpsCallable<
+        { companyId: string; pondId: string; pond: Record<string, unknown> },
+        { id: string }
+      >(getFunctions(app), 'createCompanyPhysicalPond');
+      await createPhysicalPond({
+        companyId,
+        pondId: physicalPondRef.id,
+        pond: removeUndefinedFields({
+          pondName,
+          pondArea,
+          blockId: selectedBlock?.id,
+          blockName: selectedBlock?.name,
+        }) as Record<string, unknown>,
+      });
+      save.complete();
       setModalOpen(false);
       setCycleFilter('inactive');
       setFormData({
@@ -478,20 +492,7 @@ export default function PondsPage() {
         baselineSurvivalRate: '',
         baselineCumulativeFeed: ''
       });
-      const createPhysicalPond = httpsCallable<
-        { companyId: string; pondId: string; pond: Record<string, unknown> },
-        { id: string }
-      >(getFunctions(app), 'createCompanyPhysicalPond');
-      await createPhysicalPond({
-        companyId,
-        pondId: physicalPondRef.id,
-        pond: removeUndefinedFields({
-          pondName,
-          pondArea,
-          blockId: selectedBlock?.id,
-          blockName: selectedBlock?.name,
-        }) as Record<string, unknown>,
-      });
+
     } catch (error) {
       console.error('Error adding pond:', error);
       const failedPondKey = getPhysicalPondKey(formData.pondName);
@@ -502,6 +503,8 @@ export default function PondsPage() {
       alert(message.includes('plan allows')
         ? `${message}\n\nOpen Settings → Billing & Plans to upgrade.`
         : t.messages.error || 'Failed to add pond. Please check your connection.');
+    } finally {
+      save.release();
     }
   };
 
@@ -553,9 +556,9 @@ export default function PondsPage() {
   };
 
   const openStartCycle = useCallback((pond: Pond | PhysicalPond) => {
-    if (!canEditPonds) return;
+    if (!canEditPonds || !save.reset()) return;
     setStartCyclePond(pond);
-  }, [canEditPonds]);
+  }, [canEditPonds, save]);
 
   useEffect(() => {
     if (
@@ -613,6 +616,7 @@ export default function PondsPage() {
 
   const handleUpdateBaseline = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (save.busy) return;
     if (!companyId || !user || !baselineEditPond) return;
     if (!canEditPonds) return;
 
@@ -656,8 +660,9 @@ export default function PondsPage() {
       ? baselineEditPond.samplings.map((sampling, index) => index === baselineSamplingIndex ? baselineSampling : sampling)
       : [baselineSampling, ...(baselineEditPond.samplings || [])];
 
+    if (!save.acquire()) return;
     try {
-      await updateDoc(doc(db, 'companies', companyId, 'ponds', baselineEditPond.id), removeUndefinedFields({
+      await updateRecordOnline(db, doc(db, 'companies', companyId, 'ponds', baselineEditPond.id), removeUndefinedFields({
         docStart: cycleStartDate,
         cycleStartedAt: cycleStartDate,
         cycleStartMode: 'midcycle',
@@ -676,14 +681,18 @@ export default function PondsPage() {
     } catch (error) {
       console.error('Error updating baseline:', error);
       alert(t.messages.error || 'Failed to update baseline.');
+    } finally {
+      save.release();
     }
   };
 
   const handleStartCycle = async (form: StartPondCycleFormValue) => {
+    if (save.busy) return;
     if (!companyId || !user || !startCyclePond) return;
     if (!canEditPonds) return;
 
     setStartingPondCycle(true);
+    if (!save.acquire()) return;
     try {
       const isNewCycle = form.cycleTargetMode === 'new';
       let targetCycle: FarmCycle | null | undefined = null;
@@ -704,10 +713,12 @@ export default function PondsPage() {
         form,
         today,
         activePonds: ponds,
+        operationId: save.id(`pond-cycle:${companyId}:${startCyclePond.id}`),
       });
       if (result.cycleId) {
         setSelectedCycleId(result.cycleId);
       }
+      save.complete();
       setStartCyclePond(null);
       setCycleFilter('active');
     } catch (error) {
@@ -723,6 +734,7 @@ export default function PondsPage() {
           ? t.enterpriseCycle.pondCycleMismatch
           : t.startPondCycle.errors[errorCode]);
     } finally {
+      save.release();
       setStartingPondCycle(false);
     }
   };
@@ -912,11 +924,11 @@ export default function PondsPage() {
                 placeholder={copy('Cycle name')}
                 aria-label={copy('Cycle name')}
               />
-              <button type="button" onClick={handleRenameCycle} title={copy('Save cycle name')} aria-label={copy('Save cycle name')}>
+              <button type="button" onClick={handleRenameCycle} title={copy('Save cycle name')} aria-label={copy('Save cycle name')} disabled={savePending}>
                 <Check size={15} />
               </button>
             </div>
-            <button type="button" onClick={handleCloseFarmCycle} title={copy('End cycle')} aria-label={copy('End cycle')} className="is-danger">
+            <button type="button" onClick={handleCloseFarmCycle} title={copy('End cycle')} aria-label={copy('End cycle')} className="is-danger" disabled={savePending}>
               <Lock size={15} />
             </button>
           </div>
@@ -930,7 +942,7 @@ export default function PondsPage() {
                 type="button"
                 className={`ponds-filter-tab ${cycle.id === activeFarmCycle?.id ? 'is-active' : ''}`}
                 onClick={() => setSelectedCycleId(cycle.id)}
-                style={{ padding: '6px 14px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer' }}
+                style={{ padding: '6px 14px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer' }} disabled={savePending}
               >
                 {cycle.cycleName}
               </button>
@@ -961,7 +973,7 @@ export default function PondsPage() {
               role="tab"
               aria-selected={cycleFilter === value}
               className={cycleFilter === value ? 'is-active' : ''}
-              onClick={() => setCycleFilter(value)}
+              onClick={() => setCycleFilter(value)} disabled={savePending}
             >
               {label}<span>{count}</span>
             </button>
@@ -974,7 +986,7 @@ export default function PondsPage() {
             aria-label={copy('Grid view')}
             aria-pressed={viewMode === 'grid'}
             onClick={() => setViewMode('grid')}
-            className={viewMode === 'grid' ? 'is-active' : ''}
+            className={viewMode === 'grid' ? 'is-active' : ''} disabled={savePending}
           >
             <LayoutGrid size={17} />
           </button>
@@ -983,7 +995,7 @@ export default function PondsPage() {
             aria-label={copy('List view')}
             aria-pressed={viewMode === 'list'}
             onClick={() => setViewMode('list')}
-            className={viewMode === 'list' ? 'is-active' : ''}
+            className={viewMode === 'list' ? 'is-active' : ''} disabled={savePending}
           >
             <List size={17} />
           </button>
@@ -993,7 +1005,7 @@ export default function PondsPage() {
           <button className="dashboard-action dashboard-action-primary ponds-add-button" onClick={() => {
             setFormData((previous) => ({ ...previous, docStart: today, baselineDate: today }));
             setModalOpen(true);
-          }}>
+          }} disabled={savePending}>
             <Plus size={18} />
             <span>{t.ponds.addNew || 'Add pond'}</span>
           </button>
@@ -1009,7 +1021,7 @@ export default function PondsPage() {
             <button type="button" className="ponds-empty-add-button" onClick={() => {
               setFormData((previous) => ({ ...previous, docStart: today, baselineDate: today }));
               setModalOpen(true);
-            }}>
+            }} disabled={savePending}>
               {t.ponds.addNew || 'Add pond'}
             </button>
           )}
@@ -1037,7 +1049,7 @@ export default function PondsPage() {
                   {canEditPonds && (
                     <div className="ponds-card-actions">
                       {cyclePond?.cycleStartMode === 'midcycle' && isActiveCycle(cyclePond) && (
-                        <button type="button" onClick={() => openBaselineEdit(cyclePond)} title={copy('Edit baseline estimates')} aria-label={`${copy('Edit Baseline')} ${pond.pondName}`}>
+                        <button type="button" onClick={() => openBaselineEdit(cyclePond)} title={copy('Edit baseline estimates')} aria-label={`${copy('Edit Baseline')} ${pond.pondName}`} disabled={savePending}>
                           <Pencil size={15} />
                         </button>
                       )}
@@ -1045,7 +1057,7 @@ export default function PondsPage() {
                         type="button"
                         onClick={() => isPhysical ? openStartCycle(pond) : (isActiveCycle(cyclePond!) ? setEndCyclePond(cyclePond) : openStartCycle(cyclePond!))}
                         title={isPhysical || !isActiveCycle(cyclePond!) ? copy('Start cycle') : copy('End cycle')}
-                        aria-label={`${isPhysical || !isActiveCycle(cyclePond!) ? copy('Start') : copy('End')} ${pond.pondName} ${copy('Cycle').toLowerCase()}`}
+                        aria-label={`${isPhysical || !isActiveCycle(cyclePond!) ? copy('Start') : copy('End')} ${pond.pondName} ${copy('Cycle').toLowerCase()}`} disabled={savePending}
                       >
                         {isPhysical || !isActiveCycle(cyclePond!) ? <RotateCcw size={15} /> : <Lock size={15} />}
                       </button>
@@ -1055,7 +1067,7 @@ export default function PondsPage() {
                           className="is-danger"
                           onClick={() => isPhysical ? openDeletePhysicalPond(pond) : openDeleteCyclePond(cyclePond!)}
                           title={copy('Delete pond')}
-                          aria-label={`${copy('Delete')} ${pond.pondName}`}
+                          aria-label={`${copy('Delete')} ${pond.pondName}`} disabled={savePending}
                         >
                           <Trash2 size={15} />
                         </button>
@@ -1110,7 +1122,7 @@ export default function PondsPage() {
                       type="button"
                       onClick={() => isPhysical ? openStartCycle(pond) : (isActiveCycle(cyclePond!) ? setEndCyclePond(cyclePond) : openStartCycle(cyclePond!))}
                       aria-label={`${isPhysical || !isActiveCycle(cyclePond!) ? copy('Start') : copy('End')} ${pond.pondName} ${copy('Cycle').toLowerCase()}`}
-                      title={isPhysical || !isActiveCycle(cyclePond!) ? copy('Start cycle') : copy('End cycle')}
+                      title={isPhysical || !isActiveCycle(cyclePond!) ? copy('Start cycle') : copy('End cycle')} disabled={savePending}
                     >
                       {isPhysical || !isActiveCycle(cyclePond!) ? <RotateCcw size={15} /> : <Lock size={15} />}
                     </button>
@@ -1124,7 +1136,7 @@ export default function PondsPage() {
 
       {/* -- MODAL --------------------------------------------- */}
       {isModalOpen && (
-        <AccessibleDialog title={t.ponds.addNew || 'Add pond'} onClose={() => setModalOpen(false)} className="responsive-modal-overlay" style={{
+        <AccessibleDialog title={t.ponds.addNew || 'Add pond'} onClose={() => { if (!save.busy) setModalOpen(false); }} className="responsive-modal-overlay" style={{
           position: 'fixed', inset: 0, zIndex: 1000,
           background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
@@ -1145,13 +1157,13 @@ export default function PondsPage() {
                   padding: '10px', cursor: 'pointer', transition: 'all 0.2s'
                 }}
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--border)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-mid)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-mid)'} disabled={savePending}
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form className="responsive-modal-body" onSubmit={handleAddPond} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
+            <form className="responsive-modal-body" onSubmit={handleAddPond} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '28px' }}><fieldset disabled={savePending} style={{ display: 'contents' }}>
               <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
                   <label htmlFor="add-pond-name" style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.ponds.pondName || 'Pond Name'}</label>
@@ -1207,20 +1219,20 @@ export default function PondsPage() {
                 <button type="button" onClick={() => setModalOpen(false)} style={{
                   flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)',
                   background: 'transparent', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
-                }} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-mid)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                }} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-mid)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'} disabled={savePending}>
                   {t.common.cancel || 'Cancel'}
                 </button>
-                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px' }}>
+                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px' }} disabled={savePending}>
                   {t.ponds.addNew || 'Add Pond'}
                 </button>
               </div>
-            </form>
+            </fieldset></form>
           </div>
         </AccessibleDialog>
       )}
 
       {baselineEditPond && (
-        <AccessibleDialog title={copy('Edit Baseline')} onClose={() => setBaselineEditPond(null)} className="responsive-modal-overlay" style={{
+        <AccessibleDialog title={copy('Edit Baseline')} onClose={() => { if (!save.busy) setBaselineEditPond(null); }} className="responsive-modal-overlay" style={{
           position: 'fixed', inset: 0, zIndex: 1000,
           background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
@@ -1233,11 +1245,11 @@ export default function PondsPage() {
                   {copy('Corrects baseline estimates only. This will not deduct inventory or create normal sampling history.')}
                 </p>
               </div>
-              <button aria-label={copy('Close')} onClick={() => setBaselineEditPond(null)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
+              <button aria-label={copy('Close')} onClick={() => setBaselineEditPond(null)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }} disabled={savePending}>
                 <X size={20} />
               </button>
             </div>
-            <form className="responsive-modal-body responsive-form-grid" onSubmit={handleUpdateBaseline} style={{ padding: '28px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <form className="responsive-modal-body responsive-form-grid" onSubmit={handleUpdateBaseline} style={{ padding: '28px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}><fieldset disabled={savePending} style={{ display: 'contents' }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {t.midcycleOnboarding?.baselineDate || 'Baseline Date'}
                 <input required type="date" value={baselineForm.baselineDate} onChange={e => setBaselineForm(prev => ({ ...prev, baselineDate: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
@@ -1259,16 +1271,16 @@ export default function PondsPage() {
                 <input type="number" step="0.01" value={baselineForm.baselineCumulativeFeed} onChange={e => setBaselineForm(prev => ({ ...prev, baselineCumulativeFeed: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <div style={{ gridColumn: 'span 2', display: 'flex', gap: '14px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setBaselineEditPond(null)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{copy('Cancel')}</button>
-                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }}>{copy('Save Baseline')}</button>
+                <button type="button" onClick={() => setBaselineEditPond(null)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }} disabled={savePending}>{copy('Cancel')}</button>
+                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }} disabled={savePending}>{copy('Save Baseline')}</button>
               </div>
-            </form>
+            </fieldset></form>
           </div>
         </AccessibleDialog>
       )}
 
       {endCyclePond && (
-        <AccessibleDialog title={copy('End Cycle')} onClose={() => setEndCyclePond(null)} className="responsive-modal-overlay" style={{
+        <AccessibleDialog title={copy('End Cycle')} onClose={() => { if (!save.busy) setEndCyclePond(null); }} className="responsive-modal-overlay" style={{
           position: 'fixed', inset: 0, zIndex: 1000,
           background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
@@ -1279,7 +1291,7 @@ export default function PondsPage() {
                 <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>{copy('End Cycle')}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{endCyclePond.pondName} {copy('history will stay saved.')}</p>
               </div>
-              <button aria-label={copy('Close')} onClick={() => setEndCyclePond(null)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
+              <button aria-label={copy('Close')} onClick={() => setEndCyclePond(null)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }} disabled={savePending}>
                 <X size={20} />
               </button>
             </div>
@@ -1298,8 +1310,8 @@ export default function PondsPage() {
                 </select>
               </label>
               <div style={{ display: 'flex', gap: '14px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setEndCyclePond(null)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{copy('Cancel')}</button>
-                <button type="button" onClick={handleEndCycle} className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }}>{copy('End Cycle')}</button>
+                <button type="button" onClick={() => setEndCyclePond(null)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }} disabled={savePending}>{copy('Cancel')}</button>
+                <button type="button" onClick={handleEndCycle} className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }} disabled={savePending}>{copy('End Cycle')}</button>
               </div>
             </div>
           </div>
@@ -1314,7 +1326,7 @@ export default function PondsPage() {
           openCycles={openFarmCycles}
           activeCycleId={activeFarmCycle?.id}
           saving={startingPondCycle}
-          onClose={() => setStartCyclePond(null)}
+          onClose={() => { if (!save.busy) setStartCyclePond(null); }}
           onSubmit={handleStartCycle}
         />
       )}

@@ -1,4 +1,5 @@
 "use client";
+import { useSaveOperation } from '../../../../../../shared/useSaveOperation';
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -50,6 +51,7 @@ export default function TreatmentMixesPage() {
   const [isIngredientMenuOpen, setIngredientMenuOpen] = useState(false);
   const [pondId, setPondId] = useState('');
   const [ppm, setPpm] = useState('');
+  const { save } = useSaveOperation();
   const [saving, setSaving] = useState(false);
   const hasPermission = useFarmPermissions();
   const canEdit = hasPermission('manageFeedInventory');
@@ -71,6 +73,8 @@ export default function TreatmentMixesPage() {
   }, [ppm, selectedPond]);
 
   const reset = () => {
+    if (save.busy) return;
+    save.reset();
     setShowCreate(false);
     setUseMix(null);
     setBatchMix(null);
@@ -93,15 +97,19 @@ export default function TreatmentMixesPage() {
       return quantity ? [{ additiveId: item.id, additiveName: item.itemName, quantity, unit: item.unit || 'kg' }] : [];
     });
     if (!name.trim() || !finalYield || !components.length) return alert(copy('Enter a name, final volume, and at least one ingredient.'));
-    if (inventory.some((item) => item.itemName.trim().toLowerCase() === name.trim().toLowerCase())) return alert(copy('That inventory name already exists.'));
+    if (inventory.some((item) => item.id !== save.id(`mix:${companyId}`) && item.itemName.trim().toLowerCase() === name.trim().toLowerCase())) return alert(copy('That inventory name already exists.'));
+    if (!save.acquire()) return;
     setSaving(true);
     try {
-      await createTreatmentMix(companyId, { name, yieldLiters: finalYield, components, notes, timeZone: company?.timeZone });
+      await createTreatmentMix(companyId, { name, yieldLiters: finalYield, components, notes, timeZone: company?.timeZone, operationId: save.id(`mix:${companyId}`) });
+      save.complete();
+      save.release();
       reset();
     } catch (error) {
       alert(message(error));
       setSaving(false);
     }
+    finally { save.release(); setSaving(false); }
   };
 
   const toggleIngredient = (id: string) => {
@@ -118,20 +126,25 @@ export default function TreatmentMixesPage() {
 
   const confirmBatch = async () => {
     if (!companyId || !batchMix?.treatmentMixRecipe) return;
+    if (!save.acquire()) return;
     setSaving(true);
     try {
-      await makeTreatmentMixBatch(companyId, batchMix.id, company?.timeZone);
+      await makeTreatmentMixBatch(companyId, batchMix.id, company?.timeZone, save.id(`batch:${batchMix.id}`));
+      save.complete();
+      save.release();
       reset();
     } catch (error) {
       alert(message(error));
       setSaving(false);
     }
+    finally { save.release(); setSaving(false); }
   };
 
   const recordUse = async () => {
     if (!companyId || !useMix || !selectedPond) return alert(copy('Select a pond.'));
     const parsedPpm = positiveNumber(ppm);
     if (!parsedPpm) return alert(copy('PPM must be greater than zero.'));
+    if (!save.acquire()) return;
     setSaving(true);
     try {
       await applyTreatmentMix(companyId, useMix.id, {
@@ -141,12 +154,15 @@ export default function TreatmentMixesPage() {
         cycleId: selectedPond.cycleId,
         cycleName: selectedPond.cycleName,
         pondCycleId: selectedPond.pondCycleId,
-      }, parsedPpm, company?.timeZone, notes);
+      }, parsedPpm, company?.timeZone, notes, save.id(`treatment:${useMix.id}`));
+      save.complete();
+      save.release();
       reset();
     } catch (error) {
       alert(message(error));
       setSaving(false);
     }
+    finally { save.release(); setSaving(false); }
   };
 
   if (loading) return <div style={{ minHeight: '60vh', display: 'grid', placeItems: 'center' }}><Loader2 className="animate-spin" size={42} /></div>;
@@ -159,7 +175,7 @@ export default function TreatmentMixesPage() {
           <h1>{copy('Treatment Mixes')}</h1>
           <p>{copy('Prepare recipes, then apply finished mix to ponds by PPM.')}</p>
         </div>
-        {canEdit && <button className="dashboard-action dashboard-action-primary" onClick={() => setShowCreate(true)}><Plus size={17} /> {copy('Create Mix')}</button>}
+        {canEdit && <button className="dashboard-action dashboard-action-primary" disabled={saving} onClick={() => { if (save.reset()) setShowCreate(true); }}><Plus size={17} /> {copy('Create Mix')}</button>}
       </div>
 
       <div className={styles.doseLogic}>
@@ -178,8 +194,8 @@ export default function TreatmentMixesPage() {
               {(mix.treatmentMixRecipe?.components || []).map((component) => <div key={component.additiveId} style={{ marginTop: 7, color: 'var(--text-muted)' }}>{component.quantity} {component.unit} · {component.additiveName}</div>)}
             </div>
             {canEdit && <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-              <button className="dashboard-action dashboard-action-secondary" style={{ flex: 1 }} onClick={() => setBatchMix(mix)}><RefreshCw size={17} /> {copy('Make Batch')}</button>
-              <button className="dashboard-action dashboard-action-primary" style={{ flex: 1 }} onClick={() => setUseMix(mix)} disabled={(mix.totalStock || 0) <= 0}><Waves size={17} /> {copy('Use')}</button>
+              <button className="dashboard-action dashboard-action-secondary" style={{ flex: 1 }} disabled={saving} onClick={() => { if (save.reset()) setBatchMix(mix); }}><RefreshCw size={17} /> {copy('Make Batch')}</button>
+              <button className="dashboard-action dashboard-action-primary" style={{ flex: 1 }} onClick={() => { if (save.reset()) setUseMix(mix); }} disabled={saving || (mix.totalStock || 0) <= 0}><Waves size={17} /> {copy('Use')}</button>
             </div>}
           </article>
         ))}
@@ -195,6 +211,7 @@ export default function TreatmentMixesPage() {
           style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(5,20,30,.55)', display: 'grid', placeItems: 'center', padding: 12 }}
         >
           <div className={`glass-card responsive-modal ${styles.modal}`} role="dialog" aria-modal="true" aria-labelledby="treatment-mix-modal-title" style={{ width: 'min(620px, 100%)', maxHeight: 'calc(100dvh - 24px)', overflow: 'hidden', padding: 0, background: '#fff' }}>
+            <fieldset disabled={saving} style={{ display: 'contents' }}>
             <div className={`responsive-modal-header ${styles.modalHeader}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
               <div><h2 id="treatment-mix-modal-title" style={{ margin: 0 }}>{showCreate ? copy('Create Treatment Mix') : useMix ? `${copy('Use')} ${useMix.itemName}` : `${copy('Make')} ${batchMix?.itemName}`}</h2><p style={{ color: 'var(--text-faint)' }}>{showCreate ? copy('Saving makes the first batch and deducts ingredients.') : useMix ? copy('Select the pond and PPM.') : copy('Confirm the recipe before deducting ingredients.')}</p></div>
               <button className="dashboard-action dashboard-action-secondary" onClick={reset} aria-label={copy('Close')}><X size={18} /></button>
@@ -265,6 +282,7 @@ export default function TreatmentMixesPage() {
               <button className="dashboard-action dashboard-action-secondary" onClick={reset}>{copy('Cancel')}</button>
               <button className="dashboard-action dashboard-action-primary" disabled={saving} onClick={showCreate ? saveMix : useMix ? recordUse : confirmBatch}>{saving ? <Loader2 className="animate-spin" size={18} /> : showCreate ? copy('Save & Make First Batch') : useMix ? copy('Record Treatment') : copy('Make Batch')}</button>
             </div>
+            </fieldset>
           </div>
         </div>
       )}

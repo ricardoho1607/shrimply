@@ -1,4 +1,4 @@
-import { deleteDoc, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 type CompanyProfileSource = {
@@ -96,11 +96,17 @@ export const syncPublicCompanyProfile = async (companyId: string, source: Compan
   const shouldPublish = source.isPublicProfile === true || source.isSearchable === true;
 
   if (!shouldPublish) {
-    await deleteDoc(profileRef).catch(() => undefined);
+    await runTransaction(db, async tx => {
+      await tx.get(doc(db, 'companies', companyId));
+      tx.delete(profileRef);
+    });
     return;
   }
 
-  await setDoc(profileRef, buildPublicCompanyProfile(companyId, source), { merge: true });
+  await runTransaction(db, async tx => {
+    await tx.get(doc(db, 'companies', companyId));
+    tx.set(profileRef, buildPublicCompanyProfile(companyId, source), { merge: true });
+  });
 };
 
 export const syncPublicCompanyMemberCount = async (

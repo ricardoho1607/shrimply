@@ -99,18 +99,18 @@ interface AssetStore {
   // Basic operations
   setCurrentCompanyId: (id: string) => void;
   initializeForCompany: (companyId: string) => Promise<void>;
-  addAsset: (asset: Omit<Asset, 'id' | 'companyId' | 'totalMaintenanceCost' | 'transferHistory' | 'maintenanceHistory' | 'createdAt' | 'updatedAt'>) => Promise<Asset>;
+  addAsset: (asset: Omit<Asset, 'id' | 'companyId' | 'totalMaintenanceCost' | 'transferHistory' | 'maintenanceHistory' | 'createdAt' | 'updatedAt'>, recordId?: string) => Promise<Asset>;
   updateAsset: (id: string, updates: Partial<Asset>) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
   getAsset: (id: string) => Asset | undefined;
   getAssetByQR: (qrCode: string) => Asset | undefined;
   
   // Transfer operations
-  transferAsset: (id: string, transfer: Omit<TransferRecord, 'id' | 'date'>) => Promise<void>;
+  transferAsset: (id: string, transfer: Omit<TransferRecord, 'id' | 'date'>, recordId?: string) => Promise<void>;
   returnAsset: (id: string) => Promise<void>;
   
   // Maintenance operations
-  addMaintenance: (id: string, maintenance: Omit<MaintenanceRecord, 'id' | 'date'>) => Promise<void>;
+  addMaintenance: (id: string, maintenance: Omit<MaintenanceRecord, 'id' | 'date'>, recordId?: string) => Promise<void>;
   scheduleNextMaintenance: (id: string, date: Date) => Promise<void>;
   getMaintenanceDue: () => Asset[];
   getMaintenanceCost: (id: string, startDate?: Date, endDate?: Date) => number;
@@ -423,14 +423,20 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     }
   },
 
-  addAsset: async (assetData) => {
+  addAsset: async (assetData, recordId) => {
     const { currentCompanyId } = get();
     if (!currentCompanyId) throw new Error('No company selected');
     const userId = auth.currentUser?.uid;
     if (!userId) throw new Error('No authenticated user');
+    const existing = recordId ? get().assets.find(asset => asset.id === recordId) : undefined;
+    if (existing) {
+      await persistAssetCache(currentCompanyId, get().assets);
+      requestOfflineMutationFlush(userId, currentCompanyId);
+      return existing;
+    }
 
     try {
-      const assetRef = doc(collection(db, 'assets'));
+      const assetRef = recordId ? doc(db, 'assets', recordId) : doc(collection(db, 'assets'));
       const qrCode = await get().generateQRCode(assetRef.id);
       const newAsset: Asset = {
         ...assetData,
@@ -549,19 +555,19 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     return get().assets.find((a) => a.qrCode === qrCode);
   },
 
-  transferAsset: async (id, transfer) => {
+  transferAsset: async (id, transfer, recordId) => {
     const asset = get().getAsset(id);
     if (!asset) throw new Error('Asset not found');
 
     const newTransfer: TransferRecord = {
       ...transfer,
-      id: `transfer_${Date.now()}`,
+      id: recordId || `transfer_${Date.now()}`,
       date: new Date(),
     };
 
     await get().updateAsset(id, {
       currentHolder: transfer.to,
-      transferHistory: [...asset.transferHistory, newTransfer],
+      transferHistory: asset.transferHistory.some(item => item.id === newTransfer.id) ? asset.transferHistory : [...asset.transferHistory, newTransfer],
     });
     
     // After transfer, check if there's an expected return date to monitor
@@ -584,7 +590,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     });
   },
 
-  addMaintenance: async (id, maintenance) => {
+  addMaintenance: async (id, maintenance, recordId) => {
     const asset = get().getAsset(id);
     if (!asset) throw new Error('Asset not found');
 
@@ -595,14 +601,15 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       cycleId: maintenance.cycleId || (skipCycleLink ? undefined : getActiveFarmCycle(usePondStore.getState().cycles)?.id),
       cycleName: maintenance.cycleName || (skipCycleLink ? undefined : getActiveFarmCycle(usePondStore.getState().cycles)?.cycleName),
       photos: maintenance.photos || [],
-      id: `maint_${Date.now()}`,
+      id: recordId || `maint_${Date.now()}`,
       date: new Date(),
     };
 
-    const totalCost = asset.totalMaintenanceCost + (maintenance.cost || 0);
+    const alreadyApplied = asset.maintenanceHistory.some(item => item.id === newMaintenance.id);
+    const totalCost = asset.totalMaintenanceCost + (alreadyApplied ? 0 : maintenance.cost || 0);
 
     const updates: Partial<Asset> = {
-      maintenanceHistory: [...asset.maintenanceHistory, newMaintenance],
+      maintenanceHistory: alreadyApplied ? asset.maintenanceHistory : [...asset.maintenanceHistory, newMaintenance],
       totalMaintenanceCost: totalCost,
       lastMaintenanceDate: new Date(),
     };

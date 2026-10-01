@@ -1,3 +1,4 @@
+import { useSaveOperation } from '../../shared/useSaveOperation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -101,6 +102,7 @@ function FeedAdditivesScreenContent() {
   const [voidError, setVoidError] = useState<string>('');
 
   const [activeTab, setActiveTab] = useState<'dashboard' | ItemType | 'mix'>('dashboard');
+  const { save, busy: savePending } = useSaveOperation();
   const [modalVisible, setModalVisible] = useState(false);
   const [menuModalVisible, setMenuModalVisible] = useState(false);
   const [lowStockExpanded, setLowStockExpanded] = useState(false);
@@ -258,18 +260,21 @@ function FeedAdditivesScreenContent() {
   );
 
   const closeModal = useCallback(() => {
+    if (save.busy) return;
     resetForm();
     setModalVisible(false);
     setSelectedItem(null);
     setModalType('add');
     setVoidError('');
     setActiveVoidOpId(null);
-  }, [resetForm]);
+  }, [resetForm, save]);
 
   const handleAction = useCallback(async (action: () => Promise<void>, successMsg: string) => {
+    if (!save.acquire()) return;
     try {
       await action();
-      await new Promise(resolve => setTimeout(resolve, 300));
+      save.complete();
+      save.release();
       Alert.alert(t.inventory.success, successMsg);
       closeModal();
       if (modalType === 'add') setActiveTab(itemType);
@@ -277,7 +282,8 @@ function FeedAdditivesScreenContent() {
       console.error('Inventory action failed:', err);
       Alert.alert(t.inventory.error, t.inventory.unknownError);
     }
-  }, [closeModal, modalType, itemType, t]);
+    finally { save.release(); }
+  }, [closeModal, modalType, itemType, t, save]);
 
   const handleAddItem = useCallback(() => {
     if (!formData.itemName || !formData.quantity || !formData.unitPrice) {
@@ -285,12 +291,12 @@ function FeedAdditivesScreenContent() {
     }
     const qty = Number(formData.quantity);
     const price = Number(formData.unitPrice);
-    if (isNaN(qty) || qty <= 0 || isNaN(price) || price <= 0) {
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price <= 0) {
       return Alert.alert(t.inventory.error, t.inventory.invalidQuantityOrPrice);
     }
 
     const stockInRecord: any = {
-      id: Date.now().toString(),
+      id: save.id(`initial-stock:${itemType}`),
       date: formData.stockDate,
       quantity: qty,
       price,
@@ -299,7 +305,7 @@ function FeedAdditivesScreenContent() {
       ...(formData.expiry && { expiry: formData.expiry }),
     };
 
-    const baseObj = { unit: formData.unit || 'kg', reorderLevel: Number(formData.reorderLevel || 0), stockInHistory: [stockInRecord], usageHistory: [], totalStock: qty, totalCost: qty * price, lastUpdated: new Date() };
+    const baseObj = { id: save.id(`item:${itemType}`), unit: formData.unit || 'kg', reorderLevel: Number(formData.reorderLevel || 0), stockInHistory: [stockInRecord], usageHistory: [], totalStock: qty, totalCost: qty * price, lastUpdated: new Date() };
 
     if (itemType === 'feed') {
       handleAction(() => store.addFeed({ feedName: formData.itemName, brand: formData.brand || '', feedType: (formData.category as any) || 'Grower', ...baseObj }), t.inventory.feedAddedSuccess);
@@ -317,36 +323,36 @@ function FeedAdditivesScreenContent() {
         ...baseObj,
       }), t.inventory.additiveAddedSuccess);
     }
-  }, [formData, itemType, store, handleAction, t, company?.timeZone]);
+  }, [formData, itemType, store, handleAction, t, company?.timeZone, save]);
 
   const handleStockIn = useCallback(() => {
     if (!selectedItem || !formData.quantity || !formData.unitPrice) return Alert.alert(t.inventory.error, t.inventory.quantityAndPriceRequired);
     const qty = Number(formData.quantity);
     const price = Number(formData.unitPrice);
-    if (isNaN(qty) || qty <= 0 || isNaN(price) || price <= 0) return Alert.alert(t.inventory.error, t.inventory.invalidValues);
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price <= 0) return Alert.alert(t.inventory.error, t.inventory.invalidValues);
 
     const method = itemType === 'feed' ? store.stockInFeed : store.stockInAdditive;
-    handleAction(() => method(selectedItem.id, qty, price, formData.notes || '', { stockDate: formData.stockDate, expiry: formData.expiry, unit: formData.unit || selectedItem.unit || 'kg' }), t.inventory.stockAdded);
-  }, [selectedItem, formData, itemType, store, handleAction, t]);
+    handleAction(() => method(selectedItem.id, qty, price, formData.notes || '', { stockDate: formData.stockDate, expiry: formData.expiry, unit: formData.unit || selectedItem.unit || 'kg', operationId: save.id(`stock:${selectedItem.id}`) }), t.inventory.stockAdded);
+  }, [selectedItem, formData, itemType, store, handleAction, t, save]);
 
   const handleUsage = useCallback(async () => {
     if (!selectedItem || !formData.quantity) return Alert.alert(t.inventory.error, t.inventory.quantityRequired);
     const qty = Number(formData.quantity);
-    if (isNaN(qty) || qty <= 0 || (selectedItem.totalStock || 0) < qty) {
+    if (!Number.isFinite(qty) || qty <= 0 || (selectedItem.totalStock || 0) < qty) {
       return Alert.alert(t.inventory.error, `${t.inventory.insufficientStock} (${(selectedItem.totalStock || 0).toFixed(1)} ${selectedItem.unit || 'kg'})`);
     }
 
     const method = itemType === 'feed' ? store.useFeed : store.useAdditive;
     await handleAction(async () => {
-      await method(selectedItem.id, qty, formData.pondId?.trim() || null, formData.notes?.trim() || '');
+      await method(selectedItem.id, qty, formData.pondId?.trim() || null, formData.notes?.trim() || '', save.id(`usage:${selectedItem.id}`));
       
       const updatedItems = itemType === 'feed' ? store.feeds : store.additives;
       const updatedItem = updatedItems.find(i => i.id === selectedItem.id);
       if (updatedItem) {
-        await checkAndCreateLowStockNotification(updatedItem, itemType);
+        void checkAndCreateLowStockNotification(updatedItem, itemType).catch(error => console.error('Low stock notification failed:', error));
       }
     }, `${t.inventory.usageRecorded} — ${qty} ${t.inventory.removed}`);
-  }, [selectedItem, formData, itemType, store, handleAction, checkAndCreateLowStockNotification, t]);
+  }, [selectedItem, formData, itemType, store, handleAction, checkAndCreateLowStockNotification, t, save]);
 
   const handleDelete = useCallback((id: string, type: ItemType) => {
     const item = (type === 'feed' ? store.feeds : store.additives).find(row => row.id === id);
@@ -399,6 +405,7 @@ function FeedAdditivesScreenContent() {
   };
 
   const openModal = useCallback((type: ModalType, item?: Feed | Additive, iType?: ItemType) => {
+    if (!save.reset()) return;
     setModalType(type);
     if (item && iType) {
       setSelectedItem(item);
@@ -421,7 +428,7 @@ function FeedAdditivesScreenContent() {
     }
     setMenuModalVisible(false);
     setModalVisible(true);
-  }, [company?.timeZone]);
+  }, [company?.timeZone, save]);
 
   const ItemCard = ({ item, type }: { item: Feed | Additive; type: ItemType }) => {
     const name = type === 'feed' ? (item as Feed).feedName : (item as Additive).additiveName;
@@ -992,7 +999,7 @@ function FeedAdditivesScreenContent() {
 
       <Modal visible={modalVisible} animationType="slide" transparent>
         <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+          <View style={styles.modalContent} pointerEvents={savePending ? 'none' : 'auto'}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {modalType === 'add' ? `${itemType === 'feed' ? t.inventory.addFeed : t.inventory.addAdditive}` :
@@ -1000,7 +1007,7 @@ function FeedAdditivesScreenContent() {
                     modalType === 'usage' ? t.inventory.recordUsage :
                       modalType === 'history' ? t.inventory.transactionHistory : itemType === 'additive' ? 'Product label and reorder level' : t.inventory.editReorderLevel}
               </Text>
-              <TouchableOpacity onPress={closeModal}>
+              <TouchableOpacity disabled={savePending} onPress={closeModal}>
                 <Ionicons name="close-circle" size={28} color="#dce8f2" />
               </TouchableOpacity>
             </View>
@@ -1086,7 +1093,7 @@ function FeedAdditivesScreenContent() {
                           </>
                         )}
                         <View style={styles.buttons}>
-                          <TouchableOpacity style={styles.btnCancel} onPress={closeModal}>
+                          <TouchableOpacity style={styles.btnCancel} disabled={savePending} onPress={closeModal}>
                             <Text style={styles.btnCancelText}>Cancel</Text>
                           </TouchableOpacity>
                           <TouchableOpacity style={styles.btnSubmit} onPress={async () => {
@@ -1124,10 +1131,10 @@ function FeedAdditivesScreenContent() {
 
                 {modalType !== 'editReorder' && (
                   <View style={styles.buttons}>
-                    <TouchableOpacity style={styles.btnCancel} onPress={closeModal}>
+                    <TouchableOpacity style={styles.btnCancel} disabled={savePending} onPress={closeModal}>
                       <Text style={styles.btnCancelText}>Cancel</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.btnSubmit} onPress={modalType === 'add' ? handleAddItem : modalType === 'stockIn' ? handleStockIn : handleUsage}>
+                    <TouchableOpacity style={styles.btnSubmit} disabled={savePending} onPress={modalType === 'add' ? handleAddItem : modalType === 'stockIn' ? handleStockIn : handleUsage}>
                       <Text style={styles.btnSubmitText}>
                         {modalType === 'add' ? (itemType === 'feed' ? t.inventory.addFeed : t.inventory.addAdditive) : 
                          modalType === 'stockIn' ? t.inventory.stockIn : 

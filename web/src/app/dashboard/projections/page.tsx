@@ -1,5 +1,8 @@
 "use client";
 
+import { useSaveOperation } from '../../../../../shared/useSaveOperation';
+import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
+import { updateRecordOnline } from '@/lib/saveData';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Target, 
@@ -20,8 +23,7 @@ import {
   onSnapshot, 
   doc, 
   serverTimestamp,
-  updateDoc,
-} from 'firebase/firestore';
+  } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useGemini } from '@/hooks/useGemini';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -166,6 +168,7 @@ export default function HarvestProjectionsPage() {
   const { formatCurrency, currencyConfig } = useCurrency();
   
   const [ponds, setPonds] = useState<Pond[]>([]);
+  const { save, busy: savePending } = useSaveOperation();
   const [selectedPondId, setSelectedPondId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<DashboardUser | null>(null);
@@ -402,16 +405,18 @@ export default function HarvestProjectionsPage() {
   }, [selectedPond, financialComparison, calibration, company?.timeZone]);
 
   const handleSavePrices = async () => {
+    if (save.busy) return;
     if (!company?.id || !user?.uid || !canManagePriceLadder) return;
     setPriceSaveStatus('saving');
     setPriceSaveError(null);
+    if (!save.acquire()) return;
     try {
       const persisted = buildPersistedHarvestMarketPrices(marketPrices);
-      await updateDoc(doc(db, 'companies', company.id), {
+      await updateRecordOnline(db, doc(db, 'companies', company.id), removeUndefinedFields({
         harvestProjectionMarketPrices: persisted,
         harvestProjectionMarketPricesUpdatedAt: serverTimestamp(),
         harvestProjectionMarketPricesUpdatedBy: user.uid,
-      });
+      }));
       const normalized = normalizeHarvestMarketPriceInputs(persisted);
       setSavedMarketPrices(normalized);
       setMarketPrices(normalized);
@@ -422,6 +427,8 @@ export default function HarvestProjectionsPage() {
       console.error('Failed to save harvest market prices:', error);
       setPriceSaveStatus('error');
       setPriceSaveError(error instanceof Error ? error.message : 'Unable to save market prices.');
+    } finally {
+      save.release();
     }
   };
 
@@ -643,7 +650,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
         <button 
           className="btn-primary" 
           onClick={handleExport}
-          disabled={!canExportReports || exportLoading || !projection || !financialComparison}
+          disabled={savePending || (!canExportReports || exportLoading || !projection || !financialComparison)}
         >
           {exportLoading ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
           {exportLoading ? 'Generating...' : t.actions.export + ' Audit PDF'}
@@ -672,7 +679,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                     fontWeight: 600,
                     cursor: 'pointer',
                     transition: 'all 0.2s'
-                  }}
+                  }} disabled={savePending}
                 >
                   {p.pondName}
                 </button>
@@ -715,7 +722,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                   <button
                     className="btn-primary"
                     onClick={handleSavePrices}
-                    disabled={priceSaveStatus === 'saving' || !hasUnsavedPriceChanges}
+                    disabled={savePending || (priceSaveStatus === 'saving' || !hasUnsavedPriceChanges)}
                     style={{ display: 'inline-flex', alignItems: 'center', gap: '7px' }}
                   >
                     {priceSaveStatus === 'saving' ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
@@ -724,14 +731,14 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                       : (t.harvestProjectionScreen?.savePrices || 'Save prices')}
                   </button>
                   {hasSavedPriceLadder && (
-                    <button className="btn-secondary" onClick={handleCancelPriceEdit} style={{ display: 'inline-flex', alignItems: 'center', gap: '7px' }}>
+                    <button className="btn-secondary" onClick={handleCancelPriceEdit} style={{ display: 'inline-flex', alignItems: 'center', gap: '7px' }} disabled={savePending}>
                       <X size={16} /> {t.actions.cancel || 'Cancel'}
                     </button>
                   )}
                 </>
               )}
               {canManagePriceLadder && !isEditingPrices && (
-                <button className="btn-secondary" onClick={() => { setIsEditingPrices(true); setPriceSaveStatus('idle'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: '7px' }}>
+                <button className="btn-secondary" onClick={() => { setIsEditingPrices(true); setPriceSaveStatus('idle'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: '7px' }} disabled={savePending}>
                   <Pencil size={16} /> {t.harvestProjectionScreen?.editPrices || 'Edit prices'}
                 </button>
               )}
@@ -853,7 +860,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                 <Sparkles size={24} color="#0EA5E9" />
                 <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#0369A1' }}>{t.sidebar.aiAssistant} {copy('Risk Analysis')}</h3>
               </div>
-              {insight && <button onClick={() => setInsight(null)} style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer' }}>{copy('Recalculate')}</button>}
+              {insight && <button onClick={() => setInsight(null)} style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer' }} disabled={savePending}>{copy('Recalculate')}</button>}
             </div>
 
             {insight ? (
@@ -863,7 +870,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
             ) : (
               <button 
                 onClick={handleAskOrson}
-                disabled={aiLoading || !projection}
+                disabled={savePending || (aiLoading || !projection)}
                 style={{
                   width: '100%',
                   padding: '16px',

@@ -1,3 +1,4 @@
+import { mergeAssetSave } from '../../shared/assetSave';
 import { applyDailyFeedMutation } from './dailyFeedTransaction';
 import NetInfo from '@react-native-community/netinfo';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -452,6 +453,15 @@ const applyRemoteMutation = async (mutation: OfflineMutation): Promise<void> => 
       const entries = buildInventoryLedgerEntries(reference.id, data as Parameters<typeof buildInventoryLedgerEntries>[1], mutation.path[2] === 'feeds' ? 'feed' : 'additive');
       transaction.set(reference, { ...data, financeEntries: Object.fromEntries(entries.map(entry => [entry.id, financeSourceEntry(entry.record)])) });
       for (const entry of entries) transaction.set(doc(db, 'companies', mutation.companyId, 'expenses', entry.id), { ...entry.record, companyId: mutation.companyId, addedBy: mutation.userId, addedByName: 'Inventory', timestamp: mutation.createdAt, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+    });
+    return;
+  }
+  if (mutation.path[0] === 'assets' && !mutation.createOnly) {
+    await runTransaction(db, async transaction => {
+      const snapshot = await transaction.get(reference);
+      if (!snapshot.exists() || snapshot.data().companyId !== mutation.companyId) throw new Error('Asset no longer exists in this company.');
+      const merged = mergeAssetSave(snapshot.data(), data);
+      if (merged) transaction.update(reference, merged);
     });
     return;
   }

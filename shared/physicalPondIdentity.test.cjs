@@ -55,7 +55,10 @@ test('web new cycles and restarts link and activate the same counted physical po
       getDoc: async ref => ({ exists: () => ref.id === 'physical', id: ref.id, data: () => physical }),
       getDocs: async () => ({ docs: [{ id: 'physical', data: () => physical }] }),
       query: value => value, where: () => null, serverTimestamp: () => 'server-time',
-      writeBatch: () => ({ set: (ref, data) => writes.push({ ref, data }), update: (ref, data) => writes.push({ ref, data }), commit: async () => {} }),
+      runTransaction: async (_db, work) => work({
+        get: async ref => ({ exists: () => ref.id === 'physical' || ref.id === 'farm-cycle', data: () => ref.id === 'physical' ? physical : { status: 'active' } }),
+        set: (ref, data) => writes.push({ ref, data }), update: (ref, data) => writes.push({ ref, data }),
+      }),
     };
     const { startPondCycle } = loader({ 'firebase/firestore': sdk, '@/lib/firebase': { db: {} } })(path.resolve(__dirname, '../web/src/lib/startPondCycle.ts'));
     const options = { companyId: 'company', userId: 'owner', pondType, pond: { ...physical, id: pondType === 'physical' ? 'physical' : 'old-cycle', physicalPondId: pondType === 'physical' ? undefined : 'physical' },

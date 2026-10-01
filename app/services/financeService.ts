@@ -83,10 +83,11 @@ class FinanceService {
     companyId: string, 
     expenseData: ExpenseInput, 
     userId: string, 
-    userName: string
+    userName: string,
+    recordId?: string
   ): Promise<string> {
     try {
-      const expenseRef = doc(this.getExpensesCollection(companyId));
+      const expenseRef = recordId ? doc(this.getExpensesCollection(companyId), recordId) : doc(this.getExpensesCollection(companyId));
       const newExpense: Expense = {
         id: expenseRef.id,
         ...expenseData,

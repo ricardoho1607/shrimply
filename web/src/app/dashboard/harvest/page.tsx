@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Plus,
   Wallet,
@@ -17,7 +17,6 @@ import {
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, query, orderBy, onSnapshot, doc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
-import { removeUndefinedFields } from '@/lib/firestoreData';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -29,6 +28,7 @@ import {
   calculateHarvestRemoval,
   getHarvestDateSampling,
   getNextPartialHarvestNumber,
+  getInvalidHarvestDraftLine,
   getSamplingSize,
   harvestSizeDiffersFromSampling,
   reverseHarvestImpactOnPond,
@@ -50,6 +50,7 @@ import {
 } from '../../../../../shared/harvestCycleScope';
 import styles from './HarvestPage.module.css';
 import { getHarvestDoc } from './harvestDoc';
+import { getHarvestSaveError, HarvestSaveError, isValidHarvestDate, prepareHarvestWriteData } from './harvestPersistence';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 
 /* --- Types --------------------------------------------------- */
@@ -172,6 +173,9 @@ export default function HarvestPage() {
   const [samplingMbwDrafts, setSamplingMbwDrafts] = useState<Record<string, string>>({});
   const [samplingFeedStatuses, setSamplingFeedStatuses] = useState<Record<string, HarvestDayFeedStatus>>({});
   const [samplingSavingPondId, setSamplingSavingPondId] = useState<string | null>(null);
+  const [isSavingHarvest, setIsSavingHarvest] = useState(false);
+  const harvestSubmitLock = useRef(false);
+  const pendingHarvest = useRef<{ id: string } | null>(null);
   const hasPermission = useFarmPermissions();
   const canEditHarvest = hasPermission('manageHarvests');
   const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
@@ -349,7 +353,11 @@ export default function HarvestPage() {
   }, [companyId, t.harvestCycle.productionCycle]);
 
   const saveRequiredSampling = async (pond: Pond) => {
-    if (!companyId || !user || samplingSavingPondId) return;
+    if (!companyId || !user || !canEditHarvest || samplingSavingPondId || harvestSubmitLock.current) return;
+    if (!isValidHarvestDate(formData.date, today)) {
+      alert(copy('Choose a valid harvest date that is not in the future.'));
+      return;
+    }
     const mbw = Number(samplingMbwDrafts[pond.id]);
     if (!Number.isFinite(mbw) || mbw <= 0) {
       alert(t.harvest.samplingMbwRequired);
@@ -361,10 +369,10 @@ export default function HarvestPage() {
       const pondRef = doc(db, 'companies', companyId, 'ponds', pond.id);
       await runTransaction(db, async (transaction) => {
         const snapshot = await transaction.get(pondRef);
-        if (!snapshot.exists()) throw new Error('Pond was not found');
+        if (!snapshot.exists()) throw new HarvestSaveError('A selected pond is no longer available. Refresh the pond list before saving.');
         const serverPond = { id: snapshot.id, ...snapshot.data() } as Pond;
         if (getHarvestDateSampling(serverPond, formData.date)) return;
-        transaction.update(pondRef, {
+        transaction.update(pondRef, prepareHarvestWriteData({
           samplings: [
             ...(serverPond.samplings || []),
             buildHarvestDateSampling({
@@ -379,12 +387,12 @@ export default function HarvestPage() {
           ],
           updatedAt: serverTimestamp(),
           updatedBy: user.uid,
-        });
+        }));
       });
       setSamplingMbwDrafts((current) => ({ ...current, [pond.id]: '' }));
     } catch (error) {
       console.error('Error adding harvest-date sampling:', error);
-      alert(t.harvestCycle.saveFailed);
+      alert(getHarvestSaveError(error, t.harvestCycle.saveFailed, copy));
     } finally {
       setSamplingSavingPondId(null);
     }
@@ -393,12 +401,37 @@ export default function HarvestPage() {
   const handleAddHarvest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !formData.pondId || !user) return;
-    if (!canEditHarvest) return;
+    if (!canEditHarvest || samplingSavingPondId || harvestSubmitLock.current) return;
+    harvestSubmitLock.current = true;
+    setIsSavingHarvest(true);
 
     try {
-      const entries = [...harvestBatch, formData];
+      const entries = [...harvestBatch, formData].map((entry) => ({
+        ...entry,
+        biomass: String(entry.biomass ?? '').trim(),
+        size: String(entry.size ?? '').trim(),
+        price: String(entry.price ?? '').trim(),
+        subBiomass: String(entry.subBiomass ?? '').trim(),
+        subSize: String(entry.subSize ?? '').trim(),
+        subPrice: String(entry.subPrice ?? '').trim(),
+      }));
+      if (!isValidHarvestDate(formData.date, today)) {
+        throw new HarvestSaveError('Choose a valid harvest date that is not in the future.');
+      }
+      if (new Set(entries.map((entry) => entry.pondId)).size !== entries.length) {
+        throw new HarvestSaveError('Each pond can appear only once in a harvest. Remove the duplicate pond before saving.');
+      }
+      if (entries.some((entry) => !entry.biomass?.trim() || !entry.size?.trim() || !entry.price?.trim()
+        || getInvalidHarvestDraftLine(entry))) {
+        throw new HarvestSaveError('Enter a positive biomass, size, and price for every harvest grade, including queued ponds.');
+      }
       const selectedPonds = entries.map((entry) => formPonds.find((pond) => pond.id === entry.pondId));
-      if (selectedPonds.some((pond) => !pond)) return;
+      if (selectedPonds.some((pond) => !pond)) {
+        throw new HarvestSaveError('A selected pond is no longer available. Refresh the pond list before saving.');
+      }
+      if (new Set(selectedPonds.map((pond) => pond!.cycleId).filter(Boolean)).size > 1) {
+        throw new HarvestSaveError('All ponds in a harvest must belong to the same cycle.');
+      }
       for (let index = 0; index < entries.length; index += 1) {
         const selectedPond = selectedPonds[index]!;
         const harvestSampling = getHarvestDateSampling(selectedPond, formData.date);
@@ -422,7 +455,10 @@ export default function HarvestPage() {
         )) return;
       }
 
-      const harvestRef = doc(collection(db, 'companies', companyId, 'harvestRecords'));
+      if (!pendingHarvest.current) {
+        pendingHarvest.current = { id: doc(collection(db, 'companies', companyId, 'harvestRecords')).id };
+      }
+      const harvestRef = doc(db, 'companies', companyId, 'harvestRecords', pendingHarvest.current.id);
       const firstPond = selectedPonds[0]!;
       const newRecord: HarvestRecord = {
         id: harvestRef.id,
@@ -451,7 +487,10 @@ export default function HarvestPage() {
         }),
       };
 
-      await runTransaction(db, async (transaction) => {
+      const alreadySaved = await runTransaction(db, async (transaction) => {
+        // Reuse the draft ID after an uncertain response; never apply its totals twice.
+        const savedHarvest = await transaction.get(harvestRef);
+        if (savedHarvest.exists()) return true;
         const previousHarvestRef = editingRecord
           ? doc(db, 'companies', companyId, 'harvestRecords', editingRecord.id)
           : null;
@@ -459,7 +498,7 @@ export default function HarvestPage() {
           ? await transaction.get(previousHarvestRef)
           : null;
         if (editingRecord && (!previousHarvestSnapshot?.exists() || previousHarvestSnapshot.data().voided)) {
-          throw new Error('The original harvest is no longer available to edit');
+          throw new HarvestSaveError('The original harvest has changed or was voided. Refresh the harvest list before editing.');
         }
         const previousRecord = previousHarvestSnapshot?.exists()
           ? ({ id: previousHarvestSnapshot.id, ...previousHarvestSnapshot.data() } as HarvestRecord)
@@ -471,7 +510,16 @@ export default function HarvestPage() {
         const pondRefs = uniquePondIds.map((pondId) => doc(db, 'companies', companyId, 'ponds', pondId));
         const pondSnapshots = await Promise.all(pondRefs.map((pondRef) => transaction.get(pondRef)));
         const pondSnapshotsById = new Map(pondSnapshots.map((snapshot) => [snapshot.id, snapshot]));
-        if (selectedPonds.some((pond) => !pondSnapshotsById.get(pond!.id)?.exists())) throw new Error('A selected pond was not found');
+        if (pondSnapshots.some((snapshot) => !snapshot.exists())) {
+          throw new HarvestSaveError('A selected pond is no longer available. Refresh the pond list before saving.');
+        }
+        if (selectedPonds.some((pond) => {
+          const serverPond = pondSnapshotsById.get(pond!.id)!.data()!;
+          return (serverPond.cycleId || '') !== (pond!.cycleId || '')
+            || (serverPond.pondCycleId || pond!.id) !== (pond!.pondCycleId || pond!.id);
+        })) {
+          throw new HarvestSaveError('A pond has moved to another cycle. Refresh the pond list before saving.');
+        }
 
         const updatedPondsById = new Map<string, Pond>();
         pondSnapshots.forEach((pondSnapshot) => {
@@ -485,7 +533,8 @@ export default function HarvestPage() {
         const canonicalPonds = newRecord.ponds.map((harvestPond) => {
           const serverPond = updatedPondsById.get(harvestPond.pondId)!;
           if (!getHarvestDateSampling(serverPond, newRecord.date)) {
-            throw new Error(`${serverPond.pondName} requires a positive-MBW sampling on ${newRecord.date}`);
+            throw new HarvestSaveError(t.harvest.samplingRequiredMessage
+              .replace('{{pondName}}', serverPond.pondName).replace('{{date}}', newRecord.date));
           }
           const previousHarvestPond = previousRecord?.ponds.find((pond) => pond.pondId === harvestPond.pondId);
           const partialHarvestNumber = harvestPond.harvestType === 'partial'
@@ -501,7 +550,7 @@ export default function HarvestPage() {
         pondSnapshots.forEach((pondSnapshot) => {
           if (!pondSnapshot.exists()) return;
           const updatedPond = updatedPondsById.get(pondSnapshot.id)!;
-          transaction.update(pondSnapshot.ref, {
+          transaction.update(pondSnapshot.ref, prepareHarvestWriteData({
             totalHarvestedBiomass: updatedPond.totalHarvestedBiomass,
             totalHarvestedPopulation: updatedPond.totalHarvestedPopulation,
             partialHarvestCount: updatedPond.partialHarvestCount || 0,
@@ -513,49 +562,53 @@ export default function HarvestPage() {
             postHarvestReferenceMbw: updatedPond.postHarvestReferenceMbw || 0,
             updatedAt: serverTimestamp(),
             updatedBy: user.uid,
-          });
+          }));
         });
         const revenue = buildHarvestRevenue({ ...newRecord, ponds: canonicalPonds });
-        transaction.set(harvestRef, {
+        transaction.set(harvestRef, prepareHarvestWriteData({
           financeEntry: { ...financeSourceEntry(revenue), id: financeSyncDocumentId(revenue.reference) },
-          ...removeUndefinedFields(newRecord),
-          ponds: canonicalPonds.map(removeUndefinedFields),
+          ...newRecord,
+          ponds: canonicalPonds,
           ...(previousRecord ? { correctedFromHarvestId: previousRecord.id } : {}),
           createdAt: serverTimestamp(),
           createdBy: user.uid,
-        });
+        }));
         {
-          transaction.set(doc(db, 'companies', companyId, 'revenues', financeSyncDocumentId(revenue.reference)), {
-            ...removeUndefinedFields(revenue),
+          transaction.set(doc(db, 'companies', companyId, 'revenues', financeSyncDocumentId(revenue.reference)), prepareHarvestWriteData({
+            ...revenue,
             companyId,
             addedBy: user.uid,
             addedByName: user.name || user.email || 'Unknown',
             timestamp: Date.now(),
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-          }, { merge: true });
+          }), { merge: true });
         }
         if (previousRecord && previousHarvestRef) {
           const previousRevenue = buildHarvestRevenue(previousRecord);
           const previousRevenueId = financeSyncDocumentId(previousRevenue.reference);
-          transaction.update(previousHarvestRef, {
+          transaction.update(previousHarvestRef, prepareHarvestWriteData({
             voided: true,
             voidedAt: serverTimestamp(),
             voidedBy: user.uid,
             financeEntry: { ...financeSourceEntry(previousRevenue), id: previousRevenueId, voided: true },
-          });
-          transaction.set(doc(db, 'companies', companyId, 'revenues', previousRevenueId), {
-            ...removeUndefinedFields(previousRevenue),
+          }));
+          transaction.set(doc(db, 'companies', companyId, 'revenues', previousRevenueId), prepareHarvestWriteData({
+            ...previousRevenue,
             companyId,
             addedBy: user.uid,
             timestamp: Date.now(),
             voided: true,
             voidedAt: serverTimestamp(),
             voidedBy: user.uid,
-          }, { merge: true });
+          }), { merge: true });
         }
       });
 
+      if (alreadySaved) {
+        alert(copy('This harvest was already saved. Review it in the harvest list before making further changes.'));
+      }
+      pendingHarvest.current = null;
       setModalOpen(false);
       setEditingRecord(null);
       setHarvestBatch([]);
@@ -572,11 +625,15 @@ export default function HarvestPage() {
       });
     } catch (error) {
       console.error('Error saving harvest record:', error);
-      alert(t.harvestCycle.saveFailed);
+      alert(getHarvestSaveError(error, t.harvestCycle.saveFailed, copy));
+    } finally {
+      harvestSubmitLock.current = false;
+      setIsSavingHarvest(false);
     }
   };
 
   const addPondToBatch = () => {
+    if (harvestSubmitLock.current) return;
     if (!formData.pondId || !formData.biomass || !formData.size || !formData.price) {
       alert(copy('Complete this pond before adding another.'));
       return;
@@ -595,6 +652,8 @@ export default function HarvestPage() {
   };
 
   const closeHarvestModal = () => {
+    if (harvestSubmitLock.current || samplingSavingPondId) return;
+    pendingHarvest.current = null;
     setModalOpen(false);
     setEditingRecord(null);
     setHarvestBatch([]);
@@ -612,6 +671,8 @@ export default function HarvestPage() {
   };
 
   const openCreateHarvest = () => {
+    if (harvestSubmitLock.current) return;
+    pendingHarvest.current = null;
     setEditingRecord(null);
     setHarvestBatch([]);
     setFormData({
@@ -629,7 +690,9 @@ export default function HarvestPage() {
   };
 
   const openEditRecord = (record: HarvestRecord, pondId?: string) => {
+    if (harvestSubmitLock.current) return;
     if (!canEditHarvest || !canModifyHarvestRecord(record.id)) return;
+    pendingHarvest.current = null;
     const targetPond = record.ponds.find((pond) => pond.pondId === pondId) || record.ponds[record.ponds.length - 1];
     const orderedPonds = targetPond
       ? [...record.ponds.filter((pond) => pond.pondId !== targetPond.pondId), targetPond]
@@ -662,6 +725,7 @@ export default function HarvestPage() {
   };
 
   const handleDeleteRecord = async (recordId: string) => {
+    if (harvestSubmitLock.current) return;
     if (!companyId || !user || !window.confirm('Void this harvest? Pond totals will be reversed and the sale excluded from profit reports. The original records and confirmed payments are retained; record any refund separately in Finance.')) return;
     if (!canEditHarvest) return;
     const localRecord = harvestRecords.find((record) => record.id === recordId);
@@ -670,6 +734,8 @@ export default function HarvestPage() {
       && user.role === 'technician'
       && (!localRecord || !localRecord.ponds.every((pond) => accessiblePondIds.has(pond.pondId)))
     ) return;
+    harvestSubmitLock.current = true;
+    setIsSavingHarvest(true);
     try {
       const harvestRef = doc(db, 'companies', companyId, 'harvestRecords', recordId);
       await runTransaction(db, async (transaction) => {
@@ -681,27 +747,34 @@ export default function HarvestPage() {
         const pondSnapshots = await Promise.all(pondRefs.map((pondRef) => transaction.get(pondRef)));
         const pondSnapshotsById = new Map(pondSnapshots.map((snapshot) => [snapshot.id, snapshot]));
 
+        if (pondSnapshots.some((snapshot) => !snapshot.exists())) {
+          throw new HarvestSaveError('A selected pond is no longer available. Refresh the pond list before saving.');
+        }
         record.ponds.forEach((harvestPond) => {
           const pondSnapshot = pondSnapshotsById.get(harvestPond.pondId);
           if (!pondSnapshot?.exists()) return;
           const pond = { id: pondSnapshot.id, ...pondSnapshot.data() } as Pond;
           const updatedPond = reverseHarvestImpactOnPond(pond, harvestPond);
-          transaction.update(pondSnapshot.ref, {
+          transaction.update(pondSnapshot.ref, prepareHarvestWriteData({
             totalHarvestedBiomass: updatedPond.totalHarvestedBiomass,
             totalHarvestedPopulation: updatedPond.totalHarvestedPopulation,
             postHarvestRemainingBiomass: updatedPond.postHarvestRemainingBiomass ?? null,
             postHarvestRemainingPopulation: updatedPond.postHarvestRemainingPopulation ?? null,
             updatedAt: serverTimestamp(),
             updatedBy: user.uid,
-          });
+          }));
         });
         const revenue = buildHarvestRevenue(record);
         const revenueId = financeSyncDocumentId(revenue.reference);
-        transaction.update(harvestRef, { voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid, financeEntry: { ...financeSourceEntry(revenue), id: revenueId, voided: true } });
-        transaction.set(doc(db, 'companies', companyId, 'revenues', revenueId), { ...removeUndefinedFields(revenue), companyId, addedBy: user.uid, timestamp: Date.now(), voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid }, { merge: true });
+        transaction.update(harvestRef, prepareHarvestWriteData({ voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid, financeEntry: { ...financeSourceEntry(revenue), id: revenueId, voided: true } }));
+        transaction.set(doc(db, 'companies', companyId, 'revenues', revenueId), prepareHarvestWriteData({ ...revenue, companyId, addedBy: user.uid, timestamp: Date.now(), voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid }), { merge: true });
       });
     } catch (error) {
       console.error('Error deleting record:', error);
+      alert(getHarvestSaveError(error, t.harvestCycle.saveFailed, copy));
+    } finally {
+      harvestSubmitLock.current = false;
+      setIsSavingHarvest(false);
     }
   };
 
@@ -969,13 +1042,13 @@ export default function HarvestPage() {
                 </h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '4px' }}>{t.harvest.recordHarvestDescription}</p>
               </div>
-              <button className={styles.closeButton} aria-label={copy('Close')} onClick={closeHarvestModal} style={{ border: 'none', padding: '8px', cursor: 'pointer' }}>
+              <button className={styles.closeButton} disabled={isSavingHarvest || samplingSavingPondId !== null} aria-label={copy('Close')} onClick={closeHarvestModal} style={{ border: 'none', padding: '8px', cursor: 'pointer' }}>
                 <X size={20} />
               </button>
             </div>
 
             <form className={`responsive-modal-body ${styles.harvestForm}`} onSubmit={handleAddHarvest}>
-              <div className={styles.harvestFormScroll}>
+              <fieldset className={styles.harvestFormScroll} disabled={isSavingHarvest || samplingSavingPondId !== null} style={{ border: 0, margin: 0, minWidth: 0 }}>
               <div className={styles.cycleSummary} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '12px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ color: 'var(--text-primary)', fontSize: '16px', fontWeight: 600 }}>{editingRecord?.cycleName || formCycle?.cycleName}</div>
@@ -1175,11 +1248,11 @@ export default function HarvestPage() {
                   </button>
                 )}
               </div>
-              </div>
+              </fieldset>
 
               <div className={`responsive-modal-footer ${styles.harvestFooter}`} style={{ display: 'flex', gap: '10px' }}>
-                <button type="button" onClick={closeHarvestModal} style={{ flex: 1, minHeight: '40px', padding: '0 12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{t.actions.cancel}</button>
-                <button type="submit" className={`btn-primary ${styles.saveButton}`} style={{ flex: 1, minHeight: '40px', padding: '0 12px', borderRadius: '12px', fontWeight: 600 }}>{t.actions.save} {t.harvest.harvest}</button>
+                <button type="button" disabled={isSavingHarvest || samplingSavingPondId !== null} onClick={closeHarvestModal} style={{ flex: 1, minHeight: '40px', padding: '0 12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{t.actions.cancel}</button>
+                <button type="submit" disabled={isSavingHarvest || samplingSavingPondId !== null} aria-busy={isSavingHarvest} className={`btn-primary ${styles.saveButton}`} style={{ flex: 1, minHeight: '40px', padding: '0 12px', borderRadius: '12px', fontWeight: 600 }}>{isSavingHarvest ? copy('Saving harvest…') : `${t.actions.save} ${t.harvest.harvest}`}</button>
               </div>
             </form>
           </div>

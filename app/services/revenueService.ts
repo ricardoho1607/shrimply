@@ -76,10 +76,11 @@ class RevenueService {
     companyId: string, 
     revenueData: RevenueInput, 
     userId: string, 
-    userName: string
+    userName: string,
+    recordId?: string
   ): Promise<string> {
     try {
-      const revenueRef = doc(this.getRevenuesCollection(companyId));
+      const revenueRef = recordId ? doc(this.getRevenuesCollection(companyId), recordId) : doc(this.getRevenuesCollection(companyId));
       const newRevenue: Revenue = {
         id: revenueRef.id,
         ...revenueData,

@@ -44,7 +44,7 @@ test('water quality modals use compact options and the authenticated primary act
   assert.match(pageSource, /className="glass-card responsive-modal animate-fade-up water-log-modal"/);
   assert.match(globalStyles, /@media \(max-width: 640px\)[\s\S]*\.water-log-form-grid/);
   assert.match(pageSource, /<label className="form-label">\{copy\('Date'\)\}<\/label>/);
-  assert.match(pageSource, /disabled=\{!formData\.pondId \|\| waterSubmitting\} className="water-save-log-button"/);
+  assert.match(pageSource, /disabled=\{savePending \|\| \(!formData\.pondId \|\| waterSubmitting\)\} className="water-save-log-button"/);
   assert.match(globalStyles, /\.water-save-log-button:disabled\s*\{[\s\S]*background:\s*var\(--bg-mid\)/);
 });
 

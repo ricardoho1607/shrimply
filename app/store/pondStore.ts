@@ -254,7 +254,7 @@ export interface DurableOutcome {
 
 interface PondStore {
   ponds: Pond[]; physicalPonds: PhysicalPond[]; cycles: FarmCycle[]; harvestRecords: HarvestRecord[]; currentCompanyId?: string; currentTimeZone?: string; farmCacheUserId?: string; farmCacheStatus: FarmCacheStatus; lastFarmCacheUpdate?: number; isBackingUp: boolean; isRestoring: boolean; lastBackupTime?: number;
-  firebaseSync?: { syncPond: (action: 'create' | 'update' | 'delete', pond: Pond) => void; syncPhysicalPond?: (action: 'create' | 'update' | 'delete', pond: PhysicalPond) => void; syncSampling: (action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => Promise<DurableOutcome> | void; syncMortality?: (action: 'create' | 'update' | 'delete', pondId: string, record: MortalityRecord, recordId?: string) => void; syncHarvestRecord: (action: 'create' | 'update' | 'delete', harvestRecord: HarvestRecord, previousRecord?: HarvestRecord, operationId?: string) => Promise<DurableOutcome> | void; syncCycle?: (action: 'create' | 'update' | 'delete', cycle: FarmCycle) => void; };
+  firebaseSync?: { syncPond: (action: 'create' | 'update' | 'delete', pond: Pond) => void; syncPhysicalPond?: (action: 'create' | 'update' | 'delete', pond: PhysicalPond) => void; syncSampling: (action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => Promise<DurableOutcome> | void; syncMortality?: (action: 'create' | 'update' | 'delete', pondId: string, record: MortalityRecord, recordId?: string) => Promise<DurableOutcome> | void; syncHarvestRecord: (action: 'create' | 'update' | 'delete', harvestRecord: HarvestRecord, previousRecord?: HarvestRecord, operationId?: string) => Promise<DurableOutcome> | void; syncCycle?: (action: 'create' | 'update' | 'delete', cycle: FarmCycle) => void; };
   
   addFarmCycle: (cycle?: Partial<FarmCycle>) => FarmCycle;
   updateFarmCycle: (cycleId: string, updates: Partial<FarmCycle>) => void;
@@ -262,7 +262,7 @@ interface PondStore {
   addPhysicalPond: (pond: PhysicalPond, options?: { sync?: boolean }) => void;
   updatePhysicalPond: (pondId: string, updates: Partial<PhysicalPond>) => void;
   deletePhysicalPond: (pondId: string) => void;
-  addPond: (pond: Pond) => boolean; updatePond: (pondId: string, updates: Partial<Pond>) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => Promise<DurableOutcome>; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void; addMortalityRecord: (pondId: string, record: MortalityRecord) => void; updateMortalityRecord: (pondId: string, recordId: string, updates: Partial<MortalityRecord>) => void; deleteMortalityRecord: (pondId: string, recordId: string) => void;
+  addPond: (pond: Pond) => boolean; updatePond: (pondId: string, updates: Partial<Pond>) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => Promise<DurableOutcome>; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void; addMortalityRecord: (pondId: string, record: MortalityRecord) => Promise<DurableOutcome>; updateMortalityRecord: (pondId: string, recordId: string, updates: Partial<MortalityRecord>) => void; deleteMortalityRecord: (pondId: string, recordId: string) => void;
   addHarvestRecord: (record: HarvestRecord, operationId?: string) => Promise<DurableOutcome>; updateHarvestRecord: (harvestId: string, record: HarvestRecord, operationId?: string) => Promise<DurableOutcome>; removeHarvestRecord: (harvestId: string, operationId?: string) => Promise<DurableOutcome>; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
   
   addWaterQuality: (pondId: string, record: { phMorning: string; phEvening: string; doMorning: string; doEvening: string; transparency: string; salinity: string; temperature?: string; waterAppearance?: string; waterDepthCm?: string; alkalinity?: string; waterQualityRecordedByName?: string; ammonia?: string; operationalNotes?: string; weatherEvent?: Sampling['weatherEvent']; waterExchangePercent?: string; sludgeLoad?: Sampling['sludgeLoad']; surfaceScum?: boolean | null; shrimpBehaviour?: Sampling['shrimpBehaviour']; }) => void;
@@ -1148,10 +1148,13 @@ export const usePondStore = create<PondStore>()(
         if (deletedSampling) state.firebaseSync?.syncSampling('delete', pondId, deletedSampling, samplingId);
       },
 
-      addMortalityRecord: (pondId, record) => {
+      addMortalityRecord: async (pondId, record) => {
         const state = get();
         const pond = state.ponds.find((item) => item.id === pondId);
-        if (!pond) return;
+        if (!pond) return { success: false, status: 'rejected', error: 'Pond not found.' };
+        if (pond.cycleStatus === 'ended') return { success: false, status: 'rejected', error: 'This pond cycle has ended.' };
+        if (!state.currentCompanyId || !state.farmCacheUserId || !state.firebaseSync?.syncMortality) return { success: false, status: 'rejected', error: 'Farm account or sync provider is unavailable.' };
+        const operationScope = { companyId: state.currentCompanyId, userId: state.farmCacheUserId };
 
         const normalizedRecord: MortalityRecord = {
           ...record,
@@ -1166,13 +1169,23 @@ export const usePondStore = create<PondStore>()(
           pondCycleId: record.pondCycleId || pond.pondCycleId || pondId,
         };
         const existingRecords = pond.mortalityRecords || [];
-        const mortalityRecords = [...existingRecords, normalizedRecord];
+        const mortalityRecords = existingRecords.some(item => item.id === normalizedRecord.id) ? existingRecords : [...existingRecords, normalizedRecord];
         const updatedPond = { ...pond, mortalityRecords };
 
         set((current) => ({
           ponds: current.ponds.map((item) => item.id === pondId ? updatedPond : item),
         }));
-        state.firebaseSync?.syncMortality?.('create', pondId, normalizedRecord);
+        try {
+          const outcome = await state.firebaseSync.syncMortality('create', pondId, normalizedRecord);
+          if (!outcome?.success) throw new Error(outcome?.error || 'Could not save mortality locally.');
+          return outcome;
+        } catch (error) {
+          if (isSameOfflineFarmIdentity(get(), operationScope) && !existingRecords.some(item => item.id === normalizedRecord.id)) {
+            set(current => ({ ponds: current.ponds.map(item => item.id === pondId
+              ? { ...item, mortalityRecords: (item.mortalityRecords || []).filter(entry => entry.id !== normalizedRecord.id) } : item) }));
+          }
+          return { success: false, status: 'rejected', error: error instanceof Error ? error.message : 'Could not save mortality locally.' };
+        }
       },
 
       updateMortalityRecord: (pondId, recordId, updates) => {

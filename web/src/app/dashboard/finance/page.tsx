@@ -1,6 +1,9 @@
 "use client";
 
 import { isSourceLinkedFinance, appendSettlement, monetaryValue } from '../../../../../shared/financeIntegrity';
+import { useSaveOperation } from '../../../../../shared/useSaveOperation';
+import { createRecordOnce } from '@/lib/saveData';
+import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { 
@@ -17,9 +20,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { 
-  collection, 
   doc, 
-  addDoc, 
   runTransaction,
   deleteDoc, 
   serverTimestamp 
@@ -88,6 +89,7 @@ export default function FinancePage() {
   const PAYMENT_TYPES = [t.finance.cash, t.finance.bankTransfer, t.finance.mobilePayment];
 
   const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'income'>('overview');
+  const { save, busy: savePending } = useSaveOperation();
   const { expenses, revenues: income, loading } = useFinanceRecords<Transaction, Transaction>();
   const { data: cycles, loading: cyclesLoading } = useCompanyCycles<FinanceCycle>();
   const { data: ponds, loading: pondsLoading } = useCompanyPonds<FinancePond>();
@@ -133,6 +135,7 @@ export default function FinancePage() {
   }, [isInputMenuOpen]);
 
   const openTransactionForm = (type: 'expense' | 'income') => {
+    if (!save.reset()) return;
     setInputMenuOpen(false);
     setFormType(type);
     setFormData((previous) => ({
@@ -213,7 +216,10 @@ export default function FinancePage() {
 
   const handlePost = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !company) return;
+    if (save.busy) return;
+    if (!user || !company || !canManageFinance) return;
+    const amountInput = Number(formData.amount);
+    if (!Number.isFinite(amountInput) || amountInput <= 0) { alert(copy('Enter an amount greater than 0.')); return; }
     setIsSubmitting(true);
 
     const collectionName = formType === 'expense' ? 'expenses' : 'revenues';
@@ -225,8 +231,9 @@ export default function FinancePage() {
       return;
     }
 
+    if (!save.acquire()) return;
     try {
-      await addDoc(collection(db, 'companies', company.id, collectionName), {
+      await createRecordOnce(db, doc(db, 'companies', company.id, collectionName, save.id(`finance:${company.id}:${collectionName}`)), {
         ...formData,
         amount,
         cycleId: isCompanyWideExpense ? '' : selectedCycle?.id || '',
@@ -242,11 +249,13 @@ export default function FinancePage() {
         updatedAt: serverTimestamp()
       });
       setIsModalOpen(false);
+      save.complete();
       resetForm();
     } catch (err) {
       console.error(err);
       alert(t.financeCycle.saveFailed);
     } finally {
+      save.release();
       setIsSubmitting(false);
     }
   };
@@ -261,21 +270,26 @@ export default function FinancePage() {
   };
 
   const recordPayment = async (record: Transaction, type: 'expense' | 'income') => {
+    if (save.busy) return;
     if (!company?.id || !canManageFinance) return;
     const outstanding = (monetaryValue(record.amount) ?? 0) - (record.settlements || []).reduce((sum, payment) => sum + payment.amount, 0);
     const raw = window.prompt(`Amount ${type === 'income' ? 'received' : 'paid'} (${currencyConfig.symbol}), outstanding ${outstanding}`, String(outstanding));
     if (raw === null) return;
     const date = window.prompt('Payment date (YYYY-MM-DD)', today);
     if (!date) return;
-    const payment = { id: crypto.randomUUID(), date, amount: Number(raw) };
+    const payment = { id: save.id(`payment:${record.id}`), date, amount: Number(raw) };
+    if (!save.acquire()) return;
     try {
       const ref = doc(db, 'companies', company.id, type === 'expense' ? 'expenses' : 'revenues', record.id);
       await runTransaction(db, async tx => {
         const snapshot = await tx.get(ref);
         if (!snapshot.exists()) throw new Error('Finance entry not found');
-        tx.update(ref, { settlements: appendSettlement(snapshot.data(), payment), updatedAt: serverTimestamp() });
+        tx.update(ref, removeUndefinedFields({ settlements: appendSettlement(snapshot.data(), payment), updatedAt: serverTimestamp() }));
       });
-    } catch (error) { alert(error instanceof Error ? error.message : 'Payment could not be recorded'); }
+      save.complete();
+    } catch (error) { alert(error instanceof Error ? error.message : 'Payment could not be recorded'); } finally {
+      save.release();
+    }
   };
 
   const handleDelete = async (id: string, type: 'expense' | 'income') => {
@@ -317,7 +331,7 @@ export default function FinancePage() {
             type="button"
             className={activeTab === item.id ? styles.workspaceNavActive : undefined}
             aria-pressed={activeTab === item.id}
-            onClick={() => setActiveTab(item.id)}
+            onClick={() => setActiveTab(item.id)} disabled={savePending}
           >
             <item.icon size={18} aria-hidden="true" />
             <span>{item.label}</span>
@@ -349,7 +363,7 @@ export default function FinancePage() {
             aria-label={copy('Add finance input')}
             aria-expanded={isInputMenuOpen}
             aria-haspopup="menu"
-            onClick={() => setInputMenuOpen((open) => !open)}
+            onClick={() => setInputMenuOpen((open) => !open)} disabled={savePending}
           >
             <Plus size={15} />
             <span>{copy('Input')}</span>
@@ -368,11 +382,11 @@ export default function FinancePage() {
                 zIndex: 80,
               }}
             >
-              <button type="button" role="menuitem" onClick={() => openTransactionForm('income')}>
+              <button type="button" role="menuitem" onClick={() => openTransactionForm('income')} disabled={savePending}>
                 <ArrowUpRight size={16} />
                 <span><strong>{t.finance.addRevenue}</strong><small>{copy('Record incoming funds')}</small></span>
               </button>
-              <button type="button" role="menuitem" onClick={() => openTransactionForm('expense')}>
+              <button type="button" role="menuitem" onClick={() => openTransactionForm('expense')} disabled={savePending}>
                 <ArrowDownRight size={16} />
                 <span><strong>{t.finance.addExpense}</strong><small>{copy('Record operating costs')}</small></span>
               </button>
@@ -547,13 +561,13 @@ export default function FinancePage() {
                     </td>
                     <td style={{ padding: '20px 32px', fontSize: '13px', fontWeight: 600 }}>{t.cycleName || generalCategoryLabel}</td>
                     <td style={{ padding: '20px 32px', textAlign: 'right' }}>
-                      {canManageFinance && <button type="button" onClick={() => recordPayment(t, t.type)} style={{ color: '#0F4C75', padding: 8 }}>Record payment</button>}
+                      {canManageFinance && <button type="button" onClick={() => recordPayment(t, t.type)} style={{ color: '#0F4C75', padding: 8 }} disabled={savePending}>Record payment</button>}
                       {canManageFinance && !isSourceLinkedFinance(t) && (
                       <button 
                         onClick={() => handleDelete(t.id, t.type)}
                         style={{ background: 'transparent', border: 'none', color: '#ef4444', opacity: 0.5, cursor: 'pointer', transition: 'opacity 0.2s' }}
                         onMouseOver={(e) => (e.currentTarget.style.opacity = '1')}
-                        onMouseOut={(e) => (e.currentTarget.style.opacity = '0.5')}
+                        onMouseOut={(e) => (e.currentTarget.style.opacity = '0.5')} disabled={savePending}
                       >
                         <Trash2 size={18} />
                       </button>
@@ -578,7 +592,7 @@ export default function FinancePage() {
                   </div>
                   <strong className={transaction.type === 'income' ? styles.incomeValue : styles.expenseValue}>{transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}</strong>
                 </div>
-                {canManageFinance ? <div className={styles.mobileLedgerActions}><button type="button" onClick={() => recordPayment(transaction, transaction.type)}>Record payment</button>{!isSourceLinkedFinance(transaction) ? <button type="button" aria-label={t.actions.delete} onClick={() => handleDelete(transaction.id, transaction.type)}><Trash2 size={17} /></button> : null}</div> : null}
+                {canManageFinance ? <div className={styles.mobileLedgerActions}><button type="button" onClick={() => recordPayment(transaction, transaction.type)} disabled={savePending}>Record payment</button>{!isSourceLinkedFinance(transaction) ? <button type="button" aria-label={t.actions.delete} onClick={() => handleDelete(transaction.id, transaction.type)} disabled={savePending}><Trash2 size={17} /></button> : null}</div> : null}
               </article>
             ))}
           </div>
@@ -593,10 +607,10 @@ export default function FinancePage() {
               <div>
                 <h2 style={{ fontSize: '20px', fontWeight: 600 }}>{t.financeCycle.logTransaction.replace('{{type}}', formType === 'income' ? t.finance.revenue : t.finance.expenses)}</h2>
               </div>
-              <button onClick={() => setIsModalOpen(false)} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', padding: '8px', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={20} /></button>
+              <button onClick={() => setIsModalOpen(false)} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', padding: '8px', cursor: 'pointer', color: 'var(--text-muted)' }} disabled={savePending}><X size={20} /></button>
             </div>
 
-            <form className="responsive-modal-body" onSubmit={handlePost} style={{ padding: '24px 28px 28px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <form className="responsive-modal-body" onSubmit={handlePost} style={{ padding: '24px 28px 28px', display: 'flex', flexDirection: 'column', gap: '18px' }}><fieldset disabled={savePending} style={{ display: 'contents' }}>
               <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: '16px', rowGap: '14px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.forms.date}</label>
@@ -638,12 +652,12 @@ export default function FinancePage() {
               </div>
 
               <div className="responsive-modal-footer" style={{ display: 'flex', gap: '12px', borderTop: '1px solid var(--border)', paddingTop: '18px' }}>
-                <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary" style={{ flex: '1 1 0', minWidth: 0, padding: '12px 16px', borderRadius: '12px', fontWeight: 600 }}>{t.actions.cancel}</button>
-                <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ flex: '1 1 0', minWidth: 0, padding: '12px 16px', borderRadius: '12px', background: 'var(--primary)', border: 'none', fontWeight: 600 }}>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary" style={{ flex: '1 1 0', minWidth: 0, padding: '12px 16px', borderRadius: '12px', fontWeight: 600 }} disabled={savePending}>{t.actions.cancel}</button>
+                <button type="submit" disabled={savePending || (isSubmitting)} className="btn-primary" style={{ flex: '1 1 0', minWidth: 0, padding: '12px 16px', borderRadius: '12px', background: 'var(--primary)', border: 'none', fontWeight: 600 }}>
                   {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : `${t.actions.save} ${formType === 'income' ? t.finance.revenue : t.finance.expenses}`}
                 </button>
               </div>
-            </form>
+            </fieldset></form>
           </div>
         </div>
       )}

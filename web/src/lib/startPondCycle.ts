@@ -2,9 +2,10 @@ import {
   collection,
   doc,
   serverTimestamp,
-  writeBatch,
+  runTransaction,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { removeUndefinedFields } from './firestoreData';
 import { resolveCompanyPhysicalPond } from './physicalPondIdentity';
 
 export type PondCycleStartMode = 'new' | 'midcycle';
@@ -75,16 +76,6 @@ const getDateOnlyUtcTime = (dateString: string): number => {
 const calculateDocFromDates = (startDate: string, baselineDate: string): number =>
   Math.floor((getDateOnlyUtcTime(baselineDate) - getDateOnlyUtcTime(startDate)) / DAY_MS);
 
-const removeUndefinedFields = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(removeUndefinedFields);
-  if (!value || typeof value !== 'object') return value;
-
-  return Object.entries(value).reduce((cleaned, [key, entry]) => {
-    if (entry !== undefined) cleaned[key] = removeUndefinedFields(entry);
-    return cleaned;
-  }, {} as Record<string, unknown>);
-};
-
 export const getPhysicalPondKey = (pondName: string) => pondName.trim().toLowerCase();
 
 export const convertPlStageToGrams = (plValue: string): number => {
@@ -109,7 +100,9 @@ export async function startPondCycle({
   form,
   today,
   activePonds,
+  operationId,
 }: {
+  operationId?: string;
   companyId: string;
   userId: string;
   pond: StartablePondCycleRecord;
@@ -119,6 +112,13 @@ export async function startPondCycle({
   today: string;
   activePonds: { id: string; pondName: string; cycleStatus?: 'active' | 'ended' }[];
 }): Promise<{ pondId: string; cycleId: string }> {
+  if (operationId) {
+    const committed = await runTransaction(db, async tx => {
+      const existing = await tx.get(doc(db, 'companies', companyId, 'ponds', operationId));
+      return existing.exists() ? { pondId: operationId, cycleId: String(existing.data().cycleId) } : null;
+    });
+    if (committed) return committed;
+  }
   const hasDuplicate = activePonds.some((activePond) => (
     activePond.id !== pond.id
     && activePond.cycleStatus !== 'ended'
@@ -154,7 +154,7 @@ export async function startPondCycle({
 
   const startDateTime = getDateOnlyUtcTime(form.docStart);
   const todayTime = getDateOnlyUtcTime(today);
-  if (!form.docStart || !Number.isFinite(startDateTime) || startDateTime > todayTime) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(form.docStart) || !Number.isFinite(startDateTime) || new Date(startDateTime).toISOString().slice(0, 10) !== form.docStart || startDateTime > todayTime) {
     throw new StartPondCycleError('invalidStartDate');
   }
 
@@ -169,14 +169,31 @@ export async function startPondCycle({
   const baselineSurvivalRate = parseOptionalNumber(form.baselineSurvivalRate);
   const baselineFeed = parseOptionalNumber(form.baselineCumulativeFeed);
   
-  const batch = writeBatch(db);
-  const pondRef = doc(collection(db, 'companies', companyId, 'ponds'));
+  const pondRef = operationId
+    ? doc(db, 'companies', companyId, 'ponds', operationId)
+    : doc(collection(db, 'companies', companyId, 'ponds'));
+  const cycleRef = doc(db, 'companies', companyId, 'cycles', `cycle-${pondRef.id}`);
+  const physicalRef = doc(db, 'companies', companyId, 'physicalPonds', physicalPond.id);
+  return runTransaction(db, async batch => {
+    const existingPond = await batch.get(pondRef);
+    if (existingPond.exists()) return { pondId: pondRef.id, cycleId: String(existingPond.data().cycleId) };
+    const physicalSnapshot = await batch.get(physicalRef);
+    if (!physicalSnapshot.exists()) throw new StartPondCycleError('cycleMismatch');
+    const currentPhysical = physicalSnapshot.data();
+    if (currentPhysical.activePondId && currentPhysical.activePondId !== pond.id) throw new StartPondCycleError('duplicate');
+    if (currentPhysical.activePondId === pond.id && pondType === 'cycle') {
+      const previousPond = await batch.get(doc(db, 'companies', companyId, 'ponds', pond.id));
+      if (previousPond.exists() && previousPond.data().cycleStatus !== 'ended') throw new StartPondCycleError('duplicate');
+    }
+    const existingCycle = !isCreatingNewCycle && activeCycle
+      ? await batch.get(doc(db, 'companies', companyId, 'cycles', activeCycle.id)) : null;
+    if (existingCycle && (!existingCycle.exists() || existingCycle.data().status === 'closed')) throw new StartPondCycleError('cycleMismatch');
+    const currentCycle = existingCycle?.data();
   
   let targetCycleId = activeCycle?.id || '';
   let targetCycleName = activeCycle?.cycleName || '';
 
   if (isCreatingNewCycle) {
-    const cycleRef = doc(collection(db, 'companies', companyId, 'cycles'));
     targetCycleId = cycleRef.id;
     targetCycleName = form.newCycleName?.trim() || 'New Cycle';
     batch.set(cycleRef, {
@@ -257,10 +274,10 @@ export async function startPondCycle({
   }
 
   if (!isCreatingNewCycle && activeCycle) {
-    const stockingStartDate = [activeCycle.stockingStartDate, form.docStart]
+    const stockingStartDate = [currentCycle?.stockingStartDate, form.docStart]
       .filter((date): date is string => Boolean(date))
       .sort()[0];
-    const stockingEndDate = [activeCycle.stockingEndDate, form.docStart]
+    const stockingEndDate = [currentCycle?.stockingEndDate, form.docStart]
       .filter((date): date is string => Boolean(date))
       .sort()
       .at(-1);
@@ -273,6 +290,6 @@ export async function startPondCycle({
     });
   }
 
-  await batch.commit();
   return { pondId: pondRef.id, cycleId: targetCycleId };
+  });
 }

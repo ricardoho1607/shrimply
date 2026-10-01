@@ -185,6 +185,7 @@ export default function PondManagementScreen() {
   const [cycleFilter, setCycleFilter] = useState<'active' | 'inactive' | 'ended'>('active');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
+  const mortalityDraftId = useRef<string | null>(null);
   const [modalType, setModalType] = useState<'pond' | 'sampling' | 'mortality' | 'cycle' | 'baseline'>('pond');
   const [cycleNameDraft, setCycleNameDraft] = useState('');
   const [selectedDashboardCycleId, setSelectedDashboardCycleId] = useState('');
@@ -474,7 +475,9 @@ export default function PondManagementScreen() {
     return '#0d2137';
   }, []);
 
-  const closeModal = useCallback(() => { 
+  const closeModal = useCallback(() => {
+    if (submitLockRef.current) return;
+    mortalityDraftId.current = null;
     resetForm(); 
     setEditingBaselinePondId(null);
     setModalVisible(false); 
@@ -553,6 +556,7 @@ export default function PondManagementScreen() {
         blockName: selectedBlock?.name,
         status: 'idle',
       });
+      submitLockRef.current = false;
       closeModal();
       setCycleFilter('inactive');
       Alert.alert(t.messages.success, t.home.pondAddedSuccess);
@@ -740,6 +744,8 @@ export default function PondManagementScreen() {
       setSelectedDashboardCycleId(selectedFarmCycle.id);
     }
 
+    submitLockRef.current = false;
+    setIsSubmitting(false);
     closeModal();
     setCycleFilter('active');
     Alert.alert(t.messages.success, t.farmCycle.cycleStartedSuccess.replace('{{pondName}}', sourcePond.pondName));
@@ -786,6 +792,7 @@ export default function PondManagementScreen() {
         Alert.alert(t.messages.error, outcome.error || 'Could not save sampling locally.');
         return;
       }
+      submitLockRef.current = false;
       closeModal();
       Alert.alert(t.messages.success, t.home.samplingAddedSuccess);
     } catch (error) {
@@ -796,7 +803,7 @@ export default function PondManagementScreen() {
     }
   }, [canRecordPondData, closeModal, formData, activePonds, addSampling, parseNumericInput, formatLocalDateKey, t]);
 
-  const handleAddMortalityRecord = useCallback(() => {
+  const handleAddMortalityRecord = useCallback(async () => {
     if (submitLockRef.current) return;
     submitLockRef.current = true;
     setIsSubmitting(true);
@@ -859,8 +866,9 @@ export default function PondManagementScreen() {
     const mbwAtRecord = [...(selectedPondData.samplings || [])]
       .filter((sampling) => sampling.date <= dateKey && Number(sampling.mbw) > 0)
       .sort((first, second) => second.date.localeCompare(first.date))[0]?.mbw;
-    addMortalityRecord(selectedPondData.id, {
-      id: `mortality-${Date.now()}`,
+    try {
+      const outcome = await addMortalityRecord(selectedPondData.id, {
+      id: mortalityDraftId.current || (mortalityDraftId.current = `mortality-${Date.now()}-${Math.random().toString(36).slice(2)}`),
       date: dateKey,
       observationType: mortalityObservationType,
       count,
@@ -878,8 +886,16 @@ export default function PondManagementScreen() {
       pondCycleId: selectedPondData.pondCycleId || selectedPondData.id,
     });
 
-    closeModal();
-    Alert.alert(t.messages.success, t.home.mortalitySavedSuccess);
+      if (!outcome.success) throw new Error(outcome.error || 'Could not save mortality locally.');
+      submitLockRef.current = false;
+      closeModal();
+      Alert.alert(t.messages.success, t.home.mortalitySavedSuccess);
+    } catch (error) {
+      Alert.alert(t.messages.error, error instanceof Error ? error.message : 'Could not save mortality locally.');
+    } finally {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+    }
   }, [activePonds, addMortalityRecord, canRecordPondData, closeModal, company?.timeZone, formData, formatLocalDateKey, t, user]);
 
   const handleEndPondCycle = useCallback((pond: Pond) => {
@@ -1239,6 +1255,8 @@ export default function PondManagementScreen() {
   }, [company?.timeZone, ponds, t.farmCycle.endCycleTitle, updateFarmCycle]);
 
   const openModal = useCallback((type: 'pond' | 'sampling' | 'mortality' | 'cycle' | 'baseline') => {
+    if (submitLockRef.current) return;
+    mortalityDraftId.current = null;
     if (type === 'pond' && isEnterpriseFarm && availableEnterpriseBlocks.length === 1) {
       setFormData((current) => ({ ...current, blockId: availableEnterpriseBlocks[0].id }));
     }
@@ -1259,6 +1277,7 @@ export default function PondManagementScreen() {
   }, [activeFarmCycle?.id, availableEnterpriseBlocks, cycles.length, isEnterpriseFarm, openAccessibleFarmCycles]);
 
   const openBaselineEditModal = useCallback((pond: Pond) => {
+    if (submitLockRef.current) return;
     const baselineSampling = (pond.samplings || [])
       .filter(isBaselineSampling)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
@@ -1358,6 +1377,8 @@ export default function PondManagementScreen() {
     });
 
     setEditingBaselinePondId(null);
+    submitLockRef.current = false;
+    setIsSubmitting(false);
     closeModal();
     Alert.alert(t.messages.success, t.midcycleOnboarding.baselineUpdated);
   }, [accessiblePonds, calculateDocFromDates, canRecordPondData, closeModal, editingBaselinePondId, formData, formatLocalDateKey, normalizeDateValue, t, updatePond]);

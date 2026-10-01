@@ -156,19 +156,19 @@ interface FeedAdditiveStore {
   initializeForCompany: (companyId: string, timeZone?: string) => () => void;
   setCurrentCompanyId: (companyId: string | null, timeZone?: string) => void;
   addFeed: (feed: Partial<Feed>) => Promise<void>;
-  stockInFeed: (feedId: string, quantity: number, price: number, notes?: string, opts?: { stockDate?: string; expiry?: string; unit?: string }) => Promise<void>;
-  useFeed: (feedId: string, quantity: number, pondId?: string | null, notes?: string) => Promise<void>;
+  stockInFeed: (feedId: string, quantity: number, price: number, notes?: string, opts?: { stockDate?: string; expiry?: string; unit?: string; operationId?: string }) => Promise<void>;
+  useFeed: (feedId: string, quantity: number, pondId?: string | null, notes?: string, operationId?: string) => Promise<void>;
   adjustFeedUsage: (feedId: string, quantityDelta: number, pondId?: string | null, notes?: string) => Promise<void>;
   reconcileDailyFeedAllocations: (previousAllocations: FeedAllocation[], nextAllocations: FeedAllocation[], pondId: string, date: string, feedingResponse?: string | null) => Promise<void>;
   deleteDailyFeedRecord: (pondId: string, samplingId: string, date: string, updatedBy: string, candidateFeedIds?: string[]) => Promise<{ missingInventory: boolean }>;
   deleteFeed: (feedId: string) => Promise<void>;
   updateFeed: (feedId: string, patch: Partial<Feed>) => Promise<void>;
   addAdditive: (additive: Partial<Additive>) => Promise<void>;
-  stockInAdditive: (additiveId: string, quantity: number, price: number, notes?: string, opts?: { stockDate?: string; expiry?: string; unit?: string }) => Promise<void>;
-  useAdditive: (additiveId: string, quantity: number, pondId?: string | null, notes?: string) => Promise<void>;
-  createTreatmentMix: (input: { name: string; yieldLiters: number; components: TreatmentMixComponent[]; notes?: string }) => Promise<string>;
-  makeTreatmentMixBatch: (treatmentMixId: string) => Promise<void>;
-  useTreatmentMix: (treatmentMixId: string, pond: { id: string; name: string; areaM2: number }, ppm: number, notes?: string) => Promise<{ quantityLiters: number; totalCost: number }>;
+  stockInAdditive: (additiveId: string, quantity: number, price: number, notes?: string, opts?: { stockDate?: string; expiry?: string; unit?: string; operationId?: string }) => Promise<void>;
+  useAdditive: (additiveId: string, quantity: number, pondId?: string | null, notes?: string, operationId?: string) => Promise<void>;
+  createTreatmentMix: (input: { name: string; yieldLiters: number; components: TreatmentMixComponent[]; notes?: string; operationId?: string }) => Promise<string>;
+  makeTreatmentMixBatch: (treatmentMixId: string, operationId?: string) => Promise<void>;
+  useTreatmentMix: (treatmentMixId: string, pond: { id: string; name: string; areaM2: number }, ppm: number, notes?: string, operationId?: string) => Promise<{ quantityLiters: number; totalCost: number }>;
   deleteAdditive: (additiveId: string) => Promise<void>;
   updateAdditive: (additiveId: string, patch: Partial<Additive>) => Promise<void>;
   getMetrics: () => FeedAdditiveMetrics;
@@ -202,10 +202,11 @@ const queueInventoryAdjustments = async <T extends { id: string }>(
   items: T[],
   buildAdjustments: (operationId: string) => OfflineInventoryAdjustment[],
   dailyFeed?: OfflineMutation['dailyFeed'],
+  requestedOperationId?: string,
 ): Promise<T[]> => {
   const userId = auth.currentUser?.uid;
   if (!userId) throw new Error('No authenticated user');
-  const operationId = createOfflineOperationId(operationPrefix);
+  const operationId = requestedOperationId || createOfflineOperationId(operationPrefix);
   const mutation: OfflineMutation = {
     id: operationId,
     userId,
@@ -237,6 +238,7 @@ type ProduceTreatmentMixInput = {
   treatmentMixName?: string;
   recipe?: TreatmentMixRecipe;
   createNew: boolean;
+  operationId?: string;
   timeZone: string;
   additives: Additive[];
 };
@@ -249,9 +251,16 @@ const produceTreatmentMixBatch = async ({
   createNew,
   timeZone,
   additives,
+  operationId: requestedOperationId,
 }: ProduceTreatmentMixInput) => {
   const batchId = doc(collection(db, 'companies', companyId, 'treatmentMixBatches')).id;
   const existingMix = additives.find((item) => item.id === treatmentMixId) || null;
+  if (requestedOperationId && existingMix?.stockInHistory.some(entry => entry.id === `${requestedOperationId}:${treatmentMixId}`)) {
+    await persistInventoryCache(companyId, useFeedAdditiveStore.getState().feeds, additives);
+    const userId = auth.currentUser?.uid;
+    if (userId) requestOfflineMutationFlush(userId, companyId);
+    return additives;
+  }
   if (createNew && existingMix) throw new Error('Treatment mix already exists');
   if (!createNew && !existingMix) throw new Error('Treatment mix not found');
   if (existingMix && existingMix.inventoryKind !== 'treatmentMix') throw new Error('Selected item is not a treatment mix');
@@ -360,6 +369,8 @@ const produceTreatmentMixBatch = async ({
         },
       },
     ],
+    undefined,
+    requestedOperationId,
   );
 };
 
@@ -511,13 +522,18 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     if (!currentCompanyId) throw new Error('No company selected');
     const userId = auth.currentUser?.uid;
     if (!userId) throw new Error('No authenticated user');
+    if (feed.id && get().feeds.some(item => item.id === feed.id)) {
+      await persistInventoryCache(currentCompanyId, get().feeds, get().additives);
+      requestOfflineMutationFlush(userId, currentCompanyId);
+      return;
+    }
     const hasStock = (feed.totalStock || 0) > 0;
     if (hasStock && (feed.totalCost || 0) <= 0) throw new Error('Feed price must be greater than 0');
     if ((feed.stockInHistory || []).some((stock) => !Number.isFinite(stock.price) || stock.price <= 0)) {
       throw new Error('Feed stock-in price must be greater than 0');
     }
     try {
-      const ref = doc(collection(db, 'companies', currentCompanyId, 'feeds'));
+      const ref = feed.id ? doc(db, 'companies', currentCompanyId, 'feeds', feed.id) : doc(collection(db, 'companies', currentCompanyId, 'feeds'));
       const now = Timestamp.now();
       const newFeed: Feed = {
         id: ref.id,
@@ -584,16 +600,23 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
           createdAt: Timestamp.now(),
         },
       }],
+      undefined,
+      opts.operationId,
     );
     set({ feeds });
   },
 
-  useFeed: async (feedId, quantity, pondId?: string | null, notes?: string) => {
+  useFeed: async (feedId, quantity, pondId?: string | null, notes?: string, requestedOperationId?: string) => {
     const { currentCompanyId } = get();
     if (!currentCompanyId) throw new Error('No company selected');
     if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('Quantity must be greater than 0');
     const feed = get().feeds.find((item) => item.id === feedId);
     if (!feed) throw new Error('Feed not found');
+    if (requestedOperationId && feed.usageHistory.some(entry => entry.id === `${requestedOperationId}:${feed.id}`)) {
+      await persistInventoryCache(currentCompanyId, get().feeds, get().additives);
+      requestOfflineMutationFlush(auth.currentUser!.uid, currentCompanyId);
+      return;
+    }
     const currentStock = Number(feed.totalStock) || 0;
     if (quantity > currentStock) throw new Error('Insufficient stock');
     const unitPrice = currentStock > 0 ? (Number(feed.totalCost) || 0) / currentStock : 0;
@@ -624,6 +647,8 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
           createdAt: Timestamp.now(),
         },
       }],
+      undefined,
+      requestedOperationId,
     );
     set({ feeds });
     const updatedFeed = feeds.find((item) => item.id === feedId);
@@ -917,13 +942,18 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     if (!currentCompanyId) throw new Error('No company selected');
     const userId = auth.currentUser?.uid;
     if (!userId) throw new Error('No authenticated user');
+    if (additive.id && get().additives.some(item => item.id === additive.id)) {
+      await persistInventoryCache(currentCompanyId, get().feeds, get().additives);
+      requestOfflineMutationFlush(userId, currentCompanyId);
+      return;
+    }
     const hasStock = (additive.totalStock || 0) > 0;
     if (hasStock && (additive.totalCost || 0) <= 0) throw new Error('Additive price must be greater than 0');
     if ((additive.stockInHistory || []).some((stock) => !Number.isFinite(stock.price) || stock.price <= 0)) {
       throw new Error('Additive stock-in price must be greater than 0');
     }
     try {
-      const ref = doc(collection(db, 'companies', currentCompanyId, 'additives'));
+      const ref = additive.id ? doc(db, 'companies', currentCompanyId, 'additives', additive.id) : doc(collection(db, 'companies', currentCompanyId, 'additives'));
       const now = Timestamp.now();
       const newAdditive: Additive = {
         id: ref.id,
@@ -991,16 +1021,23 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
           createdAt: Timestamp.now(),
         },
       }],
+      undefined,
+      opts.operationId,
     );
     set({ additives });
   },
 
-  useAdditive: async (additiveId, quantity, pondId?: string | null, notes?: string) => {
+  useAdditive: async (additiveId, quantity, pondId?: string | null, notes?: string, requestedOperationId?: string) => {
     const { currentCompanyId } = get();
     if (!currentCompanyId) throw new Error('No company selected');
     if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('Quantity must be greater than 0');
     const additive = get().additives.find((item) => item.id === additiveId);
     if (!additive) throw new Error('Additive not found');
+    if (requestedOperationId && additive.usageHistory.some(entry => entry.id === `${requestedOperationId}:${additive.id}`)) {
+      await persistInventoryCache(currentCompanyId, get().feeds, get().additives);
+      requestOfflineMutationFlush(auth.currentUser!.uid, currentCompanyId);
+      return;
+    }
     const currentStock = Number(additive.totalStock) || 0;
     if (quantity > currentStock) throw new Error('Insufficient stock');
     const unitPrice = currentStock > 0 ? (Number(additive.totalCost) || 0) / currentStock : 0;
@@ -1026,6 +1063,8 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
           createdAt: Timestamp.now(),
         },
       }],
+      undefined,
+      requestedOperationId,
     );
     set({ additives });
     const updatedAdditive = additives.find((item) => item.id === additiveId);
@@ -1042,15 +1081,15 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     }
   },
 
-  createTreatmentMix: async ({ name, yieldLiters, components, notes }) => {
+  createTreatmentMix: async ({ name, yieldLiters, components, notes, operationId }) => {
     const { currentCompanyId, currentTimeZone, additives } = get();
     if (!currentCompanyId) throw new Error('No company selected');
     const normalizedName = name.trim();
     if (!normalizedName) throw new Error('Treatment mix name is required');
-    if (additives.some((item) => item.additiveName.trim().toLowerCase() === normalizedName.toLowerCase())) {
+    if (additives.some((item) => item.id !== operationId && item.additiveName.trim().toLowerCase() === normalizedName.toLowerCase())) {
       throw new Error('An additive or treatment mix with this name already exists');
     }
-    const ref = doc(collection(db, 'companies', currentCompanyId, 'additives'));
+    const ref = operationId ? doc(db, 'companies', currentCompanyId, 'additives', operationId) : doc(collection(db, 'companies', currentCompanyId, 'additives'));
     const updatedAdditives = await produceTreatmentMixBatch({
       companyId: currentCompanyId,
       treatmentMixId: ref.id,
@@ -1063,12 +1102,13 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
       createNew: true,
       timeZone: currentTimeZone,
       additives,
+      operationId,
     });
     set({ additives: updatedAdditives });
     return ref.id;
   },
 
-  makeTreatmentMixBatch: async (treatmentMixId) => {
+  makeTreatmentMixBatch: async (treatmentMixId, operationId) => {
     const { currentCompanyId, currentTimeZone, additives } = get();
     if (!currentCompanyId) throw new Error('No company selected');
     const updatedAdditives = await produceTreatmentMixBatch({
@@ -1077,17 +1117,24 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
       createNew: false,
       timeZone: currentTimeZone,
       additives,
+      operationId,
     });
     set({ additives: updatedAdditives });
   },
 
-  useTreatmentMix: async (treatmentMixId, pond, ppm, notes) => {
+  useTreatmentMix: async (treatmentMixId, pond, ppm, notes, requestedOperationId) => {
     const { currentCompanyId, currentTimeZone } = get();
     if (!currentCompanyId) throw new Error('No company selected');
     const dose = calculateTreatmentDoseLiters(pond.areaM2, ppm, ASSUMED_POND_DEPTH_METERS);
     const activePond = usePondStore.getState().ponds.find((item) => item.id === pond.id);
     const mix = get().additives.find((item) => item.id === treatmentMixId);
     if (!mix) throw new Error('Treatment mix not found');
+    const previous = requestedOperationId ? mix.usageHistory.find(entry => entry.id === `${requestedOperationId}:${treatmentMixId}`) : undefined;
+    if (previous) {
+      await persistInventoryCache(currentCompanyId, get().feeds, get().additives);
+      requestOfflineMutationFlush(auth.currentUser!.uid, currentCompanyId);
+      return { quantityLiters: previous.quantity, totalCost: previous.totalCost || 0 };
+    }
     if (mix.inventoryKind !== 'treatmentMix') throw new Error('Selected item is not a treatment mix');
     if ((mix.totalStock || 0) + 0.0005 < dose.requiredMixLiters) {
       throw new Error(`Insufficient ${mix.additiveName}: need ${dose.requiredMixLiters} L, available ${mix.totalStock || 0} L`);
@@ -1125,6 +1172,8 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
           createdAt: Timestamp.now(),
         },
       }],
+      undefined,
+      requestedOperationId,
     );
     set({ additives });
     return { quantityLiters: dose.requiredMixLiters, totalCost: cost.totalCost };

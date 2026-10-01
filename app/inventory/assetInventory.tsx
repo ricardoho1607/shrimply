@@ -1,3 +1,4 @@
+import { useSaveOperation } from '../../shared/useSaveOperation';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, Image, Platform } from 'react-native';
@@ -39,6 +40,7 @@ export default function AssetInventoryScreen() {
   const isMaintenanceOnly = canLogMaintenance && !canManageAssets;
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'all'>('dashboard');
+  const { save, busy: savePending } = useSaveOperation();
   const [modalVisible, setModalVisible] = useState(false);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [maintenanceListExpanded, setMaintenanceListExpanded] = useState(false);
@@ -113,6 +115,7 @@ export default function AssetInventoryScreen() {
   };
 
   const closeModal = () => { 
+    if (save.busy) return;
     resetForm(); 
     setModalVisible(false); 
     setSelectedAsset(null);
@@ -142,6 +145,7 @@ export default function AssetInventoryScreen() {
     if (!canManageAssets) return Alert.alert(t.asset?.error || 'Error', assetManagementPermissionMessage);
     if (!formData.name) return Alert.alert(t.asset?.error || 'Error', t.asset?.assetNameRequired || 'Asset name is required');
     
+    if (!save.acquire()) return;
     try {
       await store.addAsset({
         name: formData.name, description: formData.description, category: formData.category as any,
@@ -153,51 +157,63 @@ export default function AssetInventoryScreen() {
       });
       
       Alert.alert(t.asset?.success || 'Success', t.asset?.assetAdded || 'Asset added successfully with QR code generated!');
+      save.complete();
+      save.release();
       closeModal();
       setActiveTab('all');
     } catch (error) {
       console.error('Failed to add asset:', error);
       Alert.alert(t.asset?.error || 'Error', t.asset?.failedToAdd || 'Failed to add asset');
     }
+    finally { save.release(); }
   };
 
   const handleTransfer = async () => {
     if (!canManageAssets) return Alert.alert(t.asset?.error || 'Error', assetManagementPermissionMessage);
     if (!selectedAsset || !formData.to) return Alert.alert(t.asset?.error || 'Error', t.asset?.recipientRequired || 'Recipient is required');
     
+    if (!save.acquire()) return;
     try {
       await store.transferAsset(selectedAsset.id, {
         from: selectedAsset.currentHolder || t.asset?.storage || 'Storage', to: formData.to,
         purpose: formData.purpose, expectedReturn: formData.expectedReturn ? new Date(formData.expectedReturn) : undefined,
         notes: formData.notes,
-      });
+      }, save.id(`transfer:${selectedAsset.id}`));
       
       Alert.alert(t.asset?.success || 'Success', `${t.asset?.assetTransferred || 'Asset transferred to'} ${formData.to}`);
+      save.complete();
+      save.release();
       closeModal();
     } catch (error) {
       console.error('Failed to transfer asset:', error);
       Alert.alert(t.asset?.error || 'Error', t.asset?.failedToTransfer || 'Failed to transfer asset');
     }
+    finally { save.release(); }
   };
 
   const handleReturn = async () => {
     if (!canManageAssets) return Alert.alert(t.asset?.error || 'Error', assetManagementPermissionMessage);
     if (!selectedAsset) return;
     
+    if (!save.acquire()) return;
     try {
       await store.returnAsset(selectedAsset.id);
       Alert.alert(t.asset?.success || 'Success', t.asset?.returnToStorage || 'Asset returned to storage');
+      save.complete();
+      save.release();
       closeModal();
     } catch (error) {
       console.error('Failed to return asset:', error);
       Alert.alert(t.asset?.error || 'Error', t.asset?.failedToReturn || 'Failed to return asset');
     }
+    finally { save.release(); }
   };
 
   const handleMaintenance = async () => {
     if (!canLogMaintenance) return Alert.alert(t.asset?.error || 'Error', assetMaintenancePermissionMessage);
     if (!selectedAsset || !formData.description2) return Alert.alert(t.asset?.error || 'Error', t.asset?.descriptionRequired || 'Description is required');
     
+    if (!save.acquire()) return;
     try {
       const maintenanceRecord: any = {
         description: formData.description2, technician: formData.technician || user?.name || 'Unknown',
@@ -229,13 +245,16 @@ export default function AssetInventoryScreen() {
         } catch {}
       }
 
-      await store.addMaintenance(selectedAsset.id, maintenanceRecord);
+      await store.addMaintenance(selectedAsset.id, maintenanceRecord, save.id(`maintenance:${selectedAsset.id}`));
       Alert.alert(t.asset?.success || 'Success', t.asset?.maintenanceAdded || 'Maintenance record added successfully');
+      save.complete();
+      save.release();
       closeModal();
     } catch (error) {
       console.error('Failed to add maintenance:', error);
       Alert.alert(t.asset?.error || 'Error', t.asset?.failedToAddMaintenance || 'Failed to add maintenance');
     }
+    finally { save.release(); }
   };
 
   const handleDelete = (id: string) => {
@@ -258,6 +277,7 @@ export default function AssetInventoryScreen() {
   };
 
   const openModal = (type: ModalType, asset?: Asset) => {
+    if (!save.reset()) return;
     if (!canManageAssets && ['add', 'transfer', 'return'].includes(type)) {
       Alert.alert(t.asset?.error || 'Error', assetManagementPermissionMessage);
       return;
@@ -735,10 +755,10 @@ export default function AssetInventoryScreen() {
 
       <Modal visible={modalVisible && modalType !== 'qr-scan'} animationType="slide" transparent>
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+          <View style={styles.modalContent} pointerEvents={savePending ? 'none' : 'auto'}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{getModalTitle()}</Text>
-              <TouchableOpacity onPress={closeModal}>
+              <TouchableOpacity disabled={savePending} onPress={closeModal}>
                 <Ionicons name="close-circle" size={28} color="#dce8f2" />
               </TouchableOpacity>
             </View>
@@ -923,11 +943,11 @@ export default function AssetInventoryScreen() {
                 )}
 
                 <View style={styles.buttons}>
-                  <TouchableOpacity style={styles.btnCancel} onPress={closeModal}>
+                  <TouchableOpacity style={styles.btnCancel} disabled={savePending} onPress={closeModal}>
                     <Text style={styles.btnCancelText}>{t.asset?.cancel || 'Cancel'}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.btnSubmit}
-                    onPress={modalType === 'add' ? handleAddAsset : modalType === 'transfer' ? handleTransfer :
+                    disabled={savePending} onPress={modalType === 'add' ? handleAddAsset : modalType === 'transfer' ? handleTransfer :
                       modalType === 'maintenance' ? handleMaintenance : handleReturn}>
                     <Text style={styles.btnSubmitText}>
                       {modalType === 'add' ? t.asset?.addAsset || 'Add Asset' :
@@ -945,7 +965,7 @@ export default function AssetInventoryScreen() {
       <Modal visible={modalVisible && modalType === 'qr-scan'} animationType="fade">
         <View style={{ flex: 1, backgroundColor: 'black' }}>
           {renderQRScanModal()}
-          <TouchableOpacity onPress={closeModal}
+          <TouchableOpacity disabled={savePending} onPress={closeModal}
             style={{ position: 'absolute', top: 40, right: 20, backgroundColor: 'rgba(0,0,0,0.6)', 
               padding: 12, borderRadius: 50, zIndex: 10 }}>
             <Ionicons name="close" size={30} color="white" />

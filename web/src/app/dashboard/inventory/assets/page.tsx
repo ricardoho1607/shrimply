@@ -1,5 +1,9 @@
 "use client";
 
+import { useSaveOperation } from '../../../../../../shared/useSaveOperation';
+import { createRecordOnce } from '@/lib/saveData';
+import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
+import { uploadSaveFile } from '@/lib/saveData';
 import React, { useState, useEffect, useMemo } from 'react';
 import QRCode from 'qrcode';
 import { 
@@ -26,15 +30,14 @@ import {
   where, 
   onSnapshot, 
   doc, 
-  setDoc,
-  updateDoc, 
+  runTransaction,
   deleteDoc, 
   serverTimestamp,
   Timestamp,
   orderBy
 } from 'firebase/firestore';
 import { auth, db, storage } from '@/lib/firebase';
-import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
+import { getDownloadURL, ref as storageRef } from 'firebase/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { getFarmDateKey } from '../../../../../../shared/farmDate';
 import { storedDate } from '@/lib/storedDate';
@@ -121,6 +124,7 @@ export default function AssetInventoryPage() {
   const isMaintenanceOnly = canLogMaintenance && !canManageAssets;
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'all'>('dashboard');
+  const { save, busy: savePending } = useSaveOperation();
   const [loading, setLoading] = useState(true);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [user, setUser] = useState<import('firebase/auth').User | null>(null);
@@ -232,6 +236,7 @@ export default function AssetInventoryPage() {
   }, [assets, searchTerm, categoryFilter]);
 
   const handleOpenModal = (type: typeof modalType, asset?: Asset) => {
+    if (!save.reset()) return;
     if (!canManageAssets && ['add', 'transfer', 'return'].includes(type)) {
       alert(copy(assetManagementPermissionMessage));
       return;
@@ -284,7 +289,7 @@ export default function AssetInventoryPage() {
   const uploadPhotos = async (assetId: string, folder: string) => Promise.all(photoFiles.map(async (file, index) => {
     const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
     const fileRef = storageRef(storage, `companies/${companyId}/assets/${assetId}/${folder}/${Date.now()}-${index}.${extension}`);
-    await uploadBytes(fileRef, file, { contentType: file.type, customMetadata: { companyId: companyId || '', assetId } });
+    await uploadSaveFile(fileRef, file, { contentType: file.type, customMetadata: { companyId: companyId || '', assetId } });
     return getDownloadURL(fileRef);
   }));
 
@@ -318,6 +323,7 @@ export default function AssetInventoryPage() {
 
   const handleAction = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (save.busy) return;
     if (!companyId) return;
     if (!canManageAssets && ['add', 'transfer', 'return'].includes(modalType)) {
       alert(copy(assetManagementPermissionMessage));
@@ -328,9 +334,10 @@ export default function AssetInventoryPage() {
       return;
     }
 
+    if (!save.acquire()) return;
     try {
       if (modalType === 'add') {
-        const assetRef = doc(collection(db, 'assets'));
+        const assetRef = doc(db, 'assets', save.id(`asset:${companyId}`));
         const photos = await uploadPhotos(assetRef.id, 'asset');
         const assetData = {
           companyId,
@@ -351,11 +358,11 @@ export default function AssetInventoryPage() {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         };
-        await setDoc(assetRef, assetData);
+        await createRecordOnce(db, assetRef, assetData);
       } 
       else if (modalType === 'transfer' && selectedAsset) {
         const transfer: TransferRecord = {
-          id: `transfer_${Date.now()}`,
+          id: save.id(`transfer:${selectedAsset.id}`),
           date: Timestamp.now(),
           from: selectedAsset.currentHolder || 'Storage',
           to: formData.to,
@@ -363,25 +370,39 @@ export default function AssetInventoryPage() {
           expectedReturn: formData.expectedReturn ? Timestamp.fromDate(new Date(formData.expectedReturn)) : null,
           notes: formData.notes
         };
-        await updateDoc(doc(db, 'assets', selectedAsset.id), {
-          currentHolder: formData.to,
-          transferHistory: [...(selectedAsset.transferHistory || []), transfer],
-          updatedAt: serverTimestamp()
+        const assetRef = doc(db, 'assets', selectedAsset.id);
+        await runTransaction(db, async transaction => {
+          const snapshot = await transaction.get(assetRef);
+          if (!snapshot.exists()) throw new Error('Asset no longer exists');
+          const current = snapshot.data();
+          if ((current.transferHistory || []).some((record: TransferRecord) => record.id === transfer.id)) return;
+          transaction.update(assetRef, removeUndefinedFields({
+            currentHolder: formData.to,
+            transferHistory: [...(current.transferHistory || []), { ...transfer, from: current.currentHolder || 'Storage' }],
+            updatedAt: serverTimestamp(),
+          }));
         });
       }
       else if (modalType === 'return' && selectedAsset) {
-        const updatedHistory = (selectedAsset.transferHistory || []).map((t, idx) => 
-          idx === selectedAsset.transferHistory.length - 1 ? { ...t, returned: Timestamp.now() } : t
-        );
-        await updateDoc(doc(db, 'assets', selectedAsset.id), {
-          currentHolder: null,
-          transferHistory: updatedHistory,
-          updatedAt: serverTimestamp()
+        const assetRef = doc(db, 'assets', selectedAsset.id);
+        await runTransaction(db, async transaction => {
+          const snapshot = await transaction.get(assetRef);
+          if (!snapshot.exists()) throw new Error('Asset no longer exists');
+          const current = snapshot.data();
+          const history = current.transferHistory || [];
+          if (!current.currentHolder) return;
+          // A return must not clear a newer transfer created by another user.
+          if (history.at(-1)?.id !== selectedAsset.transferHistory?.at(-1)?.id) throw new Error('Asset transfer changed. Refresh before returning it.');
+          transaction.update(assetRef, removeUndefinedFields({
+            currentHolder: null,
+            transferHistory: history.map((record: TransferRecord, index: number) => index === history.length - 1 ? { ...record, returned: Timestamp.now() } : record),
+            updatedAt: serverTimestamp(),
+          }));
         });
       }
       else if (modalType === 'maintenance' && selectedAsset) {
         const cost = Number(formData.maintCost) || 0;
-        const maintenanceId = `maint_${Date.now()}`;
+        const maintenanceId = save.id(`maintenance:${selectedAsset.id}`);
         const photos = await uploadPhotos(selectedAsset.id, `maintenance/${maintenanceId}`);
         const maintRecord: MaintenanceRecord = {
           id: maintenanceId,
@@ -398,19 +419,28 @@ export default function AssetInventoryPage() {
           conditionBefore: selectedAsset.condition,
           conditionAfter: 'Good' // Default or could add more fields
         };
-        await updateDoc(doc(db, 'assets', selectedAsset.id), {
-          totalMaintenanceCost: (selectedAsset.totalMaintenanceCost || 0) + cost,
-          maintenanceHistory: [...(selectedAsset.maintenanceHistory || []), maintRecord],
-          nextMaintenanceDue: formData.nextMaint ? Timestamp.fromDate(new Date(formData.nextMaint)) : null,
-          condition: 'Good',
-          updatedAt: serverTimestamp()
+        const assetRef = doc(db, 'assets', selectedAsset.id);
+        await runTransaction(db, async transaction => {
+          const snapshot = await transaction.get(assetRef);
+          if (!snapshot.exists()) throw new Error('Asset no longer exists');
+          const current = snapshot.data();
+          if ((current.maintenanceHistory || []).some((record: MaintenanceRecord) => record.id === maintenanceId)) return;
+          transaction.update(assetRef, removeUndefinedFields({
+            totalMaintenanceCost: (Number(current.totalMaintenanceCost) || 0) + cost,
+            maintenanceHistory: [...(current.maintenanceHistory || []), maintRecord],
+            nextMaintenanceDue: formData.nextMaint ? Timestamp.fromDate(new Date(formData.nextMaint)) : null,
+            condition: 'Good', updatedAt: serverTimestamp(),
+          }));
         });
       }
 
+      save.complete();
       setModalOpen(false);
     } catch (err) {
       console.error('Asset action failed:', err);
       alert(copy('Operation failed. Please try again.'));
+    } finally {
+      save.release();
     }
   };
 
@@ -446,7 +476,7 @@ export default function AssetInventoryPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={`dashboard-segmented-tab ${activeTab === tab.id ? 'active' : ''}`}
+              className={`dashboard-segmented-tab ${activeTab === tab.id ? 'active' : ''}`} disabled={savePending}
             >
               <tab.icon size={18} />
               {tab.label}
@@ -465,7 +495,7 @@ export default function AssetInventoryPage() {
                 fontWeight: 600,
                 letterSpacing: '0',
                 textTransform: 'none'
-              }}
+              }} disabled={savePending}
             >
               <Plus size={18} />
               {t.asset.addAsset}
@@ -521,7 +551,7 @@ export default function AssetInventoryPage() {
                         <div style={{ fontSize: '12px', color: 'rgba(153, 27, 27, 0.8)' }}>{asset.category} • {asset.serialNumber || 'No SN'}</div>
                       </div>
                       {canLogMaintenance && (
-                        <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '12px', background: '#991B1B', border: 'none' }} onClick={() => handleOpenModal('maintenance', asset)}>{t.asset.log}</button>
+                        <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '12px', background: '#991B1B', border: 'none' }} onClick={() => handleOpenModal('maintenance', asset)} disabled={savePending}>{t.asset.log}</button>
                       )}
                     </div>
                   ))}
@@ -560,7 +590,7 @@ export default function AssetInventoryPage() {
                     color: !categoryFilter ? 'var(--primary)' : 'var(--text-muted)',
                     boxShadow: !categoryFilter ? '0 4px 12px rgba(15, 76, 117, 0.07)' : 'none',
                     border: 'none', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap'
-                  }}
+                  }} disabled={savePending}
                 >{copy('All')}</button>
                 {CATEGORIES.map(cat => (
                   <button 
@@ -572,7 +602,7 @@ export default function AssetInventoryPage() {
                       color: categoryFilter === cat ? 'var(--primary)' : 'var(--text-muted)',
                       boxShadow: categoryFilter === cat ? '0 4px 12px rgba(15, 76, 117, 0.07)' : 'none',
                       border: 'none', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap'
-                    }}
+                    }} disabled={savePending}
                   >{copy(cat)}</button>
                 ))}
               </div>
@@ -605,10 +635,10 @@ export default function AssetInventoryPage() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                      <button className="btn-secondary" aria-label={copy('Show QR code for {asset}', { asset: asset.name })} style={{ padding: '8px', minWidth: 'unset', width: '36px', height: '36px' }} onClick={() => handleOpenModal('qr', asset)}><QrCode size={16} /></button>
-                      <button className="btn-secondary" style={{ padding: '8px', minWidth: 'unset', width: '36px', height: '36px' }} onClick={() => handleOpenModal('history', asset)}><History size={16} /></button>
+                      <button className="btn-secondary" aria-label={copy('Show QR code for {asset}', { asset: asset.name })} style={{ padding: '8px', minWidth: 'unset', width: '36px', height: '36px' }} onClick={() => handleOpenModal('qr', asset)} disabled={savePending}><QrCode size={16} /></button>
+                      <button className="btn-secondary" style={{ padding: '8px', minWidth: 'unset', width: '36px', height: '36px' }} onClick={() => handleOpenModal('history', asset)} disabled={savePending}><History size={16} /></button>
                       {canManageAssets && (
-                        <button onClick={() => handleDeleteAsset(asset.id)} style={{ color: '#ef4444', opacity: 0.6, cursor: 'pointer', background: 'transparent', border: 'none', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={18} /></button>
+                        <button onClick={() => handleDeleteAsset(asset.id)} style={{ color: '#ef4444', opacity: 0.6, cursor: 'pointer', background: 'transparent', border: 'none', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} disabled={savePending}><Trash2 size={18} /></button>
                       )}
                     </div>
                   </div>
@@ -622,17 +652,17 @@ export default function AssetInventoryPage() {
 
                   <div style={{ padding: '16px 20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                     {canManageAssets && (
-                      <button className="btn-primary" style={{ flex: 1, borderRadius: '10px', padding: '10px' }} onClick={() => handleOpenModal('transfer', asset)}>
+                      <button className="btn-primary" style={{ flex: 1, borderRadius: '10px', padding: '10px' }} onClick={() => handleOpenModal('transfer', asset)} disabled={savePending}>
                         <ArrowRightLeft size={16} /> {copy('Transfer')}
                       </button>
                     )}
                     {canManageAssets && asset.currentHolder && (
-                      <button className="btn-secondary" style={{ flex: 1, borderRadius: '10px', color: '#27ae60', borderColor: '#27ae60', padding: '10px' }} onClick={() => handleOpenModal('return', asset)}>
+                      <button className="btn-secondary" style={{ flex: 1, borderRadius: '10px', color: '#27ae60', borderColor: '#27ae60', padding: '10px' }} onClick={() => handleOpenModal('return', asset)} disabled={savePending}>
                         <CheckCircle2 size={16} /> {copy('Return')}
                       </button>
                     )}
                     {canLogMaintenance && (
-                      <button className="btn-secondary" style={{ flex: 1, borderRadius: '10px', color: '#f39c12', borderColor: '#f39c12', padding: '10px' }} onClick={() => handleOpenModal('maintenance', asset)}>
+                      <button className="btn-secondary" style={{ flex: 1, borderRadius: '10px', color: '#f39c12', borderColor: '#f39c12', padding: '10px' }} onClick={() => handleOpenModal('maintenance', asset)} disabled={savePending}>
                         <Wrench size={16} /> {copy('Log')}
                       </button>
                     )}
@@ -667,7 +697,7 @@ export default function AssetInventoryPage() {
                 </h2>
                 {selectedAsset && <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px', fontWeight: 600, overflowWrap: 'anywhere' }}>{selectedAsset.name}</p>}
               </div>
-              <button onClick={() => setModalOpen(false)} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', padding: '8px', cursor: 'pointer', color: 'var(--text-muted)' }}>
+              <button onClick={() => setModalOpen(false)} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', padding: '8px', cursor: 'pointer', color: 'var(--text-muted)' }} disabled={savePending}>
                 <X size={20} />
               </button>
             </div>
@@ -732,7 +762,7 @@ export default function AssetInventoryPage() {
                   </div>
                 </div>
               ) : (
-                <form id="assetForm" onSubmit={handleAction} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                <form id="assetForm" onSubmit={handleAction} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}><fieldset disabled={savePending} style={{ display: 'contents' }}>
                   {modalType === 'add' && (
                     <>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -829,14 +859,14 @@ export default function AssetInventoryPage() {
                       <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>{copy('This will clear the current holder.')}</p>
                     </div>
                   )}
-                </form>
+                </fieldset></form>
               )}
             </div>
 
             {modalType !== 'history' && modalType !== 'qr' && (
               <div style={{ padding: '24px 32px', borderTop: '1px solid var(--border)', display: 'flex', gap: '16px', background: 'var(--bg-mid)' }}>
-                <button type="button" className="asset-modal-cancel" onClick={() => setModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'white', fontWeight: 600, cursor: 'pointer', color: 'var(--text-muted)' }}>{copy('Cancel')}</button>
-                <button form="assetForm" type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }}>
+                <button type="button" className="asset-modal-cancel" onClick={() => setModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'white', fontWeight: 600, cursor: 'pointer', color: 'var(--text-muted)' }} disabled={savePending}>{copy('Cancel')}</button>
+                <button form="assetForm" type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }} disabled={savePending}>
                   {modalType === 'add' ? copy('Add Asset') :
                    modalType === 'transfer' ? copy('Confirm Transfer') :
                    modalType === 'maintenance' ? copy('Save Record') : copy('Confirm Return')}

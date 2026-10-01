@@ -51,15 +51,17 @@ type ProduceInput = {
   treatmentMixName?: string;
   recipe?: TreatmentMixRecipe;
   createNew: boolean;
+  operationId?: string;
   timeZone?: string;
 };
 
-const produceBatch = async ({ companyId, treatmentMixId, treatmentMixName, recipe: requestedRecipe, createNew, timeZone }: ProduceInput) => {
+const produceBatch = async ({ companyId, treatmentMixId, treatmentMixName, recipe: requestedRecipe, createNew, timeZone, operationId }: ProduceInput) => {
   const mixRef = doc(db, 'companies', companyId, 'additives', treatmentMixId);
-  const batchId = doc(collection(db, 'companies', companyId, 'treatmentMixBatches')).id;
+  const batchId = operationId || doc(collection(db, 'companies', companyId, 'treatmentMixBatches')).id;
 
   await runTransaction(db, async (tx) => {
     const mixSnapshot = await tx.get(mixRef);
+    if (mixSnapshot.exists() && (mixSnapshot.data().stockInHistory || []).some((entry: { id?: string }) => entry.id === batchId)) return;
     if (createNew && mixSnapshot.exists()) throw new Error('Treatment mix already exists');
     if (!createNew && !mixSnapshot.exists()) throw new Error('Treatment mix not found');
     const existingMix = mixSnapshot.exists() ? mixSnapshot.data() as TreatmentMixInventoryItem : null;
@@ -71,6 +73,7 @@ const produceBatch = async ({ companyId, treatmentMixId, treatmentMixName, recip
     if (!recipe || !Number.isFinite(recipe.yieldLiters) || recipe.yieldLiters <= 0) throw new Error('Final mix volume must be greater than zero');
     const components = recipe.components.filter((component) => Number.isFinite(component.quantity) && component.quantity > 0);
     if (components.length === 0) throw new Error('Select at least one additive');
+    if (new Set(components.map(component => component.additiveId)).size !== components.length) throw new Error('Each additive can only be included once');
 
     const refs = components.map((component) => doc(db, 'companies', companyId, 'additives', component.additiveId));
     const snapshots = await Promise.all(refs.map((ref) => tx.get(ref)));
@@ -167,9 +170,9 @@ const produceBatch = async ({ companyId, treatmentMixId, treatmentMixName, recip
 
 export const createTreatmentMix = async (
   companyId: string,
-  input: { name: string; yieldLiters: number; components: TreatmentMixComponent[]; notes?: string; timeZone?: string },
+  input: { name: string; yieldLiters: number; components: TreatmentMixComponent[]; notes?: string; timeZone?: string; operationId?: string },
 ) => {
-  const ref = doc(collection(db, 'companies', companyId, 'additives'));
+  const ref = input.operationId ? doc(db, 'companies', companyId, 'additives', input.operationId) : doc(collection(db, 'companies', companyId, 'additives'));
   await produceBatch({
     companyId,
     treatmentMixId: ref.id,
@@ -181,12 +184,13 @@ export const createTreatmentMix = async (
     },
     createNew: true,
     timeZone: input.timeZone,
+    operationId: input.operationId,
   });
   return ref.id;
 };
 
-export const makeTreatmentMixBatch = (companyId: string, treatmentMixId: string, timeZone?: string) =>
-  produceBatch({ companyId, treatmentMixId, createNew: false, timeZone });
+export const makeTreatmentMixBatch = (companyId: string, treatmentMixId: string, timeZone?: string, operationId?: string) =>
+  produceBatch({ companyId, treatmentMixId, createNew: false, timeZone, operationId });
 
 export const useTreatmentMix = async (
   companyId: string,
@@ -195,13 +199,16 @@ export const useTreatmentMix = async (
   ppm: number,
   timeZone?: string,
   notes?: string,
+  operationId?: string,
 ) => {
+  const usageId = operationId || doc(collection(db, 'companies', companyId, 'treatmentMixUsage')).id;
   const dose = calculateTreatmentDoseLiters(pond.areaM2, ppm, ASSUMED_POND_DEPTH_METERS);
   const mixRef = doc(db, 'companies', companyId, 'additives', treatmentMixId);
   await runTransaction(db, async (tx) => {
     const snapshot = await tx.get(mixRef);
     if (!snapshot.exists()) throw new Error('Treatment mix not found');
     const mix = snapshot.data() as TreatmentMixInventoryItem;
+    if ((mix.usageHistory || []).some(entry => entry.id === usageId)) return;
     if (mix.inventoryKind !== 'treatmentMix') throw new Error('Selected item is not a treatment mix');
     if ((mix.totalStock || 0) + 0.0005 < dose.requiredMixLiters) {
       throw new Error(`Insufficient ${mix.additiveName}: need ${dose.requiredMixLiters} L, available ${mix.totalStock || 0} L`);
@@ -209,7 +216,7 @@ export const useTreatmentMix = async (
     const cost = calculateFifoConsumption(mix.stockInHistory || [], mix.usageHistory || [], dose.requiredMixLiters);
     tx.update(mixRef, {
       usageHistory: arrayUnion({
-        id: doc(collection(db, 'companies', companyId, 'treatmentMixUsage')).id,
+        id: usageId,
         date: getFarmDateKey(new Date(), timeZone),
         quantity: dose.requiredMixLiters,
         unitPrice: cost.unitPrice,
