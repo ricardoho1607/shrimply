@@ -19,3 +19,6 @@ Object.assign(exports, require("./billing"));
 Object.assign(exports, require('./diseasePrivacy'));
 
 Object.assign(exports, require('./orsonAgent'));
+
+const { readOnlyApi } = require('./readOnlyApi');
+exports.readOnlyApi = readOnlyApi;

@@ -12,6 +12,18 @@
     {
       "source": "/firebase-auth/securetoken/:path*",
       "destination": "https://securetoken.googleapis.com/:path*"
+    },
+    {
+      "source": "/api/sites-mcp/status",
+      "destination": "https://us-central1-investashrimp-5d9e5.cloudfunctions.net/readOnlyApi/api/integrations/v1/site-delegation/status"
+    },
+    {
+      "source": "/api/sites-mcp/pair",
+      "destination": "https://us-central1-investashrimp-5d9e5.cloudfunctions.net/readOnlyApi/api/integrations/v1/site-delegation/pair-complete"
+    },
+    {
+      "source": "/api/sites-mcp/revoke",
+      "destination": "https://us-central1-investashrimp-5d9e5.cloudfunctions.net/readOnlyApi/api/integrations/v1/site-delegation/revoke"
     }
   ],
   "redirects": [
