@@ -401,6 +401,250 @@ export const selectDailyFeedEntries = (
   return result.sort((a, b) => a.farmDate.localeCompare(b.farmDate) || a.feedKg - b.feedKg);
 };
 
+// ============================================================================
+// 2b. Observation Parsing & Validation
+// ============================================================================
+
+export interface NitriteValidationResult {
+  valid: boolean;
+  value: number | null;
+  basis: string | null;
+  status: 'valid' | 'missing' | 'malformed' | 'negative';
+  reason?: string;
+}
+
+/**
+ * Validates and parses nitrite concentration in mg/L.
+ * Preserves zero (0 mg/L) and retains explicit or canonical basis ('NO2').
+ * Rejects negative, non-finite, and malformed inputs; missing values stay null.
+ */
+export const validateNitriteMgL = (value: unknown, basis?: unknown): NitriteValidationResult => {
+  if (value === null || value === undefined) {
+    return { valid: false, value: null, basis: null, status: 'missing', reason: 'Nitrite value is missing' };
+  }
+  let parsed: number | null = null;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      return { valid: false, value: null, basis: null, status: 'malformed', reason: 'Nitrite number is non-finite' };
+    }
+    parsed = Object.is(value, -0) ? 0 : value;
+  } else if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (EMPTY_FEED_TOKENS.has(trimmed.toLowerCase())) {
+      return { valid: false, value: null, basis: null, status: 'missing', reason: 'Nitrite string is empty' };
+    }
+    const normalized = trimmed.replace(/,/g, '');
+    if (!/^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(normalized)) {
+      return { valid: false, value: null, basis: null, status: 'malformed', reason: 'Nitrite string contains non-numeric characters' };
+    }
+    const num = Number(normalized);
+    if (!Number.isFinite(num)) {
+      return { valid: false, value: null, basis: null, status: 'malformed', reason: 'Parsed nitrite is non-finite' };
+    }
+    parsed = Object.is(num, -0) ? 0 : num;
+  } else {
+    return { valid: false, value: null, basis: null, status: 'malformed', reason: 'Unsupported type for nitrite' };
+  }
+
+  if (parsed < 0) {
+    return { valid: false, value: null, basis: null, status: 'negative', reason: 'Nitrite cannot be negative' };
+  }
+
+  const explicitBasis = typeof basis === 'string' && basis.trim() ? basis.trim() : null;
+  const resolvedBasis = explicitBasis ?? 'NO2';
+  return { valid: true, value: parsed, basis: resolvedBasis, status: 'valid' };
+};
+
+export const parseNitriteMgL = (value: unknown): number | null => {
+  const result = validateNitriteMgL(value);
+  return result.valid ? result.value : null;
+};
+
+export interface WaterDepthValidationResult {
+  valid: boolean;
+  value: number | null;
+  status: 'valid' | 'missing' | 'malformed' | 'negative';
+  reason?: string;
+}
+
+/**
+ * Validates and parses water depth in centimetres.
+ * Preserves zero (0 cm e.g. drained pond) and positive depths.
+ * Rejects negative and malformed values; missing values stay null.
+ */
+export const validateWaterDepthCm = (value: unknown): WaterDepthValidationResult => {
+  if (value === null || value === undefined) {
+    return { valid: false, value: null, status: 'missing', reason: 'Water depth is missing' };
+  }
+  let parsed: number | null = null;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      return { valid: false, value: null, status: 'malformed', reason: 'Water depth is non-finite' };
+    }
+    parsed = Object.is(value, -0) ? 0 : value;
+  } else if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (EMPTY_FEED_TOKENS.has(trimmed.toLowerCase())) {
+      return { valid: false, value: null, status: 'missing', reason: 'Water depth string is empty' };
+    }
+    const normalized = trimmed.replace(/,/g, '').replace(/cm$/i, '').trim();
+    if (!/^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(normalized)) {
+      return { valid: false, value: null, status: 'malformed', reason: 'Water depth string contains non-numeric characters' };
+    }
+    const num = Number(normalized);
+    if (!Number.isFinite(num)) {
+      return { valid: false, value: null, status: 'malformed', reason: 'Parsed water depth is non-finite' };
+    }
+    parsed = Object.is(num, -0) ? 0 : num;
+  } else {
+    return { valid: false, value: null, status: 'malformed', reason: 'Unsupported type for water depth' };
+  }
+
+  if (parsed < 0) {
+    return { valid: false, value: null, status: 'negative', reason: 'Water depth cannot be negative' };
+  }
+
+  return { valid: true, value: parsed, status: 'valid' };
+};
+
+export const parseWaterDepthCm = (value: unknown): number | null => {
+  const result = validateWaterDepthCm(value);
+  return result.valid ? result.value : null;
+};
+
+export interface SessionWaterDepth {
+  waterDepthCmMorning: number | null;
+  waterDepthCmEvening: number | null;
+  waterDepthCm: number | null;
+}
+
+/**
+ * Resolves session-specific water depth in centimetres.
+ * Preserves morning and evening sessions separately; isolates session depths
+ * so evening depths never leak into morning depth or vice versa.
+ */
+export const resolveSessionWaterDepth = (record: unknown): SessionWaterDepth => {
+  if (!record || typeof record !== 'object') {
+    return { waterDepthCmMorning: null, waterDepthCmEvening: null, waterDepthCm: null };
+  }
+  const r = record as Record<string, any>;
+  const m = parseWaterDepthCm(r.waterDepthCmMorning ?? r.waterDepthMorning);
+  const e = parseWaterDepthCm(r.waterDepthCmEvening ?? r.waterDepthEvening);
+  const g = parseWaterDepthCm(r.waterDepthCm ?? r.waterDepth);
+
+  // Session isolation: evening depth must not leak into morningDepth, and vice versa
+  const morningDepth = m !== null ? m : (e === null ? g : null);
+  const eveningDepth = e;
+  const genericDepth = morningDepth ?? eveningDepth ?? g;
+
+  return {
+    waterDepthCmMorning: morningDepth,
+    waterDepthCmEvening: eveningDepth,
+    waterDepthCm: genericDepth,
+  };
+};
+
+const NEGATIVE_SCUM_TOKENS = new Set([
+  'false', 'none', 'no', '0', 'nil', 'negative', 'neg', 'clean', 'clear',
+  'tidak ada buih', 'tidak ada scum', 'nihil', 'tidak ada', 'tiada',
+  'không có váng', 'không', 'ไม่มีคราบ', '无浮膜', '无',
+]);
+
+const POSITIVE_SCUM_TOKENS = new Set([
+  'true', 'yes', '1', 'scum', 'surface scum', 'buih', 'ada buih', 'ada scum',
+  'có váng', 'váng', 'มีคราบ', '有浮膜', '浮膜',
+]);
+
+/**
+ * Validates surface scum observation.
+ * Preserves false as false, true as true; missing stays null (unknown).
+ */
+export const validateSurfaceScum = (value: unknown): boolean | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (value === 0) return false;
+    if (value === 1) return true;
+    return null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim().toLowerCase();
+    if (NEGATIVE_SCUM_TOKENS.has(trimmed)) return false;
+    if (POSITIVE_SCUM_TOKENS.has(trimmed)) return true;
+    return null;
+  }
+  return null;
+};
+
+/**
+ * Validates shrimp behaviour observation.
+ * Note: Abnormal behaviour is strictly recorded as an operational observation
+ * and NOT a clinical or biological diagnosis.
+ */
+export const validateShrimpBehaviour = (value: unknown): 'normal' | 'abnormal' | null => {
+  if (value === null || value === undefined) return null;
+  if (value === 'normal' || value === 'abnormal') return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim().toLowerCase();
+    if (trimmed === 'abnormal' || trimmed === 'unusual' || trimmed === 'erratic') return 'abnormal';
+    if (trimmed === 'normal' || trimmed === 'active' || trimmed === 'healthy') return 'normal';
+    return null;
+  }
+  return null;
+};
+
+export interface WaterExchangeValidationResult {
+  valid: boolean;
+  value: number | null;
+  status: 'valid' | 'missing' | 'malformed' | 'out_of_range';
+  reason?: string;
+}
+
+/**
+ * Validates and parses water exchange percentage.
+ * Preserves zero (0% exchange) and positive values up to 100%.
+ * Rejects negative, out-of-range, and malformed inputs; missing values stay null.
+ */
+export const validateWaterExchangePercent = (value: unknown): WaterExchangeValidationResult => {
+  if (value === null || value === undefined) {
+    return { valid: false, value: null, status: 'missing', reason: 'Water exchange is missing' };
+  }
+  let parsed: number | null = null;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      return { valid: false, value: null, status: 'malformed', reason: 'Water exchange is non-finite' };
+    }
+    parsed = Object.is(value, -0) ? 0 : value;
+  } else if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (EMPTY_FEED_TOKENS.has(trimmed.toLowerCase())) {
+      return { valid: false, value: null, status: 'missing', reason: 'Water exchange string is empty' };
+    }
+    const normalized = trimmed.replace(/,/g, '').replace(/%$/, '').trim();
+    if (!/^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(normalized)) {
+      return { valid: false, value: null, status: 'malformed', reason: 'Water exchange string contains non-numeric characters' };
+    }
+    const num = Number(normalized);
+    if (!Number.isFinite(num)) {
+      return { valid: false, value: null, status: 'malformed', reason: 'Parsed water exchange is non-finite' };
+    }
+    parsed = Object.is(num, -0) ? 0 : num;
+  } else {
+    return { valid: false, value: null, status: 'malformed', reason: 'Unsupported type for water exchange' };
+  }
+
+  if (parsed < 0 || parsed > 100) {
+    return { valid: false, value: null, status: 'out_of_range', reason: 'Water exchange percent must be between 0 and 100' };
+  }
+
+  return { valid: true, value: parsed, status: 'valid' };
+};
+
+export const parseWaterExchangePercent = (value: unknown): number | null => {
+  const result = validateWaterExchangePercent(value);
+  return result.valid ? result.value : null;
+};
+
 /**
  * Pure freshness evaluator.
  * - Freshness comes only from measurement provenance.

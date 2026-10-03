@@ -508,9 +508,9 @@ const recordKinds = (record: RawRecord, feedData: OrsonNormalizedFeedData | null
   if ((mbw !== null && mbw > 0) || (mortality !== null && mortality > 0)) kinds.push('sampling');
   if (record.mortalityObservationType) kinds.push('mortality');
   if (
-    firstNumber(record.alkalinity, record.alkalinityMgL, record.nitriteMgL, record.temperatureMorning, record.temperatureEvening) !== null
-    ||
-    firstNumber(record.phMorning, record.phEvening, record.doMorning, record.doEvening, record.salinity, record.transparency, record.temperature, record.ammonia, record.ammoniaMgL, record.tanMgL, record.waterExchangePercent) !== null
+    firstNumber(record.alkalinity, record.alkalinityMgL, record.nitriteMgL, record.nitrite, record.temperatureMorning, record.temperatureEvening) !== null
+    || firstNumber(record.waterDepthCm, record.waterDepthCmMorning, record.waterDepthCmEvening, record.waterDepth, record.waterDepthMorning, record.waterDepthEvening) !== null
+    || firstNumber(record.phMorning, record.phEvening, record.doMorning, record.doEvening, record.salinity, record.transparency, record.temperature, record.ammonia, record.ammoniaMgL, record.tanMgL, record.waterExchangePercent, record.waterExchange) !== null
     || firstString(record.operationalNotes) !== null
     || record.weatherEvent === 'rain' || record.weatherEvent === 'heavy_rain' || record.weatherEvent === 'sudden_cloud'
     || record.sludgeLoad === 'low' || record.sludgeLoad === 'moderate' || record.sludgeLoad === 'high'
@@ -564,6 +564,41 @@ const normalizeRecord = (record: RawRecord, docStartDate: string | null, timeZon
     ? ((mainHarvestBiomass ?? 0) * (mainHarvestSize ?? 0)) + ((subHarvestBiomass ?? 0) * (subHarvestSize ?? 0))
     : null;
 
+  const rawNitrite = firstNumber(record.nitriteMgL, record.nitrite);
+  const nitriteBasis = firstString(record.nitriteBasis) ?? (rawNitrite !== null ? 'NO2' : null);
+
+  const rawMorningDepth = firstNumber(record.waterDepthCmMorning, record.waterDepthMorning);
+  const rawEveningDepth = firstNumber(record.waterDepthCmEvening, record.waterDepthEvening);
+  const rawGenericDepth = firstNumber(record.waterDepthCm, record.waterDepth);
+  const waterDepthCmMorning = rawMorningDepth !== null
+    ? rawMorningDepth
+    : (rawEveningDepth === null ? rawGenericDepth : null);
+  const waterDepthCmEvening = rawEveningDepth;
+  const waterDepthCm = waterDepthCmMorning ?? waterDepthCmEvening ?? rawGenericDepth;
+
+  const surfaceScum = typeof record.surfaceScum === 'boolean'
+    ? record.surfaceScum
+    : (record.surfaceScum === 'false' || record.surfaceScum === 'none' || record.surfaceScum === 'clean' || record.surfaceScum === 'no' || record.surfaceScum === '0'
+        ? false
+        : (record.surfaceScum === 'true' || record.surfaceScum === 'scum' || record.surfaceScum === 'yes' || record.surfaceScum === '1'
+            ? true
+            : null));
+
+  const shrimpBehaviour = record.shrimpBehaviour === 'normal' || record.shrimpBehaviour === 'abnormal'
+    ? record.shrimpBehaviour
+    : (typeof record.shrimpBehaviour === 'string' && record.shrimpBehaviour.trim().toLowerCase() === 'abnormal'
+        ? 'abnormal'
+        : (typeof record.shrimpBehaviour === 'string' && record.shrimpBehaviour.trim().toLowerCase() === 'normal'
+            ? 'normal'
+            : null));
+
+  const waterExchangePercent = firstNumber(record.waterExchangePercent, record.waterExchange);
+  const alkalinityMgL = firstNumber(record.alkalinityMgL, record.alkalinity);
+  const temperatureMorningC = firstNumber(record.temperatureMorningC, record.temperatureMorning);
+  const temperatureEveningC = firstNumber(record.temperatureEveningC, record.temperatureEvening);
+  const transparencyMorningCm = firstNumber(record.transparencyMorningCm, record.transparencyMorning);
+  const transparencyEveningCm = firstNumber(record.transparencyEveningCm, record.transparencyEvening);
+
   const normalized: OrsonNormalizedRecord = {
     id: firstString(record.id),
     cycleId: firstString(record.cycleId),
@@ -586,15 +621,35 @@ const normalizeRecord = (record: RawRecord, docStartDate: string | null, timeZon
     doEvening: firstNumber(record.doEvening),
     salinityPpt: firstNumber(record.salinity),
     transparencyCm: firstNumber(record.transparency),
+    transparencyMorningCm,
+    transparencyEveningCm,
     temperatureC: firstNumber(record.temp, record.temperature, record.temperatureC),
+    temperatureMorningC,
+    temperatureEveningC,
     ammoniaMgL: firstNumber(record.ammonia, record.ammoniaMgL),
+    alkalinityMgL,
+    nitriteMgL: rawNitrite,
+    nitriteBasis,
+    waterDepthCm,
+    waterDepthCmMorning,
+    waterDepthCmEvening,
     diagnosticMeasurements: Object.fromEntries(Object.entries({
-      alkalinityMgL: firstNumber(record.alkalinityMgL, record.alkalinity),
+      alkalinityMgL,
       tanMgL: firstNumber(record.tanMgL),
-      nitriteMgL: firstNumber(record.nitriteMgL),
+      nitriteMgL: rawNitrite,
+      nitriteBasis,
       nitrogenBasis: firstString(record.nitrogenBasis),
-      temperatureMorningC: firstNumber(record.temperatureMorningC, record.temperatureMorning),
-      temperatureEveningC: firstNumber(record.temperatureEveningC, record.temperatureEvening),
+      temperatureMorningC,
+      temperatureEveningC,
+      transparencyMorningCm,
+      transparencyEveningCm,
+      waterDepthCm,
+      waterDepthCmMorning,
+      waterDepthCmEvening,
+      waterExchangePercent,
+      surfaceScum: typeof surfaceScum === 'boolean' ? surfaceScum : undefined,
+      sludgeLoad: record.sludgeLoad === 'low' || record.sludgeLoad === 'moderate' || record.sludgeLoad === 'high' ? record.sludgeLoad : undefined,
+      shrimpBehaviour: shrimpBehaviour ?? undefined,
       estimatedPopulation: firstNumber(record.estimatedPopulation),
       estimatedBiomassKg: firstNumber(record.estimatedBiomassKg, record.biomassKg),
       survivalPercent: firstNumber(record.survivalPercent, record.survivalRate),
@@ -602,19 +657,17 @@ const normalizeRecord = (record: RawRecord, docStartDate: string | null, timeZon
       recordedFcr: firstNumber(record.fcr),
       fcrBasis: firstString(record.fcrBasis),
       recordedFeedIndex: firstNumber(record.feedIndex),
-    }).filter(([, value]) => value !== null)),
+    }).filter(([, value]) => value !== null && value !== undefined)),
     operationalNotes: firstString(record.operationalNotes),
     weatherEvent: record.weatherEvent === 'rain' || record.weatherEvent === 'heavy_rain' || record.weatherEvent === 'sudden_cloud'
       ? record.weatherEvent
       : null,
-    waterExchangePercent: firstNumber(record.waterExchangePercent),
+    waterExchangePercent,
     sludgeLoad: record.sludgeLoad === 'low' || record.sludgeLoad === 'moderate' || record.sludgeLoad === 'high'
       ? record.sludgeLoad
       : null,
-    surfaceScum: typeof record.surfaceScum === 'boolean' ? record.surfaceScum : null,
-    shrimpBehaviour: record.shrimpBehaviour === 'normal' || record.shrimpBehaviour === 'abnormal'
-      ? record.shrimpBehaviour
-      : null,
+    surfaceScum,
+    shrimpBehaviour,
     harvestType: harvestData?.harvestType === 'partial' || harvestData?.harvestType === 'final'
       ? harvestData.harvestType
       : null,

@@ -22,6 +22,15 @@ const {
   rankRiskFindings,
   comparePondRiskReports,
   rankPondsByRisk,
+  validateNitriteMgL,
+  parseNitriteMgL,
+  validateWaterDepthCm,
+  parseWaterDepthCm,
+  resolveSessionWaterDepth,
+  validateSurfaceScum,
+  validateShrimpBehaviour,
+  validateWaterExchangePercent,
+  parseWaterExchangePercent,
 } = require('./orsonEvidence.ts');
 
 // ============================================================================
@@ -651,3 +660,146 @@ test('highestCurrentRiskSeverity ignores historical-only findings', () => {
   assert.equal(highestRiskSeverity(findings.map((f) => f.severity)), 'watch');
   assert.equal(highestCurrentRiskSeverity(findings), 'info', 'historical-only findings must not elevate current severity above info');
 });
+
+// ============================================================================
+// 6. Observation Validation & Session Depth Handling
+// Acceptance Criterion: "False/zero, basis and session depth survive; missing remains unknown; abnormal behaviour remains an observation and not a diagnosis."
+// ============================================================================
+
+test('nitrite validation preserves 0 and retains explicit basis, rejecting negative and malformed', () => {
+  // Zero survives
+  const zeroResult = validateNitriteMgL(0);
+  assert.equal(zeroResult.valid, true);
+  assert.equal(zeroResult.value, 0);
+  assert.equal(zeroResult.basis, 'NO2');
+  assert.equal(parseNitriteMgL(0), 0);
+  assert.equal(parseNitriteMgL('0.0'), 0);
+
+  // Positive with explicit basis
+  const posResult = validateNitriteMgL(0.35, 'NO2');
+  assert.equal(posResult.valid, true);
+  assert.equal(posResult.value, 0.35);
+  assert.equal(posResult.basis, 'NO2');
+
+  // Negative rejected
+  assert.equal(validateNitriteMgL(-0.1).valid, false);
+  assert.equal(validateNitriteMgL(-1).status, 'negative');
+  assert.equal(parseNitriteMgL(-0.1), null);
+
+  // Malformed rejected
+  assert.equal(validateNitriteMgL('abc').status, 'malformed');
+  assert.equal(validateNitriteMgL(NaN).status, 'malformed');
+
+  // Missing remains unknown (null)
+  assert.equal(validateNitriteMgL(null).status, 'missing');
+  assert.equal(validateNitriteMgL(undefined).status, 'missing');
+  assert.equal(parseNitriteMgL(null), null);
+  assert.equal(parseNitriteMgL(''), null);
+});
+
+test('water depth validation preserves zero and resolves sessions with strict isolation', () => {
+  // Zero survives (drained pond)
+  assert.equal(validateWaterDepthCm(0).valid, true);
+  assert.equal(validateWaterDepthCm(0).value, 0);
+  assert.equal(parseWaterDepthCm(0), 0);
+  assert.equal(parseWaterDepthCm('0 cm'), 0);
+
+  // Negative rejected
+  assert.equal(validateWaterDepthCm(-10).status, 'negative');
+  assert.equal(parseWaterDepthCm(-5), null);
+
+  // Missing stays null
+  assert.equal(validateWaterDepthCm(null).status, 'missing');
+  assert.equal(parseWaterDepthCm(null), null);
+
+  // Session depth isolation: morning only
+  const morningOnly = resolveSessionWaterDepth({ waterDepthCmMorning: 100 });
+  assert.equal(morningOnly.waterDepthCmMorning, 100);
+  assert.equal(morningOnly.waterDepthCmEvening, null);
+  assert.equal(morningOnly.waterDepthCm, 100);
+
+  // Session depth isolation: evening only (evening depth must NOT leak into morning)
+  const eveningOnly = resolveSessionWaterDepth({ waterDepthCmEvening: 115, waterDepthCm: 115 });
+  assert.equal(eveningOnly.waterDepthCmMorning, null, 'evening depth must not leak into morning');
+  assert.equal(eveningOnly.waterDepthCmEvening, 115);
+  assert.equal(eveningOnly.waterDepthCm, 115);
+
+  // Both sessions provided
+  const bothSessions = resolveSessionWaterDepth({ waterDepthCmMorning: 102, waterDepthCmEvening: 118 });
+  assert.equal(bothSessions.waterDepthCmMorning, 102);
+  assert.equal(bothSessions.waterDepthCmEvening, 118);
+  assert.equal(bothSessions.waterDepthCm, 102);
+
+  // Zero depth survives in sessions
+  const zeroMorning = resolveSessionWaterDepth({ waterDepthCmMorning: 0 });
+  assert.equal(zeroMorning.waterDepthCmMorning, 0);
+  assert.equal(zeroMorning.waterDepthCmEvening, null);
+  assert.equal(zeroMorning.waterDepthCm, 0);
+
+  // Missing stays unknown (all null)
+  const missingDepth = resolveSessionWaterDepth({ phMorning: 7.5 });
+  assert.equal(missingDepth.waterDepthCmMorning, null);
+  assert.equal(missingDepth.waterDepthCmEvening, null);
+  assert.equal(missingDepth.waterDepthCm, null);
+});
+
+test('surface scum validation preserves false and true while keeping missing unknown', () => {
+  // Boolean false survives
+  assert.equal(validateSurfaceScum(false), false);
+  // Negative text tokens map to false
+  assert.equal(validateSurfaceScum('false'), false);
+  assert.equal(validateSurfaceScum('none'), false);
+  assert.equal(validateSurfaceScum('clean'), false);
+  assert.equal(validateSurfaceScum('no'), false);
+  assert.equal(validateSurfaceScum('tidak ada buih'), false);
+
+  // Boolean true survives
+  assert.equal(validateSurfaceScum(true), true);
+  // Positive text tokens map to true
+  assert.equal(validateSurfaceScum('true'), true);
+  assert.equal(validateSurfaceScum('scum'), true);
+  assert.equal(validateSurfaceScum('ada buih'), true);
+
+  // Missing remains unknown (null), never false or true
+  assert.equal(validateSurfaceScum(null), null);
+  assert.equal(validateSurfaceScum(undefined), null);
+  assert.equal(validateSurfaceScum(''), null);
+});
+
+test('shrimp behaviour observation preserves observation values without diagnosing diseases', () => {
+  // Abnormal behaviour is captured as observation
+  assert.equal(validateShrimpBehaviour('abnormal'), 'abnormal');
+  assert.equal(validateShrimpBehaviour('unusual'), 'abnormal');
+  assert.equal(validateShrimpBehaviour('erratic'), 'abnormal');
+
+  // Normal behaviour is captured
+  assert.equal(validateShrimpBehaviour('normal'), 'normal');
+  assert.equal(validateShrimpBehaviour('active'), 'normal');
+
+  // Missing stays null
+  assert.equal(validateShrimpBehaviour(null), null);
+  assert.equal(validateShrimpBehaviour(undefined), null);
+  assert.equal(validateShrimpBehaviour(''), null);
+});
+
+test('water exchange percent validation preserves zero and limits to 0-100%', () => {
+  // Zero exchange survives
+  assert.equal(validateWaterExchangePercent(0).valid, true);
+  assert.equal(validateWaterExchangePercent(0).value, 0);
+  assert.equal(parseWaterExchangePercent(0), 0);
+  assert.equal(parseWaterExchangePercent('0%'), 0);
+
+  // Positive exchange
+  assert.equal(validateWaterExchangePercent(20).valid, true);
+  assert.equal(validateWaterExchangePercent('25%').value, 25);
+
+  // Out of range rejected
+  assert.equal(validateWaterExchangePercent(-5).status, 'out_of_range');
+  assert.equal(validateWaterExchangePercent(120).status, 'out_of_range');
+  assert.equal(parseWaterExchangePercent(150), null);
+
+  // Missing stays null
+  assert.equal(validateWaterExchangePercent(null).status, 'missing');
+  assert.equal(parseWaterExchangePercent(null), null);
+});
+
