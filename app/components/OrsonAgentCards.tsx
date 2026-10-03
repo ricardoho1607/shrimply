@@ -13,12 +13,179 @@ import type {
   OrsonCommand,
   OrsonOperation,
 } from "../../shared/orsonAgentContract";
+import { useLanguage } from "../../context/LanguageContext";
 import {
   agentFields,
   agentActivityLabel,
   agentFieldLabel,
   agentFieldOptions,
 } from "../../shared/orsonAgentPresentation";
+
+export const OBSERVATION_LABELS_EN: Record<string, string> = {
+  doMorning: "Morning dissolved oxygen (mg/L)",
+  doEvening: "Evening dissolved oxygen (mg/L)",
+  phMorning: "Morning pH",
+  phEvening: "Evening pH",
+  temperatureMorning: "Morning temperature (°C)",
+  temperatureEvening: "Evening temperature (°C)",
+  transparencyMorning: "Morning transparency (cm)",
+  transparencyEvening: "Evening transparency (cm)",
+  waterDepthCmMorning: "Morning water depth (cm)",
+  waterDepthCmEvening: "Evening water depth (cm)",
+  salinity: "Salinity (ppt)",
+  alkalinity: "Alkalinity (mg/L)",
+  ammonia: "Ammonia (mg/L)",
+  nitriteMgL: "Nitrite (mg/L NO₂)",
+  nitriteBasis: "Nitrite basis",
+  weatherEvent: "Weather event",
+  waterExchangePercent: "Water exchange (%)",
+  sludgeLoad: "Sludge load",
+  surfaceScum: "Surface scum",
+  shrimpBehaviour: "Shrimp behaviour",
+  operationalNotes: "Operational notes",
+  pondName: "Pond name",
+  pondArea: "Pond area (m²)",
+  supplier: "PL supplier",
+  mbw: "Mean body weight (g)",
+  feed: "Sampling feed observation (kg)",
+  count: "Mortality count",
+  density: "Stocking density (shrimp/m²)",
+  initialWeight: "Initial weight (g)",
+  price: "Unit price",
+  size: "Shrimp size (count/kg)",
+  biomass: "Harvest weight (kg)",
+  subBiomass: "Secondary harvest weight (kg)",
+  subSize: "Secondary size (count/kg)",
+  subPrice: "Secondary unit price",
+  feedingResponse: "Observed feeding response",
+  observationType: "Mortality observation type",
+  cycleEndReason: "Reason for closing",
+  cycleName: "New production cycle name",
+  cycleId: "Existing production cycle",
+  item: "Description",
+  reorderLevel: "Reorder level",
+};
+
+export const OBSERVATION_LABELS_ID: Record<string, string> = {
+  doMorning: "Oksigen terlarut pagi (mg/L)",
+  doEvening: "Oksigen terlarut sore (mg/L)",
+  phMorning: "pH pagi",
+  phEvening: "pH sore",
+  temperatureMorning: "Suhu pagi (°C)",
+  temperatureEvening: "Suhu sore (°C)",
+  transparencyMorning: "Kecerahan pagi (cm)",
+  transparencyEvening: "Kecerahan sore (cm)",
+  waterDepthCmMorning: "Kedalaman air pagi (cm)",
+  waterDepthCmEvening: "Kedalaman air sore (cm)",
+  salinity: "Salinitas (ppt)",
+  alkalinity: "Alkalinitas (mg/L)",
+  ammonia: "Amoniak (mg/L)",
+  nitriteMgL: "Nitrit (mg/L NO₂)",
+  nitriteBasis: "Basis nitrit",
+  weatherEvent: "Kondisi cuaca",
+  waterExchangePercent: "Pergantian air (%)",
+  sludgeLoad: "Beban lumpur",
+  surfaceScum: "Busa permukaan",
+  shrimpBehaviour: "Perilaku udang",
+  operationalNotes: "Catatan operasional",
+  pondName: "Nama kolam",
+  pondArea: "Luas kolam (m²)",
+  supplier: "Pemasok benur",
+  mbw: "Bobot rata-rata / MBW (g)",
+  feed: "Pengamatan pakan sampling (kg)",
+  count: "Jumlah kematian",
+  density: "Padat tebar (ekor/m²)",
+  initialWeight: "Bobot awal (g)",
+  price: "Harga satuan",
+  size: "Ukuran udang (ekor/kg)",
+  biomass: "Biomassa panen (kg)",
+  subBiomass: "Biomassa panen sekunder (kg)",
+  subSize: "Ukuran sekunder (ekor/kg)",
+  subPrice: "Harga satuan sekunder",
+  feedingResponse: "Respons pakan",
+  observationType: "Tipe pengamatan kematian",
+  cycleEndReason: "Alasan penutupan",
+  cycleName: "Nama siklus produksi baru",
+  cycleId: "Siklus produksi yang ada",
+  item: "Deskripsi",
+  reorderLevel: "Batas pemesanan ulang",
+};
+
+export const OBSERVATION_OPTIONS: Record<string, { id: string; name: string }[]> = {
+  surfaceScum: [
+    { id: "false", name: "No" },
+    { id: "true", name: "Yes" },
+  ],
+  weatherEvent: [
+    { id: "rain", name: "Rain" },
+    { id: "heavy_rain", name: "Heavy rain" },
+    { id: "sudden_cloud", name: "Sudden cloud" },
+  ],
+  sludgeLoad: [
+    { id: "low", name: "Low" },
+    { id: "moderate", name: "Moderate" },
+    { id: "high", name: "High" },
+  ],
+  shrimpBehaviour: [
+    { id: "normal", name: "Normal" },
+    { id: "abnormal", name: "Abnormal" },
+  ],
+  nitriteBasis: [
+    { id: "NO2", name: "NO₂" },
+  ],
+};
+
+export const OBSERVATION_OPTIONS_ID: Record<string, { id: string; name: string }[]> = {
+  surfaceScum: [
+    { id: "false", name: "Tidak" },
+    { id: "true", name: "Ya" },
+  ],
+  weatherEvent: [
+    { id: "rain", name: "Hujan" },
+    { id: "heavy_rain", name: "Hujan lebat" },
+    { id: "sudden_cloud", name: "Mendung tiba-tiba" },
+  ],
+  sludgeLoad: [
+    { id: "low", name: "Rendah" },
+    { id: "moderate", name: "Sedang" },
+    { id: "high", name: "Tinggi" },
+  ],
+  shrimpBehaviour: [
+    { id: "normal", name: "Normal" },
+    { id: "abnormal", name: "Abnormal" },
+  ],
+  nitriteBasis: [
+    { id: "NO2", name: "NO₂" },
+  ],
+};
+
+export function getFieldLabel(field: string, lang = "en"): string {
+  const dict = lang === "id" ? OBSERVATION_LABELS_ID : OBSERVATION_LABELS_EN;
+  return dict[field] || OBSERVATION_LABELS_EN[field] || agentFieldLabel(field);
+}
+
+export function getFieldOptions(field: string, lang = "en"): { id: string; name: string }[] | undefined {
+  const dict = lang === "id" ? OBSERVATION_OPTIONS_ID : OBSERVATION_OPTIONS;
+  return dict[field] || OBSERVATION_OPTIONS[field] || agentFieldOptions[field];
+}
+
+export function formatObservationValue(field: string, val: unknown, lang = "en"): string {
+  const isId = lang === "id";
+  if (field === "surfaceScum" || typeof val === "boolean") {
+    if (val === true || val === "true") return isId ? "Ya" : "Yes";
+    if (val === false || val === "false") return isId ? "Tidak" : "No";
+    return isId ? "Tidak diketahui" : "Unknown";
+  }
+  if (val === null || val === undefined || val === "") {
+    return isId ? "Tidak diketahui" : "Unknown";
+  }
+  const opts = getFieldOptions(field, lang);
+  if (opts) {
+    const match = opts.find((o) => o.id === String(val));
+    if (match) return match.name;
+  }
+  return String(val);
+}
 function Button({
   title,
   onPress,
@@ -83,6 +250,13 @@ function Choice({
 }
 function Card({ op, agent, onDismiss }: { op: OrsonOperation; agent: AgentController; onDismiss?: (operationId: string) => void }) {
   const router = useRouter();
+  let currentLanguage = "en";
+  try {
+    const langCtx = useLanguage();
+    if (langCtx?.currentLanguage) currentLanguage = langCtx.currentLanguage;
+  } catch {
+    currentLanguage = "en";
+  }
   const saved = new Set(
     op.receipts.filter((r) => r.status === "saved").flatMap((r) => r.rowIds),
   );
@@ -95,6 +269,13 @@ function Card({ op, agent, onDismiss }: { op: OrsonOperation; agent: AgentContro
   );
   const [editingRows, setEditingRows] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    setCommands(remaining.map((r) => r.command));
+    setSelected(remaining.filter((r) => r.valid).map((r) => r.command.id));
+    setDirty(false);
+  }, [op.revision, op.id, op.receipts]);
+
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [showSaveStatus, setShowSaveStatus] = useState(false);
   const closed = op.state === "completed" || op.state === "discarded";
@@ -108,6 +289,29 @@ function Card({ op, agent, onDismiss }: { op: OrsonOperation; agent: AgentContro
     if (agent.busy) return;
     setCommands((old) => old.map((c, j) => (i === j ? { ...c, ...patch } : c)));
     setDirty(true);
+  };
+  const handleFieldChange = (index: number, field: string, value: string) => {
+    let parsed: unknown = value;
+    if (field === "surfaceScum") {
+      parsed = value === "true" ? true : value === "false" ? false : value;
+    } else if (
+      [
+        "waterDepthCmMorning",
+        "waterDepthCmEvening",
+        "waterExchangePercent",
+        "nitriteMgL",
+      ].includes(field) &&
+      value !== "" &&
+      Number.isFinite(Number(value))
+    ) {
+      parsed = Number(value);
+    }
+    edit(index, {
+      values: {
+        ...commands[index].values,
+        [field]: parsed as string | number | boolean,
+      },
+    });
   };
   return (
     <View style={styles.card}>
@@ -221,9 +425,12 @@ function Card({ op, agent, onDismiss }: { op: OrsonOperation; agent: AgentContro
                 const hasPrevious = Object.hasOwn(row.before || {}, field);
                 const previous = row.before?.[field];
                 const proposed = c.values?.[field];
+                const label = getFieldLabel(field, currentLanguage);
+                const beforeText = formatObservationValue(field, previous, currentLanguage);
+                const afterText = formatObservationValue(field, proposed, currentLanguage);
                 return (
                   <Text key={field} style={styles.text}>
-                    {agentFieldLabel(field)}: {hasPrevious ? `${previous === null || previous === undefined ? "Missing" : String(previous)} → ` : ""}{proposed === null || proposed === undefined || proposed === "" ? "Missing" : String(proposed)}
+                    {label}: {hasPrevious ? `${beforeText} → ` : ""}{afterText}
                   </Text>
                 );
               })}
@@ -300,30 +507,32 @@ function Card({ op, agent, onDismiss }: { op: OrsonOperation; agent: AgentContro
                   />
                 </>
               )}
-              {agentFields(c).map((field) => (
-                <View key={field}>
-                  <Text style={styles.label}>{agentFieldLabel(field)}</Text>
-                  {agentFieldOptions[field] ? (
-                    <Choice
-                      label={agentFieldLabel(field)}
-                      value={String(c.values?.[field] ?? "")}
-                      options={agentFieldOptions[field]}
-                      onChange={(value) =>
-                        edit(i, { values: { ...c.values, [field]: value } })
-                      }
-                    />
-                  ) : (
-                    <TextInput
-                      style={styles.input}
-                      editable={!agent.busy}
-                      value={String(c.values?.[field] ?? "")}
-                      onChangeText={(value) =>
-                        edit(i, { values: { ...c.values, [field]: value } })
-                      }
-                    />
-                  )}
-                </View>
-              ))}
+              {agentFields(c).map((field) => {
+                const options = getFieldOptions(field, currentLanguage);
+                const label = getFieldLabel(field, currentLanguage);
+                const val = c.values?.[field];
+                const stringVal = typeof val === "boolean" ? String(val) : String(val ?? "");
+                return (
+                  <View key={field}>
+                    <Text style={styles.label}>{label}</Text>
+                    {options ? (
+                      <Choice
+                        label={label}
+                        value={stringVal}
+                        options={options}
+                        onChange={(value) => handleFieldChange(i, field, value)}
+                      />
+                    ) : (
+                      <TextInput
+                        style={styles.input}
+                        editable={!agent.busy}
+                        value={String(c.values?.[field] ?? "")}
+                        onChangeText={(value) => handleFieldChange(i, field, value)}
+                      />
+                    )}
+                  </View>
+                );
+              })}
               {c.type === "record_feeding" && (
                 <>
                   {(c.allocations || []).map((a, j) => (
@@ -405,7 +614,14 @@ function Card({ op, agent, onDismiss }: { op: OrsonOperation; agent: AgentContro
           />}
           <Button
             title={confirmLabel}
-            disabled={agent.busy || dirty || !selected.length}
+            disabled={
+              agent.busy ||
+              dirty ||
+              !selected.length ||
+              selected.some(
+                (id) => !remaining.find((r) => r.command.id === id)?.valid,
+              )
+            }
             onPress={() => void agent.confirm(op, selected)}
           />
           <Text style={styles.text}>

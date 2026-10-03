@@ -240,12 +240,21 @@ export function useAgentOperations(
         revision: op.revision,
         discard: true,
       }),
-    confirm: (op: OrsonOperation, selectedRowIds: string[]) =>
-      run(
+    confirm: (op: OrsonOperation, selectedRowIds: string[]) => {
+      const selectedSet = new Set(selectedRowIds);
+      const invalidSelected = op.rows?.some(
+        (r) => selectedSet.has(r.command.id) && !r.valid,
+      );
+      if (invalidSelected) {
+        setError("Unresolved rows cannot be confirmed.");
+        return Promise.resolve(null);
+      }
+      return run(
         "confirmOrsonOperation",
         { operationId: op.id, revision: op.revision, selectedRowIds },
         op.id,
-      ),
+      );
+    },
     dismiss: (operationId: string) => {
       if (!mounted.current) return;
       setOperations((old) => old.filter((op) => op.id !== operationId));
