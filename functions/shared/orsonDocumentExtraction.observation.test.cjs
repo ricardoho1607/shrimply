@@ -1,7 +1,9 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
+require("../../scripts/register-typescript.cjs");
 
 const {
+  extractionSchema,
   normalizeScumObservation,
   normalizeDepthToCm,
   resolveSessionDepth,
@@ -12,6 +14,7 @@ const {
 } = require("./orsonDocumentExtraction");
 
 const { createAgentTools } = require("../orsonAgentTools");
+const { normalizeCommand } = require("../../shared/orsonAgentContract.ts");
 
 test("no scum maps to false across explicit negative observation phrases", () => {
   const negatives = [
@@ -111,13 +114,20 @@ test("depth converts deterministically to session-specific centimetres", () => {
   assert.equal(normalizeDepthToCm("1.20 meters"), 120);
   assert.equal(normalizeDepthToCm("0.9 m"), 90);
   assert.equal(normalizeDepthToCm("1.5 metre"), 150);
-  assert.equal(normalizeDepthToCm(1.2), 120);
+  assert.equal(normalizeDepthToCm(1.2), null);
+  assert.equal(normalizeDepthToCm(1.2, "m"), 120);
+  assert.equal(normalizeDepthToCm(1.2, "cm"), 1);
+  assert.equal(normalizeDepthToCm("1.2"), null);
 
   // Centimetre conversions
   assert.equal(normalizeDepthToCm("120 cm"), 120);
   assert.equal(normalizeDepthToCm("120cm"), 120);
   assert.equal(normalizeDepthToCm("120 centimeters"), 120);
-  assert.equal(normalizeDepthToCm(120), 120);
+  assert.equal(normalizeDepthToCm(120), null);
+  assert.equal(normalizeDepthToCm(120, "cm"), 120);
+
+  const canonicalDepth = normalizeObservationValues({ waterDepthCmMorning: 120 });
+  assert.equal(canonicalDepth.waterDepthCmMorning, 120);
 
   // Morning session depth mapping
   const morningExplicit = normalizeObservationValues({
@@ -158,10 +168,35 @@ test("depth converts deterministically to session-specific centimetres", () => {
     "evening",
   );
   assert.equal(genericWithEveningContext.waterDepthCmEvening, 125);
+
+  const declaredMetres = normalizeObservationValues({
+    waterDepthCmMorning: 1.2,
+    waterDepthUnit: "m",
+  });
+  assert.equal(declaredMetres.waterDepthCmMorning, 120);
+
+  const ambiguousDepth = normalizeObservationValues({ depth: "1.2", doMorning: 5.0 });
+  assert.equal(ambiguousDepth.waterDepthCmMorning, "1.2 (unit required)");
+  assert.throws(
+    () => normalizeCommand({
+      id: "ambiguous-depth",
+      type: "upsert_water_quality",
+      date: "2026-09-21",
+      values: ambiguousDepth,
+    }),
+    /waterDepthCmMorning must be a non-negative number\./,
+  );
+
+  const conflictingDepthUnit = normalizeObservationValues({
+    depth: "1.2m",
+    waterDepthUnit: "cm",
+    doMorning: 5.0,
+  });
+  assert.equal(conflictingDepthUnit.waterDepthCmMorning, "1.2m (conflicts with cm)");
 });
 
-test("unsupported units and bases do not draft writes", () => {
-  // Depth in unsupported units (ft, inches, yards) returns null and is not drafted
+test("unsupported units and bases remain unresolved and cannot be saved", () => {
+  // Depth in unsupported units (ft, inches, yards) remains visible but invalid
   assert.equal(normalizeDepthToCm("4 ft"), null);
   assert.equal(normalizeDepthToCm("4 feet"), null);
   assert.equal(normalizeDepthToCm("48 in"), null);
@@ -172,7 +207,7 @@ test("unsupported units and bases do not draft writes", () => {
     depth: "4 ft",
     doMorning: 5.2,
   });
-  assert.equal(Object.hasOwn(depthUnsupported, "waterDepthCmMorning"), false);
+  assert.equal(depthUnsupported.waterDepthCmMorning, "4 ft (unsupported unit)");
   assert.equal(Object.hasOwn(depthUnsupported, "waterDepthCmEvening"), false);
   assert.equal(depthUnsupported.doMorning, 5.2);
 
@@ -184,7 +219,14 @@ test("unsupported units and bases do not draft writes", () => {
   assert.equal(Object.hasOwn(tempUnsupported, "temperatureMorning"), false);
   assert.equal(tempUnsupported.doMorning, 5.2);
 
-  // Nitrite with NO2-N basis is omitted
+  const depthWithUnsupportedDeclaredUnit = normalizeObservationValues({
+    depth: "4 ft",
+    waterDepthUnit: "ft",
+    doMorning: 5.2,
+  });
+  assert.equal(depthWithUnsupportedDeclaredUnit.waterDepthCmMorning, "4 ft (unsupported unit)");
+
+  // Nitrite with NO2-N basis remains visible but fails the canonical contract
   assert.deepEqual(
     normalizeNitrite({ nitriteMgL: 0.5, nitriteBasis: "NO2-N" }),
     {},
@@ -194,8 +236,17 @@ test("unsupported units and bases do not draft writes", () => {
     nitriteBasis: "NO2-N",
     doMorning: 5.0,
   });
-  assert.equal(Object.hasOwn(nitriteNo2N, "nitriteMgL"), false);
-  assert.equal(Object.hasOwn(nitriteNo2N, "nitriteBasis"), false);
+  assert.equal(nitriteNo2N.nitriteMgL, "0.5");
+  assert.equal(nitriteNo2N.nitriteBasis, "NO2-N");
+  assert.throws(
+    () => normalizeCommand({
+      id: "no2-n",
+      type: "upsert_water_quality",
+      date: "2026-09-21",
+      values: nitriteNo2N,
+    }),
+    /Ambiguous or NO2-N nitrite/,
+  );
 
   // Nitrite with ambiguous/missing basis is omitted
   assert.deepEqual(normalizeNitrite({ nitriteMgL: 0.5 }), {});
@@ -207,13 +258,47 @@ test("unsupported units and bases do not draft writes", () => {
     nitriteMgL: 0.5,
     doMorning: 5.0,
   });
-  assert.equal(Object.hasOwn(nitriteAmbiguous, "nitriteMgL"), false);
+  assert.equal(nitriteAmbiguous.nitriteMgL, "0.5");
+  assert.throws(
+    () => normalizeCommand({
+      id: "ambiguous-nitrite",
+      type: "upsert_water_quality",
+      date: "2026-09-21",
+      values: nitriteAmbiguous,
+    }),
+    /Ambiguous or NO2-N nitrite/,
+  );
 
   // Nitrite with unsupported unit (e.g. µg/L) is omitted
   assert.deepEqual(
     normalizeNitrite({ nitriteMgL: 500, nitriteBasis: "NO2", nitriteUnit: "µg/L" }),
     {},
   );
+  assert.deepEqual(
+    normalizeNitrite({ nitriteMgL: 0.5, nitriteBasis: "NO2", nitriteUnit: "ppm" }),
+    {},
+  );
+  const unsupportedPpm = normalizeObservationValues({
+    nitriteMgL: 0.5,
+    nitriteBasis: "NO2",
+    nitriteUnit: "ppm",
+  });
+  assert.equal(unsupportedPpm.nitriteMgL, "0.5 ppm");
+  assert.throws(
+    () => normalizeCommand({
+      id: "ppm-nitrite",
+      type: "upsert_water_quality",
+      date: "2026-09-21",
+      values: unsupportedPpm,
+    }),
+    /nitriteMgL must be a non-negative number\./,
+  );
+  const nitriteWithInlineUnit = normalizeObservationValues({
+    nitriteMgL: "0.5 ppm",
+    nitriteBasis: "NO2",
+    nitriteUnit: "ppm",
+  });
+  assert.equal(nitriteWithInlineUnit.nitriteMgL, "0.5 ppm");
 
   // Supported explicit NO2 basis is drafted
   const nitriteValid = normalizeObservationValues({
@@ -224,7 +309,7 @@ test("unsupported units and bases do not draft writes", () => {
   assert.equal(nitriteValid.nitriteMgL, 0.35);
   assert.equal(nitriteValid.nitriteBasis, "NO2");
 
-  // Commands with only unsupported units drop completely and do not draft writes
+  // Commands with unsupported values stay as unresolved review rows.
   const commands = [
     {
       id: "row-1",
@@ -239,7 +324,38 @@ test("unsupported units and bases do not draft writes", () => {
     },
   ];
   const cleaned = normalizeExtractedCommands(commands);
-  assert.equal(cleaned.length, 0);
+  assert.equal(cleaned.length, 1);
+  assert.throws(() => normalizeCommand(cleaned[0]), /waterDepthCmMorning must be a non-negative number\./);
+
+  const extractedWithoutNitriteUnit = normalizeExtractedCommands([
+    {
+      id: "row-unit-required",
+      type: "upsert_water_quality",
+      date: "2026-09-21",
+      values: { nitriteMgL: "0.5", nitriteBasis: "NO2" },
+    },
+  ], { requireExplicitNitriteUnit: true });
+  assert.equal(extractedWithoutNitriteUnit[0].values.nitriteMgL, "0.5 (unit required)");
+  assert.throws(
+    () => normalizeCommand(extractedWithoutNitriteUnit[0]),
+    /nitriteMgL must be a non-negative number\./,
+  );
+
+  const extractedWithExplicitNitriteUnit = normalizeExtractedCommands([
+    {
+      id: "row-unit-valid",
+      type: "upsert_water_quality",
+      date: "2026-09-21",
+      values: { nitriteMgL: "0.5", nitriteBasis: "NO2", nitriteUnit: "mg/L" },
+    },
+  ], { requireExplicitNitriteUnit: true });
+  assert.equal(extractedWithExplicitNitriteUnit[0].values.nitriteMgL, 0.5);
+  assert.equal(extractedWithExplicitNitriteUnit[0].values.nitriteUnit, undefined);
+  assert.doesNotThrow(() => normalizeCommand(extractedWithExplicitNitriteUnit[0]));
+
+  const extractionFields = extractionSchema.properties.commands.items.properties.values.properties;
+  assert.equal(extractionFields.waterDepthUnit.type, "STRING");
+  assert.equal(extractionFields.nitriteUnit.type, "STRING");
 });
 
 test("embedded advice, instructions, and hypotheticals never gain write authority", async () => {

@@ -187,13 +187,7 @@ function OperationCard({
   operation: OrsonOperation;
   agent: AgentController;
 }) {
-  let currentLanguage = "en";
-  try {
-    const langCtx = useLanguage();
-    if (langCtx?.currentLanguage) currentLanguage = langCtx.currentLanguage;
-  } catch {
-    currentLanguage = "en";
-  }
+  const { currentLanguage } = useLanguage();
   const saved = new Set(
     op.receipts.filter((r) => r.status === "saved").flatMap((r) => r.rowIds),
   );
@@ -205,12 +199,6 @@ function OperationCard({
     remaining.filter((r) => r.valid).map((r) => r.command.id),
   );
   const [dirty, setDirty] = useState(false);
-
-  useEffect(() => {
-    setCommands(remaining.map((r) => r.command));
-    setSelected(remaining.filter((r) => r.valid).map((r) => r.command.id));
-    setDirty(false);
-  }, [op.revision, op.id, op.receipts]);
 
   const [checkingStatus, setCheckingStatus] = useState(false);
   const closed = op.state === "completed" || op.state === "discarded";

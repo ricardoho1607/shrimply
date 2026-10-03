@@ -208,6 +208,9 @@ const validDate = (date) => typeof date === "string" &&
     Number.isFinite(Date.parse(date)) &&
     new Date(date).toISOString().slice(0, 10) === date;
 exports.validDate = validDate;
+const booleanFields = new Set([
+    "surfaceScum",
+]);
 const textFields = new Set([
     "pondName",
     "notes",
@@ -227,6 +230,10 @@ const textFields = new Set([
     "expiry",
     "feedName",
     "additiveName",
+    "weatherEvent",
+    "sludgeLoad",
+    "shrimpBehaviour",
+    "nitriteBasis",
 ]);
 const requiredFields = {
     record_sampling: ["mbw", "feed"],
@@ -245,6 +252,10 @@ const fieldEnums = {
     harvestType: ["partial", "final"],
     cycleEndReason: ["harvested", "disease", "reset", "other"],
     paymentType: ["Unconfirmed", "Cash", "Mobile Payment", "Bank Transfer"],
+    weatherEvent: ["rain", "heavy_rain", "sudden_cloud"],
+    sludgeLoad: ["low", "moderate", "high"],
+    shrimpBehaviour: ["normal", "abnormal"],
+    nitriteBasis: ["NO2"],
 };
 function normalizeCommand(input) {
     if (!input || typeof input !== "object" || !Object.hasOwn(exports.ORSON_ACTIONS, input.type)) {
@@ -312,15 +323,29 @@ function normalizeCommand(input) {
         if (!config.fields.includes(key)) {
             fail(`Unsupported field: ${key}.`, "invalid-argument");
         }
-        if (raw === "" || raw === null || raw === undefined)
+        if (raw === "" ||
+            raw === null ||
+            raw === undefined ||
+            (typeof raw === "string" && raw.trim() === "")) {
             continue;
-        if (textFields.has(key)) {
+        }
+        if (booleanFields.has(key)) {
+            if (typeof raw !== "boolean") {
+                fail(`${key} must be a boolean.`);
+            }
+            result.values[key] = raw;
+        }
+        else if (textFields.has(key)) {
             if (typeof raw !== "string" || raw.length > 1000)
                 fail(`Invalid ${key}.`);
-            result.values[key] = raw.trim();
-            if (fieldEnums[key] && !fieldEnums[key].includes(raw)) {
+            const trimmed = raw.trim();
+            if (key === "nitriteBasis" && trimmed !== "NO2") {
+                fail("Ambiguous or NO2-N nitrite is unresolved; only explicit NO2 is accepted.");
+            }
+            if (fieldEnums[key] && !fieldEnums[key].includes(trimmed)) {
                 fail(`Choose a valid ${key}.`);
             }
+            result.values[key] = trimmed;
         }
         else {
             if (!["number", "string"].includes(typeof raw) ||
@@ -329,9 +354,13 @@ function normalizeCommand(input) {
                 fail(`${key} must be a non-negative number.`);
             }
             const n = Number(raw);
-            if (key.startsWith("ph") && n > 14)
+            if (key.startsWith("ph") && (n < 0 || n > 14)) {
                 fail("pH must be between 0 and 14.");
-            if (["mbw", "quantity", "size", "pondArea", "density", "initialWeight"].includes(key) &&
+            }
+            if (key === "waterExchangePercent" && (n < 0 || n > 100)) {
+                fail("waterExchangePercent must be between 0 and 100.");
+            }
+            if (["mbw", "quantity", "size", "subSize", "pondArea", "density", "initialWeight"].includes(key) &&
                 n <= 0) {
                 fail(`${key} must be greater than zero.`);
             }
@@ -340,6 +369,12 @@ function normalizeCommand(input) {
             }
             result.values[key] = n;
         }
+    }
+    if (result.values.nitriteMgL !== undefined && result.values.nitriteBasis !== "NO2") {
+        fail("Ambiguous or NO2-N nitrite is unresolved; only explicit NO2 is accepted.");
+    }
+    if (result.values.nitriteBasis !== undefined && result.values.nitriteMgL === undefined) {
+        fail("Ambiguous or NO2-N nitrite is unresolved; only explicit NO2 is accepted.");
     }
     for (const field of requiredFields[input.type] || []) {
         if (result.values[field] === undefined || result.values[field] === "") {

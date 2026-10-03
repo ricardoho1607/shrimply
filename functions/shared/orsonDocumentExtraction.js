@@ -23,9 +23,19 @@ const extractionSchema = {
           recordId: { type: "STRING" },
           values: {
             type: "OBJECT",
-            properties: Object.fromEntries(
-              values.map((key) => [key, { type: "STRING" }]),
-            ),
+            properties: {
+              ...Object.fromEntries(values.map((key) => [key, { type: "STRING" }])),
+              waterDepthUnit: {
+                type: "STRING",
+                enum: ["cm", "m", "ft", "in", "unknown"],
+                description: "Source unit for measured depth; never infer when missing.",
+              },
+              nitriteUnit: {
+                type: "STRING",
+                enum: ["mg/L", "ppm", "µg/L", "unknown"],
+                description: "Source concentration unit; only mg/L can be saved as nitriteMgL.",
+              },
+            },
           },
           allocations: {
             type: "ARRAY",
@@ -158,17 +168,30 @@ function normalizeScumObservation(rawScum) {
 /**
  * Converts water depth to centimetres deterministically:
  * - Metres (e.g. 1.2 m, 1.2m, 1.20 meters) -> Math.round(val * 100)
- * - Centimetres (e.g. 120 cm, 120cm, 120) -> Math.round(val)
+ * - Centimetres (e.g. 120 cm, 120cm) -> Math.round(val)
+ * - Bare values require an explicit unit from the field or caller.
  * - Unsupported units (e.g. ft, in, yards, fathoms) return null
  */
+function normalizeDepthUnit(rawUnit) {
+  if (typeof rawUnit !== "string") return null;
+  const unit = rawUnit.trim().toLowerCase();
+  if (["m", "meter", "meters", "metre", "metres"].includes(unit)) return "m";
+  if (["cm", "centimeter", "centimeters", "centimetre", "centimetres"].includes(unit)) return "cm";
+  return null;
+}
+
+function hasExplicitDepthUnit(rawDepth) {
+  if (typeof rawDepth !== "string") return false;
+  return /^[0-9]+(?:\.[0-9]+)?\s*(?:m|meter|meters|metre|metres|cm|centimeter|centimeters|centimetre|centimetres)$/i.test(rawDepth.trim());
+}
+
 function normalizeDepthToCm(rawDepth, defaultUnit = null) {
   if (rawDepth === null || rawDepth === undefined) return null;
   if (typeof rawDepth === "number") {
     if (!Number.isFinite(rawDepth) || rawDepth <= 0) return null;
-    if (defaultUnit === "m" || (defaultUnit === null && rawDepth <= 3)) {
-      return Math.round(rawDepth * 100);
-    }
-    return Math.round(rawDepth);
+    if (defaultUnit === "m") return Math.round(rawDepth * 100);
+    if (defaultUnit === "cm") return Math.round(rawDepth);
+    return null;
   }
   if (typeof rawDepth !== "string") return null;
   const s = rawDepth.trim().toLowerCase();
@@ -182,6 +205,7 @@ function normalizeDepthToCm(rawDepth, defaultUnit = null) {
   // Explicit meters: e.g. "1.2 m", "1.2m", "1.2 meters", "1.2 meter", "1.20 m"
   const mMatch = s.match(/^([0-9]+(?:\.[0-9]+)?)\s*(?:m|meter|meters|metre|metres)$/i);
   if (mMatch) {
+    if (defaultUnit && defaultUnit !== "m") return null;
     const val = Number(mMatch[1]);
     return Number.isFinite(val) && val > 0 ? Math.round(val * 100) : null;
   }
@@ -189,6 +213,7 @@ function normalizeDepthToCm(rawDepth, defaultUnit = null) {
   // Explicit centimetres: e.g. "120 cm", "120cm", "120 centimeters"
   const cmMatch = s.match(/^([0-9]+(?:\.[0-9]+)?)\s*(?:cm|centimeter|centimeters|centimetre|centimetres)$/i);
   if (cmMatch) {
+    if (defaultUnit && defaultUnit !== "cm") return null;
     const val = Number(cmMatch[1]);
     return Number.isFinite(val) && val > 0 ? Math.round(val) : null;
   }
@@ -198,13 +223,37 @@ function normalizeDepthToCm(rawDepth, defaultUnit = null) {
   if (numMatch) {
     const val = Number(numMatch[1]);
     if (!Number.isFinite(val) || val <= 0) return null;
-    if (defaultUnit === "m" || (defaultUnit === null && val <= 3)) {
-      return Math.round(val * 100);
-    }
-    return Math.round(val);
+    if (defaultUnit === "m") return Math.round(val * 100);
+    if (defaultUnit === "cm") return Math.round(val);
+    return null;
   }
 
   return null;
+}
+
+function unresolvedMeasurement(rawValue, declaredUnit, explicitlyUnitized) {
+  const rawText = typeof rawValue === "string" ? rawValue.trim() : String(rawValue);
+  if (/\s*(?:ft|feet|foot|in|inch|inches|yd|yards|fathom|fathoms)$/i.test(rawText)) {
+    return `${rawText} (unsupported unit)`;
+  }
+  if (declaredUnit && !normalizeDepthUnit(declaredUnit)) {
+    const hasSuffix = /(?:[a-zµ°/'"]+)\s*$/i.test(rawText);
+    return `${hasSuffix ? rawText : `${rawText} ${declaredUnit}`} (unsupported unit)`;
+  }
+  if (explicitlyUnitized && declaredUnit) {
+    const normalizedDeclared = normalizeDepthUnit(declaredUnit);
+    const rawUnit = rawText.match(/\s*(cm|centimeters?|centimetres?|m|meters?|metres?)$/i)?.[1];
+    if (normalizedDeclared && rawUnit && normalizeDepthUnit(rawUnit) !== normalizedDeclared) {
+      return `${rawText} (conflicts with ${declaredUnit})`;
+    }
+    return rawText;
+  }
+  if (declaredUnit) {
+    const hasSuffix = /(?:[a-zµ°/'"]+)\s*$/i.test(rawText);
+    return hasSuffix ? rawText : `${rawText} ${declaredUnit}`;
+  }
+  if (/(?:[a-zµ°/'"]+)\s*$/i.test(rawText)) return rawText;
+  return `${rawText} (unit required)`;
 }
 
 /**
@@ -212,8 +261,19 @@ function normalizeDepthToCm(rawDepth, defaultUnit = null) {
  * - waterDepthCmMorning
  * - waterDepthCmEvening
  */
-function resolveSessionDepth(values, sessionHint = null) {
+function resolveSessionDepth(values, sessionHint = null, options = {}) {
   const result = {};
+  const declaredUnit = normalizeDepthUnit(values.waterDepthUnit);
+  const unitText = typeof values.waterDepthUnit === "string" ? values.waterDepthUnit.trim() : "";
+  const normalizeSessionValue = (raw, canonicalCmField = false) => {
+    const explicitUnit = hasExplicitDepthUnit(raw);
+    const unit = declaredUnit || (canonicalCmField && !explicitUnit ? "cm" : null);
+    const invalidDeclaredUnit = Boolean(unitText) && !declaredUnit;
+    const unitIsKnown = !invalidDeclaredUnit && (explicitUnit || Boolean(declaredUnit) || (canonicalCmField && !options.requireExplicitDepthUnit));
+    const cm = normalizeDepthToCm(raw, unit);
+    if (cm !== null && unitIsKnown) return cm;
+    return unresolvedMeasurement(raw, unitText, explicitUnit);
+  };
 
   const rawMorning =
     values.waterDepthCmMorning ??
@@ -223,8 +283,10 @@ function resolveSessionDepth(values, sessionHint = null) {
     values.depthAm ??
     values.amDepth;
   if (rawMorning !== undefined && rawMorning !== null) {
-    const cm = normalizeDepthToCm(rawMorning);
-    if (cm !== null) result.waterDepthCmMorning = cm;
+    result.waterDepthCmMorning = normalizeSessionValue(
+      rawMorning,
+      Object.hasOwn(values, "waterDepthCmMorning"),
+    );
   }
 
   const rawEvening =
@@ -235,32 +297,35 @@ function resolveSessionDepth(values, sessionHint = null) {
     values.depthPm ??
     values.pmDepth;
   if (rawEvening !== undefined && rawEvening !== null) {
-    const cm = normalizeDepthToCm(rawEvening);
-    if (cm !== null) result.waterDepthCmEvening = cm;
+    result.waterDepthCmEvening = normalizeSessionValue(
+      rawEvening,
+      Object.hasOwn(values, "waterDepthCmEvening"),
+    );
   }
 
-  const rawGeneric = values.waterDepth ?? values.depth ?? values.waterDepthCm;
+  const rawGeneric = values.waterDepthCm ?? values.waterDepth ?? values.depth;
   if (
     rawGeneric !== undefined &&
     rawGeneric !== null &&
-    !result.waterDepthCmMorning &&
-    !result.waterDepthCmEvening
+    result.waterDepthCmMorning === undefined &&
+    result.waterDepthCmEvening === undefined
   ) {
-    const cm = normalizeDepthToCm(rawGeneric);
-    if (cm !== null) {
-      const isEvening =
-        sessionHint === "evening" ||
-        ((values.doEvening !== undefined ||
-          values.phEvening !== undefined ||
-          values.temperatureEvening !== undefined) &&
-          values.doMorning === undefined &&
-          values.phMorning === undefined &&
-          values.temperatureMorning === undefined);
-      if (isEvening) {
-        result.waterDepthCmEvening = cm;
-      } else {
-        result.waterDepthCmMorning = cm;
-      }
+    const depth = normalizeSessionValue(
+      rawGeneric,
+      Object.hasOwn(values, "waterDepthCm"),
+    );
+    const isEvening =
+      sessionHint === "evening" ||
+      ((values.doEvening !== undefined ||
+        values.phEvening !== undefined ||
+        values.temperatureEvening !== undefined) &&
+        values.doMorning === undefined &&
+        values.phMorning === undefined &&
+        values.temperatureMorning === undefined);
+    if (isEvening) {
+      result.waterDepthCmEvening = depth;
+    } else {
+      result.waterDepthCmMorning = depth;
     }
   }
 
@@ -271,9 +336,9 @@ function resolveSessionDepth(values, sessionHint = null) {
  * Validates and normalizes nitrite:
  * - ONLY explicit NO2 is accepted.
  * - Ambiguous, missing, or NO2-N basis is unresolved and returns {} (do not draft writes).
- * - Unsupported units (other than mg/L or ppm) return {}.
+ * - Only mg/L can be stored as nitriteMgL; unsupported units return {}.
  */
-function normalizeNitrite(values) {
+function normalizeNitrite(values, { requireExplicitUnit = false } = {}) {
   const rawNitrite = values.nitriteMgL ?? values.nitrite ?? values.no2;
   const rawBasis = values.nitriteBasis ?? values.nitrogenBasis ?? values.basis;
   const rawUnit = values.nitriteUnit ?? values.unit;
@@ -282,12 +347,16 @@ function normalizeNitrite(values) {
     return {};
   }
 
-  if (typeof rawUnit === "string" && rawUnit.trim()) {
-    const u = rawUnit.trim().toLowerCase();
-    if (u !== "mg/l" && u !== "ppm") {
-      return {}; // unsupported unit
-    }
-  }
+  const valueMatch = typeof rawNitrite === "string"
+    ? rawNitrite.trim().match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(mg\/l|ppm|µg\/l|ug\/l)?$/i)
+    : null;
+  if (typeof rawNitrite === "string" && !valueMatch) return {};
+  const valueUnit = valueMatch?.[2]?.toLowerCase();
+  const declaredUnit = typeof rawUnit === "string" ? rawUnit.trim().toLowerCase() : "";
+  if (declaredUnit && declaredUnit !== "mg/l") return {};
+  if (valueUnit && valueUnit !== "mg/l") return {};
+  if (declaredUnit && valueUnit && declaredUnit !== valueUnit) return {};
+  if (requireExplicitUnit && !(declaredUnit || valueUnit)) return {};
 
   if (rawBasis === undefined || rawBasis === null) {
     return {}; // ambiguous/unspecified basis
@@ -297,7 +366,7 @@ function normalizeNitrite(values) {
     return {}; // NO2-N or non-NO2 basis
   }
 
-  const num = Number(rawNitrite);
+  const num = Number(valueMatch ? valueMatch[1] : rawNitrite);
   if (!Number.isFinite(num) || num < 0) {
     return {};
   }
@@ -411,7 +480,7 @@ function isAdviceInstructionOrHypothetical(entry) {
  * - Nitrite: explicit NO2 accepted; NO2-N/ambiguous omitted
  * - Enums and valid ranges normalized
  */
-function normalizeObservationValues(rawValues, sessionHint = null) {
+function normalizeObservationValues(rawValues, sessionHint = null, options = {}) {
   if (!rawValues || typeof rawValues !== "object") return {};
   const result = {};
 
@@ -427,12 +496,36 @@ function normalizeObservationValues(rawValues, sessionHint = null) {
   }
 
   // 2. Depth conversion to session-specific centimetres
-  const depthSession = resolveSessionDepth(rawValues, sessionHint);
+  const depthSession = resolveSessionDepth(rawValues, sessionHint, options);
   Object.assign(result, depthSession);
 
   // 3. Nitrite basis & unit validation
-  const nitriteNormalized = normalizeNitrite(rawValues);
+  const nitriteNormalized = normalizeNitrite(rawValues, {
+    requireExplicitUnit: options.requireExplicitNitriteUnit === true,
+  });
   Object.assign(result, nitriteNormalized);
+  const rawNitrite = rawValues.nitriteMgL ?? rawValues.nitrite ?? rawValues.no2;
+  if (
+    Object.keys(nitriteNormalized).length === 0 &&
+    rawNitrite !== undefined &&
+    rawNitrite !== null &&
+    rawNitrite !== ""
+  ) {
+    const rawUnit = rawValues.nitriteUnit ?? rawValues.unit;
+    const rawBasis = rawValues.nitriteBasis ?? rawValues.nitrogenBasis ?? rawValues.basis;
+    const rawText = String(rawNitrite).trim();
+    const unitText = typeof rawUnit === "string" ? rawUnit.trim() : "";
+    const valueHasUnit = /(?:mg\/l|ppm|µg\/l|ug\/l)\s*$/i.test(rawText);
+    const unitConflict = valueHasUnit && unitText && rawText.match(/(?:mg\/l|ppm|µg\/l|ug\/l)\s*$/i)?.[0].trim().toLowerCase() !== unitText.toLowerCase();
+    result.nitriteMgL = unitConflict
+      ? `${rawText} (conflicts with ${unitText})`
+      : valueHasUnit || !unitText
+        ? `${rawText}${options.requireExplicitNitriteUnit && !valueHasUnit && !unitText ? " (unit required)" : ""}`
+        : `${rawText} ${unitText}`;
+    if (rawBasis !== undefined && rawBasis !== null && rawBasis !== "") {
+      result.nitriteBasis = rawBasis;
+    }
+  }
 
   // 4. Other water quality fields
   for (const [key, raw] of Object.entries(rawValues)) {
@@ -441,7 +534,7 @@ function normalizeObservationValues(rawValues, sessionHint = null) {
         "surfaceScum", "scum", "surface_scum",
         "waterDepth", "depth", "waterDepthCm", "waterDepthCmMorning", "waterDepthCmEvening",
         "morningDepth", "eveningDepth", "depthMorning", "depthEvening", "waterDepthMorning", "waterDepthEvening",
-        "nitriteMgL", "nitrite", "no2", "nitriteBasis", "nitrogenBasis", "nitriteUnit",
+        "nitriteMgL", "nitrite", "no2", "nitriteBasis", "nitrogenBasis", "nitriteUnit", "waterDepthUnit", "unit",
       ].includes(key)
     ) {
       continue;
@@ -515,7 +608,7 @@ function normalizeExtractedCommands(commands, options = {}) {
     const command = { ...cmd };
     if (command.values && typeof command.values === "object") {
       if (command.type === "upsert_water_quality") {
-        command.values = normalizeObservationValues(command.values, options.session);
+        command.values = normalizeObservationValues(command.values, options.session, options);
       } else {
         const cleanedValues = {};
         for (const [k, v] of Object.entries(command.values)) {
