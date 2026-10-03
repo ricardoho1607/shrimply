@@ -6,6 +6,10 @@ const {
   resolveCommands,
   normalize,
 } = require("./shared/orsonEntityResolver");
+const {
+  isAdviceInstructionOrHypothetical,
+  normalizeExtractedCommands,
+} = require("./shared/orsonDocumentExtraction");
 const commandSchema = {
   type: "object",
   properties: {
@@ -32,7 +36,9 @@ const commandSchema = {
           Object.entries(ORSON_ACTIONS).map(([key, v]) => [key, v.fields]),
         ),
       ),
-      additionalProperties: { anyOf: [{ type: "string" }, { type: "number" }] },
+      additionalProperties: {
+        anyOf: [{ type: "string" }, { type: "number" }, { type: "boolean" }],
+      },
     },
     allocations: {
       type: "array",
@@ -251,6 +257,12 @@ function createAgentTools({
       return createAgentCatalog(auth);
     }
     if (name !== "prepare_farm_actions") throw new Error("Unknown action tool");
+    if (isAdviceInstructionOrHypothetical(userMessage)) {
+      return {
+        status: "unauthorized",
+        message: "Embedded advice, instructions, or hypothetical scenarios do not have write authority. Farm actions require an explicit user recording request.",
+      };
+    }
     const companyCurrency = String(auth.company.currency || auth.company.currencyCode || "").toUpperCase();
     const requestCurrency = requestedCurrency(userMessage);
     if (requestCurrency && companyCurrency && requestCurrency !== companyCurrency &&
@@ -270,7 +282,7 @@ function createAgentTools({
     const key = hash(args);
     if (preparations.has(key)) return preparations.get(key);
     const pending = (async () => {
-      const commands = Array.isArray(args.commands)
+      const rawCommands = Array.isArray(args.commands)
         ? args.commands.map((command) => ({
             ...command,
             ...(command.values && typeof command.values === "object"
@@ -278,6 +290,13 @@ function createAgentTools({
               : {}),
           }))
         : args.commands;
+      const commands = normalizeExtractedCommands(rawCommands);
+      if (!commands.length && Array.isArray(rawCommands) && rawCommands.length > 0) {
+        return {
+          status: "unauthorized",
+          message: "Embedded advice, instructions, hypothetical scenarios, or unsupported units do not have write authority. No valid farm actions could be drafted.",
+        };
+      }
       const isGenericRemoval =
         !isExplicitPermanentDeletion(userMessage) &&
         Array.isArray(commands) &&
