@@ -4114,7 +4114,7 @@ nav.scrolled {
   white-space: nowrap;
 }
 
-.water-history-button,
+.water-text-action,
 .water-quick-log {
   border: 0;
   background: transparent;
@@ -4125,14 +4125,16 @@ nav.scrolled {
   cursor: pointer;
 }
 
-.water-history-button {
-  width: 30px;
-  height: 30px;
+.water-text-action {
+  min-height: 30px;
+  padding: 0 9px;
   border-radius: 7px;
   flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: var(--weight-medium);
 }
 
-.water-history-button:hover,
+.water-text-action:hover,
 .water-quick-log:hover {
   background: var(--primary-dim);
 }
@@ -4212,34 +4214,21 @@ nav.scrolled {
 }
 
 .water-metric-grid .wq-value {
+  display: block;
   color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  gap: 7px;
   font-size: 13px;
   font-weight: var(--weight-semibold);
   line-height: 18px;
 }
 
-.water-metric-grid .wq-value svg {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 auto;
-}
-
 .water-pond-actions {
   min-height: 38px;
-  padding: 5px 8px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
 }
 
 .water-quick-log {
-  min-height: 30px;
-  padding: 0 8px;
+  min-height: 26px;
+  padding: 0 9px;
   border-radius: 7px;
-  gap: 4px;
   font-size: 11px;
   font-weight: var(--weight-medium);
 }

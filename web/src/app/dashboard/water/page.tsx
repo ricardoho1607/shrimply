@@ -9,20 +9,14 @@ import {
   Plus,
   Droplets,
   Search,
-  Activity,
-  Thermometer,
-  Wind,
   X,
   Loader2,
-  History,
   Info,
   FileText,
   CheckCircle2,
   ClipboardList,
   ChevronDown,
   ExternalLink,
-  Eye,
-  Compass,
   type LucideIcon
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -1091,23 +1085,23 @@ export default function WaterQualityPage() {
             const latest = getLatestWQ(pond);
             const labStyle = getSeverityStyle(pond.latestLabStatus?.status);
             return (
-              <article key={pond.id} className={`glass-card water-pond-card animate-fade-up animate-delay-${(idx % 4) + 1}`}>
-                <div className="water-pond-header">
+              <article key={pond.id} className={`glass-card ponds-overview-card water-pond-card animate-fade-up animate-delay-${(idx % 4) + 1}`}>
+                <div className="ponds-card-header water-pond-header">
                   <div className="water-pond-identity">
                     <div>
                       <h3>{pond.pondName}</h3>
                       <p>
-                        {latest ? `${copy('UPDATED')} ${new Date(latest.date).toLocaleDateString()}` : copy('NO DATA LOGGED')}
+                        {copy('Daily Log')}
                       </p>
                     </div>
                   </div>
                   <button
                     onClick={() => setSelectedPondForHistory(pond)}
-                    className="water-history-button"
+                    className="water-text-action"
                     aria-label={copy('View {pond} water quality history', { pond: pond.pondName })}
                     title={copy('View history')} disabled={savePending}
                   >
-                    <History size={17} />
+                    {copy('View history')}
                   </button>
                 </div>
 
@@ -1125,73 +1119,57 @@ export default function WaterQualityPage() {
                   </div>
                 )}
 
-                <div className="water-metric-grid">
+                <div className="ponds-card-metrics water-metric-grid">
                   <div className="wq-metric">
                     <span className="wq-label">{copy('pH Level')}</span>
-                    <div className="wq-value">
-                      <Activity size={16} color="var(--accent)" />
-                      <span>{latest ? `${latest.phMorning || 'N/A'} / ${latest.phEvening || 'N/A'}` : 'N/A'}</span>
-                    </div>
+                    <strong className="wq-value">{latest ? `${latest.phMorning || 'N/A'} / ${latest.phEvening || 'N/A'}` : 'N/A'}</strong>
                   </div>
                   <div className="wq-metric">
                     <span className="wq-label">DO (mg/L)</span>
-                    <div className="wq-value">
-                      <Wind size={16} color="var(--primary)" />
-                      <span>{latest ? `${latest.doMorning || 'N/A'} / ${latest.doEvening || 'N/A'}` : 'N/A'}</span>
-                    </div>
+                    <strong className="wq-value">{latest ? `${latest.doMorning || 'N/A'} / ${latest.doEvening || 'N/A'}` : 'N/A'}</strong>
                   </div>
                   <div className="wq-metric">
                     <span className="wq-label">{copy('Temperature')}</span>
-                    <div className="wq-value">
-                      <Thermometer size={16} color="#ef4444" />
-                      <span>{latest ? (
+                    <strong className="wq-value">{latest ? (
                         hasSavedValue(latest.temperatureMorning) || hasSavedValue(latest.temperatureEvening)
                           ? `${latest.temperatureMorning || 'N/A'} / ${latest.temperatureEvening || 'N/A'} °C`
                           : hasSavedValue(latest.temperature) ? `${latest.temperature} °C` : 'N/A'
-                      ) : 'N/A'}</span>
-                    </div>
+                      ) : 'N/A'}</strong>
                   </div>
                   <div className="wq-metric">
                     <span className="wq-label">{copy('Transparency')}</span>
-                    <div className="wq-value">
-                      <Eye size={16} color="#f59e0b" />
-                      <span>{latest ? (
+                    <strong className="wq-value">{latest ? (
                         hasSavedValue(latest.transparencyMorning) || hasSavedValue(latest.transparencyEvening)
                           ? `${latest.transparencyMorning || 'N/A'} / ${latest.transparencyEvening || 'N/A'} CM`
                           : hasSavedValue(latest.transparency) ? `${latest.transparency} CM` : 'N/A'
-                      ) : 'N/A'}</span>
-                    </div>
+                      ) : 'N/A'}</strong>
                   </div>
                   <div className="wq-metric">
                     <span className="wq-label">{copy('Salinity')}</span>
-                    <div className="wq-value">
-                      <Droplets size={16} color="#10b981" />
-                      <span>{latest && hasSavedValue(latest.salinity) ? `${latest.salinity} PPT` : 'N/A'}</span>
-                    </div>
+                    <strong className="wq-value">{latest && hasSavedValue(latest.salinity) ? `${latest.salinity} PPT` : 'N/A'}</strong>
                   </div>
                   <div className="wq-metric">
                     <span className="wq-label">{t.dailyOperationsReports.waterDepth}</span>
-                    <div className="wq-value">
-                      <Compass size={16} color="#3b82f6" />
-                      <span>{latest ? (
+                    <strong className="wq-value">{latest ? (
                         hasSavedValue(latest.waterDepthCmMorning) || hasSavedValue(latest.waterDepthCmEvening)
                           ? `${latest.waterDepthCmMorning || 'N/A'} / ${latest.waterDepthCmEvening || 'N/A'} CM`
                           : hasSavedValue(latest.waterDepthCm) ? `${latest.waterDepthCm} CM` : 'N/A'
-                      ) : 'N/A'}</span>
-                    </div>
+                      ) : 'N/A'}</strong>
                   </div>
                 </div>
 
-                {canEditWater && (
-                  <div className="water-pond-actions">
+                <div className="ponds-card-footer water-pond-actions">
+                  <span>{latest ? `${copy('UPDATED')} ${new Date(latest.date).toLocaleDateString()}` : copy('NO DATA LOGGED')}</span>
+                  {canEditWater && (
                     <button
+                      type="button"
                       onClick={() => openWaterRecord(pond.id)}
                       className="water-quick-log" disabled={savePending}
                     >
-                      <Plus size={15} /> {copy('Log')}
+                      {copy('Log')}
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </article>
             );
           })}

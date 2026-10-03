@@ -86,6 +86,7 @@ interface Sampling {
   surfaceScum?: boolean | null;
   shrimpBehaviour?: 'normal' | 'abnormal' | null;
   feedData?: FeedData;
+  feedEntryStatus?: 'recorded' | 'not_recorded' | 'fasted';
   isBaselineEstimate?: boolean;
   source?: string;
   estimatedPopulation?: number;
@@ -238,7 +239,14 @@ function PondCard({ pond, calculateMetrics, timeZone }: { pond: Pond; calculateM
     const todaySampling = pond.samplings?.find((s) => s.date === today);
     const wqPosted = !!(todaySampling?.phMorning || todaySampling?.phEvening || todaySampling?.doMorning || todaySampling?.doEvening);
     const todayFeedRecord = [...(pond.samplings || [])].reverse().find((sampling: Sampling) => (
-      sampling.date === today && (Number(sampling.feed) > 0 || Number(sampling.feedData?.totalDailyFeed) > 0)
+      sampling.date === today
+      && !sampling.isBaselineEstimate
+      && sampling.source !== 'midcycle_onboarding'
+      && (
+        sampling.feedEntryStatus === 'recorded'
+        || Number(sampling.feed) > 0
+        || Number(sampling.feedData?.totalDailyFeed) > 0
+      )
     ));
     const feedPosted = Boolean(todayFeedRecord);
     const todayFeedResponse = getLatestFeedResponseForDate(pond.samplings, today, {
