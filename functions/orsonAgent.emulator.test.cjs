@@ -1060,3 +1060,172 @@ test("rejects voiding with multiple commands, missing record, treatment mix item
   assert.equal(prodOp.rows[0].valid, false);
   assert.equal(prodOp.rows[0].error, "Treatment mix production cannot be voided through purchase voiding.");
 });
+
+test("observation-only entry needs no MBW/feed and leaves inventory, costs and finance unchanged", async () => {
+  // Fresh pond with no prior samplings
+  const op = await prepare([
+    command("upsert_water_quality", {
+      doMorning: 5.8,
+      phMorning: 7.9,
+      waterDepthCmMorning: 120,
+      surfaceScum: false,
+      nitriteMgL: 0.25,
+      nitriteBasis: "NO2",
+    }),
+  ]);
+  assert.equal(op.rows[0].valid, true);
+  const confirmed = await confirm(op);
+  assert.equal(confirmed.state, "completed");
+
+  const p1 = await get("ponds/p1");
+  assert.equal(p1.samplings.length, 1);
+  const record = p1.samplings[0];
+  assert.equal(record.doMorning, "5.8");
+  assert.equal(record.phMorning, "7.9");
+  assert.equal(record.waterDepthCmMorning, 120);
+  assert.equal(typeof record.waterDepthCmMorning, "number");
+  assert.equal(record.surfaceScum, false);
+  assert.equal(typeof record.surfaceScum, "boolean");
+  assert.equal(record.nitriteMgL, 0.25);
+  assert.equal(typeof record.nitriteMgL, "number");
+  assert.equal(record.nitriteBasis, "NO2");
+
+  // Crucial: Observation-only entry has NO mbw, feed, or mortality
+  assert.equal(record.mbw, undefined);
+  assert.equal(record.feed, undefined);
+  assert.equal(record.feedData, undefined);
+  assert.equal(record.mortality, undefined);
+
+  // Crucial: Inventory remains completely untouched
+  const feedA = await get("feeds/feed-a");
+  assert.equal(feedA.totalStock, 100);
+  assert.equal(feedA.totalCost, 200);
+  assert.deepEqual(feedA.usageHistory, []);
+
+  // Crucial: Finance (expenses and revenues) remains completely untouched
+  const expensesSnap = await db.collection(`companies/${companyId}/expenses`).get();
+  assert.equal(expensesSnap.docs.length, 0);
+  const revenuesSnap = await db.collection(`companies/${companyId}/revenues`).get();
+  assert.equal(revenuesSnap.docs.length, 0);
+});
+
+test("existing id, date, cycle and other sessions survive updates and corrections", async () => {
+  // Pre-seed an existing sampling record with morning session and biological/cycle metadata
+  const existingRecord = {
+    id: "sample-existing-42",
+    date,
+    cycleId: "cycle-a",
+    pondCycleId: "p1",
+    cycleName: "Alpha Cycle",
+    doMorning: "5.2",
+    phMorning: "7.7",
+    temperatureMorning: "28.5",
+    waterDepthCmMorning: 110,
+    surfaceScum: true,
+  };
+  await db.doc(`companies/${companyId}/ponds/p1`).update({
+    samplings: [existingRecord],
+  });
+
+  // Now submit evening observation to the same date
+  const op = await prepare([
+    command("upsert_water_quality", {
+      doEvening: 6.3,
+      phEvening: 8.1,
+      temperatureEvening: 29.5,
+      waterDepthCmEvening: 115,
+      surfaceScum: false,
+    }),
+  ]);
+  assert.equal(op.rows[0].valid, true);
+  await confirm(op);
+
+  const p1 = await get("ponds/p1");
+  assert.equal(p1.samplings.length, 1);
+  const updated = p1.samplings[0];
+
+  // Existing id, date, cycle survive
+  assert.equal(updated.id, "sample-existing-42");
+  assert.equal(updated.date, date);
+  assert.equal(updated.cycleId, "cycle-a");
+  assert.equal(updated.pondCycleId, "p1");
+
+  // Morning session survived untouched
+  assert.equal(updated.doMorning, "5.2");
+  assert.equal(updated.phMorning, "7.7");
+  assert.equal(updated.temperatureMorning, "28.5");
+  assert.equal(updated.waterDepthCmMorning, 110);
+
+  // Evening session and typed fields were added/updated
+  assert.equal(updated.doEvening, "6.3");
+  assert.equal(updated.phEvening, "8.1");
+  assert.equal(updated.temperatureEvening, "29.5");
+  assert.equal(updated.waterDepthCmEvening, 115);
+  assert.equal(typeof updated.waterDepthCmEvening, "number");
+  assert.equal(updated.surfaceScum, false);
+  assert.equal(typeof updated.surfaceScum, "boolean");
+});
+
+test("water quality confirmation retries remain idempotent", async () => {
+  const op = await prepare([
+    command("upsert_water_quality", {
+      doMorning: 5.6,
+      surfaceScum: false,
+    }),
+  ]);
+  const res1 = await confirm(op);
+  assert.equal(res1.state, "completed");
+  assert.equal((await get("ponds/p1")).samplings.length, 1);
+
+  // Retry confirming the exact same operation
+  const res2 = await confirm(op);
+  assert.equal(res2.state, "completed");
+  assert.equal((await get("ponds/p1")).samplings.length, 1);
+  assert.equal((await get("ponds/p1")).samplings[0].doMorning, "5.6");
+  assert.equal((await get("ponds/p1")).samplings[0].surfaceScum, false);
+});
+
+test("concurrent edit to the same reading rejects confirmation", async () => {
+  const op = await prepare([
+    command("upsert_water_quality", { doMorning: 5.5 }),
+  ]);
+  assert.equal(op.rows[0].valid, true);
+
+  // Someone concurrently writes a sampling on that date
+  await db.doc(`companies/${companyId}/ponds/p1`).update({
+    samplings: [
+      { id: "concurrent-row", date, doMorning: "6.0", phMorning: "7.8" },
+    ],
+  });
+
+  // Attempting to confirm the prepared draft must reject due to changed basis
+  await assert.rejects(confirm(op), /changed/i);
+});
+
+test("permission revocation rejects confirmation of prepared observation draft", async () => {
+  const op = await service.prepare({
+    uid: "tech",
+    companyId,
+    commands: [
+      command("upsert_water_quality", { doMorning: 5.5 }),
+    ],
+  });
+  assert.equal(op.rows[0].valid, true);
+
+  // Revoke permission
+  await db
+    .doc("users/tech")
+    .update({ permissionOverrides: { recordPondData: false } });
+
+  // Confirmation must reject
+  await assert.rejects(
+    service.confirm({
+      uid: "tech",
+      companyId,
+      operationId: op.id,
+      revision: op.revision,
+      selectedRowIds: ["row-1"],
+    }),
+    /permission/i,
+  );
+});

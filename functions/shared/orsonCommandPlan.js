@@ -1,5 +1,16 @@
 const { fail, validId } = require("./orsonActionAuth");
-const { normalizeCommand, ORSON_ACTIONS } = require("./orsonDomain/orsonAgentContract");
+let contract;
+try {
+  contract = require("../../shared/orsonAgentContract");
+} catch {
+  try {
+    require("../../scripts/register-typescript.cjs");
+    contract = require("../../shared/orsonAgentContract.ts");
+  } catch {
+    contract = require("./orsonDomain/orsonAgentContract");
+  }
+}
+const { normalizeCommand, ORSON_ACTIONS } = contract;
 const {
   reconcileDailyFeedStock,
 } = require("./orsonDomain/dailyFeedTransaction");
@@ -299,12 +310,17 @@ async function planCommands({ auth, commands, operationId, transaction }) {
       let next = {
         ...(previous || {
           id: c.type === "record_feeding" ? `feed-${c.date}` : generatedId,
-          mbw: 0,
-          mortality: 0,
+          ...(c.type === "upsert_water_quality" ? {} : { mbw: 0, mortality: 0 }),
         }),
-        date: c.date,
+        date: previous?.date || c.date,
         ...cycleKeys(pond),
+        ...(previous?.cycleId ? { cycleId: previous.cycleId } : {}),
+        ...(previous?.pondCycleId ? { pondCycleId: previous.pondCycleId } : {}),
+        ...(previous?.cycleName ? { cycleName: previous.cycleName } : {}),
       };
+      if (previous?.id) {
+        next.id = previous.id;
+      }
       if (c.type === "record_feeding") {
         const oldAllocations = normalizeFeedAllocations(previous?.feedData);
         const ids = [
@@ -356,8 +372,23 @@ async function planCommands({ auth, commands, operationId, transaction }) {
               : null,
         };
       } else {
-        for (const [key, value] of Object.entries(v))
-          next[key] = c.type === "upsert_water_quality" ? String(value) : value;
+        for (const [key, value] of Object.entries(v)) {
+          if (typeof value === "boolean" || key === "surfaceScum") {
+            next[key] = typeof value === "boolean" ? value : value === "true";
+          } else if (
+            [
+              "waterDepthCmMorning",
+              "waterDepthCmEvening",
+              "waterExchangePercent",
+              "nitriteMgL",
+            ].includes(key) &&
+            typeof value === "number"
+          ) {
+            next[key] = value;
+          } else {
+            next[key] = c.type === "upsert_water_quality" ? String(value) : value;
+          }
+        }
         if (c.type === "upsert_water_quality")
           for (const [key, value] of Object.entries(v)) {
             if (key.startsWith("do") && Number(value) < 4)

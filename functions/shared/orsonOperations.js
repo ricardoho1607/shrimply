@@ -1,6 +1,18 @@
 const { randomUUID } = require("node:crypto");
 const { authorizeAgent, validId, fail } = require("./orsonActionAuth");
 const { planCommands, hash, clean } = require("./orsonCommandPlan");
+let contract;
+try {
+  contract = require("../../shared/orsonAgentContract");
+} catch {
+  try {
+    require("../../scripts/register-typescript.cjs");
+    contract = require("../../shared/orsonAgentContract.ts");
+  } catch {
+    contract = require("./orsonAgentContract");
+  }
+}
+const { ORSON_ACTIONS } = contract;
 const MAX_ROWS = 30;
 const publicOperation = (op) => ({
   id: op.id,
@@ -42,7 +54,6 @@ function createOperationService(db) {
     for (const row of Array.isArray(op.rows) ? op.rows : []) {
       if (!row.valid) continue;
       const command = row.command;
-      const { ORSON_ACTIONS } = require("./orsonAgentContract");
       const action = command && ORSON_ACTIONS[command.type];
       if (!action)
         fail(
@@ -121,7 +132,7 @@ function createOperationService(db) {
           typeof c.values !== "object" ||
           Array.isArray(c.values) ||
           Object.values(c.values).some(
-            (v) => !["string", "number"].includes(typeof v),
+            (v) => !["string", "number", "boolean"].includes(typeof v),
           ) ||
           (c.allocations !== undefined &&
             (!Array.isArray(c.allocations) ||
@@ -132,7 +143,7 @@ function createOperationService(db) {
                   !["number", "string"].includes(typeof a.quantityKg),
               )))
         )
-          fail("Entry fields must contain text or numbers.");
+          fail("Entry fields must contain text, numbers, or booleans.");
         ids.add(c.id);
       }
       const rows = [];
@@ -339,6 +350,8 @@ function createOperationService(db) {
           });
         });
       } catch (error) {
+        if (["permission-denied", "unauthenticated"].includes(error.code))
+          throw error;
         // Store an unsuccessful result only after fresh authorization; no domain write occurred.
         await db.runTransaction(async (tx) => {
           await authorizeAgent(db, uid, companyId, tx);
