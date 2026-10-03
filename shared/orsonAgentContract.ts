@@ -20,6 +20,15 @@ export const ORSON_ACTIONS = {
       "salinity",
       "alkalinity",
       "ammonia",
+      "nitriteMgL",
+      "nitriteBasis",
+      "weatherEvent",
+      "waterExchangePercent",
+      "sludgeLoad",
+      "surfaceScum",
+      "shrimpBehaviour",
+      "waterDepthCmMorning",
+      "waterDepthCmEvening",
       "operationalNotes",
     ],
   },
@@ -114,7 +123,7 @@ export type OrsonCommand = {
   itemId?: string;
   itemType?: "feed" | "additive";
   recordId?: string;
-  values: Record<string, string | number>;
+  values: Record<string, string | number | boolean>;
   allocations?: { inventoryFeedId: string; quantityKg: number }[];
 };
 export type OrsonDraftRow = {
