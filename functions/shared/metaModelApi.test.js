@@ -14,6 +14,9 @@ const jsonResponse = (body, status = 200) => new Response(JSON.stringify(body), 
 });
 
 test('diagnostic requests send high reasoning while routine requests stay low', async () => {
+  assert.equal(getOrsonGenerationSettings('standard').timeoutMs, 60000);
+  assert.equal(getOrsonGenerationSettings('pond_diagnostic').timeoutMs, 90000);
+
   for (const mode of ['standard', 'pond_diagnostic', 'mortality_diagnostic']) {
     await generateMetaModelResponse({
       apiKey: 'test-key', systemInstruction: 'test', prompt: 'test',
@@ -320,4 +323,3 @@ test('streaming with tool calls executes tool exactly once without duplicate cal
   assert.deepEqual(emitted, ['123 kg ', 'available.']);
   assert.equal(result.text, '123 kg available.');
 });
-
