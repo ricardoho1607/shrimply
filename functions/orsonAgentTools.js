@@ -10,7 +10,9 @@ const {
 const {
   isAdviceInstructionOrHypothetical,
   normalizeExtractedCommands,
+  normalizeDepthToCm,
 } = require("./shared/orsonDocumentExtraction");
+const { farmDateKey, shiftDateKey } = require("./farmDate");
 const commandSchema = {
   type: "object",
   properties: {
@@ -96,6 +98,226 @@ const extractExplicitObservedWeatherEvent = (message) => {
   if (forecastOrFuture.test(text) || negated.test(text) || notObservedAfter.test(text)) return null;
   return events[0];
 };
+const DEPTH_FIELDS = {
+  waterDepthCmMorning: "morning", morningDepth: "morning", depthMorning: "morning",
+  waterDepthMorning: "morning", depthAm: "morning", amDepth: "morning",
+  waterDepthCmEvening: "evening", eveningDepth: "evening", depthEvening: "evening",
+  waterDepthEvening: "evening", depthPm: "evening", pmDepth: "evening",
+  waterDepthCm: null, waterDepth: null, depth: null,
+};
+const supplied = (value) => value !== null && value !== undefined &&
+  !(typeof value === "string" && !value.trim());
+const depthLabel = /\b(?:water\s+depth|depth|kedalaman(?:\s+air)?)\b/i;
+const sessionPattern = /\b(morning|am|pagi|evening|pm|sore|malam)\b/gi;
+const depthSession = (word) => /^(morning|am|pagi)$/i.test(word) ? "morning" : "evening";
+const clarifyDepth = (message) => {
+  throw Object.assign(new Error(message), { code: "depth_clarification" });
+};
+const escapePattern = (value) => value.replace(/[.*+?^$(){}|[\]\\]/g, "\\$&");
+const normalizeDepthUnit = (value) => {
+  const unit = normalize(value);
+  if (/^(m|meters?|metres?)$/.test(unit)) return "m";
+  if (/^(cm|centimeters?|centimetres?)$/.test(unit)) return "cm";
+  return null;
+};
+
+function parseCommandDepth(value, declaredUnit, canonicalField = false) {
+  if (!["number", "string"].includes(typeof value)) clarifyDepth("Water depth must be a number with a supported unit.");
+  const match = String(value).trim().match(/^([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*([a-z]+)?[.!?;:]*$/i);
+  if (!match || !Number.isFinite(Number(match[1])) || Number(match[1]) <= 0) clarifyDepth("Water depth must be a positive finite measurement.");
+  const magnitude = Number(match[1]);
+  const explicitUnit = match[2] ? normalizeDepthUnit(match[2]) : null;
+  if (match[2] && !explicitUnit) clarifyDepth("Use metres or centimetres for water depth.");
+  if (explicitUnit && declaredUnit && explicitUnit !== declaredUnit) clarifyDepth("The water depth units conflict.");
+  const unit = explicitUnit || declaredUnit || (canonicalField ? "cm" : null);
+  const cm = unit ? normalizeDepthToCm(magnitude, unit) : null;
+  if (cm !== null && (!Number.isFinite(cm) || cm <= 0)) clarifyDepth("Water depth must remain positive after conversion to centimetres.");
+  return { magnitude, cm, explicitUnit };
+}
+
+function commandDepthSessions(values) {
+  const sessions = new Set();
+  for (const [key, value] of Object.entries(values || {})) {
+    if (!supplied(value)) continue;
+    if (key.endsWith("Morning") || DEPTH_FIELDS[key] === "morning") sessions.add("morning");
+    if (key.endsWith("Evening") || DEPTH_FIELDS[key] === "evening") sessions.add("evening");
+  }
+  return sessions;
+}
+
+// Exact IDs take precedence over another pond's name. The catalog already
+// restricts the ponds available to an enterprise technician's assigned blocks.
+function sourceDepthFacts(message, catalog, company) {
+  const ponds = catalog.ponds || [];
+  const today = farmDateKey(company.timeZone);
+  const facts = [];
+  let context = { pond: null, date: null, session: null };
+  const text = String(message || "").normalize("NFKC");
+  const clauses = text.split(/,(?!\d)|(?<!\d),|[;\n!?]|\.(?!\d)|\s+(?:and|with)\s+(?=(?:(?:morning|evening|am|pm|pagi|sore|malam)\s+)?(?:depth|water\s+depth|DO\b|pH\b|temperature\b|no\s+(?:surface\s+)?scum\b|rain\b))/i);
+  for (const clause of clauses) {
+    const otherDateText = clause.replace(/\b\d{4}-\d{2}-\d{2}\b/g, "");
+    if (/\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}\b|\b\d{1,2}\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b/i.test(otherDateText)) {
+      clarifyDepth("Use an unambiguous YYYY-MM-DD date, today, or yesterday for water depth.");
+    }
+    const occurrences = [];
+    for (const pond of ponds) {
+      for (const [value, isId] of [[pond.id, true], [pond.name, false]]) {
+        if (typeof value !== "string" || !value) continue;
+        const rx = new RegExp("(?<![\\p{L}\\p{N}_-])" + escapePattern(value) + "(?![\\p{L}\\p{N}_-])", "giu");
+        for (const match of clause.matchAll(rx)) occurrences.push({ key: pond.id, start: match.index, end: match.index + match[0].length, isId });
+      }
+    }
+    const references = occurrences.filter((o) => o.isId ||
+      !occurrences.some((id) => id.isId && id.start === o.start && id.end === o.end));
+    for (const match of clause.matchAll(/\bpond\s+([a-z0-9_-]+)\b/gi)) {
+      if (/^(water|depth|quality)$/i.test(match[1])) continue;
+      if (!references.some((r) => r.start >= match.index && r.end <= match.index + match[0].length)) references.push({ key: "unknown:" + normalize(match[0]) });
+    }
+    const pondKeys = [...new Set(references.map((r) => r.key))];
+    const dates = [];
+    for (const match of clause.matchAll(/\b\d{4}-\d{2}-\d{2}\b|\b(today|yesterday|tomorrow)\b/gi)) {
+      const word = match[0].toLowerCase();
+      const date = word === "today" ? today : word === "yesterday" ? shiftDateKey(today, -1) :
+        word === "tomorrow" ? shiftDateKey(today, 1) : word;
+      if (!Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) clarifyDepth("Clarify the observation date.");
+      dates.push(date);
+    }
+    const dateKeys = [...new Set(dates)];
+    if (pondKeys.length) {
+      if (pondKeys.length > 1) context.pond = "ambiguous";
+      else {
+        if (context.pond !== pondKeys[0]) context.session = null;
+        context.pond = pondKeys[0];
+      }
+    }
+    if (dateKeys.length) context.date = dateKeys.length === 1 ? dateKeys[0] : "ambiguous";
+    const labels = [...clause.matchAll(/\b(?:water\s+depth|depth|kedalaman(?:\s+air)?)\b/gi)];
+    if (!labels.length) {
+      if (/^\s*(?:(?:or|and|to|morning|am|pagi|evening|pm|sore|malam)\s+)*[+-]?(?:\d+(?:\.\d+)?|\.\d+)\s*(?:m|cm|metres?|meters?|centimetres?|centimeters?)\b/i.test(clause)) {
+        clarifyDepth("State each depth reading separately with its session.");
+      }
+      const sessions = [...new Set([...clause.matchAll(sessionPattern)].map((m) => depthSession(m[1])))];
+      if (sessions.length) context.session = sessions.length === 1 ? sessions[0] : "ambiguous";
+      continue;
+    }
+    if (labels.length !== 1) clarifyDepth("State each depth reading separately with its pond and session.");
+    if (context.pond === "ambiguous" || context.date === "ambiguous") clarifyDepth("Clarify which pond and date belong to each depth reading.");
+    const label = labels[0];
+    const before = clause.slice(0, label.index);
+    const after = clause.slice(label.index + label[0].length);
+    const nearSession = before.match(/\b(morning|am|pagi|evening|pm|sore|malam)\s*$/i);
+    const localSessions = [...new Set([
+      ...(nearSession ? [depthSession(nearSession[1])] : []),
+      ...[...after.matchAll(sessionPattern)].map((m) => depthSession(m[1])),
+    ])];
+    if (localSessions.length > 1) clarifyDepth("Clarify the session for this depth reading.");
+    const session = localSessions[0] || context.session;
+    if (session === "ambiguous") clarifyDepth("Specify morning or evening for water depth.");
+    const excluded = /\b(?:no|not|without|never|unrecorded|unmeasured|tidak|belum)\s*(?:(?:measured|recorded|water)\s+)*$/i.test(before) ||
+      /^\s*(?:(?:is|was|were|has\s+been)\s+)*(?:not|never|unrecorded|unmeasured|tidak|belum)\b/i.test(after) ||
+      /\b(?:expected|forecast|predicted|target|planned|maybe|perhaps|possibly|estimated|guess)\s*(?:water\s*)?$/i.test(before) ||
+      /^\s*(?:will|may|might|expected|forecast|predicted)\b/i.test(after) ||
+      /\btomorrow\b/i.test(after);
+    if (excluded) {
+      facts.push({ ...context, session, excluded: true });
+      continue;
+    }
+    const reading = after.match(/^\s*[:=]?\s*(?:(?:morning|am|pagi|evening|pm|sore|malam|is|was|measured|recorded|at|of)\s+)*([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*([a-z]+)?(.*)$/i);
+    if (!reading || !reading[2] || /^\s*(?:\/|-|\d|or\b|to\b)/i.test(reading[3]) ||
+      /\b(?:or|to|and|versus|vs)\s*[+-]?\d/.test(reading[3])) clarifyDepth("Provide one measured water depth with an explicit metre or centimetre unit.");
+    if (/^\s*(?:(?:was|is)\s+)?(?:not\s+(?:recorded|measured)|expected|forecast|predicted|will|may|might|uncertain)\b/i.test(reading[3])) {
+      facts.push({ ...context, session, excluded: true });
+      continue;
+    }
+    const parsed = parseCommandDepth(reading[1] + reading[2], null);
+    facts.push({ ...context, session, ...parsed, excluded: false });
+    context.session = session;
+  }
+  return facts;
+}
+
+function preflightWaterDepth(commands, message, catalog, company) {
+  try {
+    const rows = commands.filter((c) => c?.type === "upsert_water_quality").map((command) => {
+      const values = command.values || {};
+      let pond = null;
+      if (command.pondId) {
+        const exact = catalog.ponds.filter((p) => p.id === command.pondId);
+        const matches = exact.length ? exact : catalog.ponds.filter((p) => normalize(p.name) === normalize(command.pondId));
+        if (matches.length !== 1) clarifyDepth("Choose an exact authorized pond for water depth.");
+        pond = matches[0].id;
+      }
+      return { command, pond, sessions: commandDepthSessions(values), fields: Object.keys(DEPTH_FIELDS).filter((key) => supplied(values[key])), sources: new Map(), excluded: new Set() };
+    });
+    const facts = sourceDepthFacts(message, catalog, company);
+    for (const fact of facts) {
+      let targets = rows.filter((r) => (!fact.pond || r.pond === fact.pond ||
+        (!r.pond && rows.length === 1 && r.fields.length)) && (!fact.date || r.command.date === fact.date));
+      if (new Set(targets.map((r) => r.pond)).size > 1 || new Set(targets.map((r) => r.command.date)).size > 1) clarifyDepth("Clarify the pond and date for each water depth reading.");
+      if (fact.excluded) {
+        for (const row of targets) {
+          for (const session of fact.session ? [fact.session] : ["morning", "evening"]) row.excluded.add(session);
+        }
+        continue;
+      }
+      if (fact.session) targets = targets.filter((r) => !r.sessions.size || r.sessions.has(fact.session));
+      if (targets.length !== 1) clarifyDepth("Water depth must match one pond, date, and session in the draft.");
+      const row = targets[0];
+      if (!fact.session && row.sessions.size > 1) clarifyDepth("Specify morning or evening for water depth.");
+      const session = fact.session || [...row.sessions][0] || "morning";
+      const previous = row.sources.get(session);
+      if (previous && previous.cm !== fact.cm) clarifyDepth("Conflicting water depths were provided for the same pond, date, and session.");
+      row.sources.set(session, fact);
+    }
+    const plans = [];
+    for (const row of rows) {
+      const values = row.command.values || {};
+      const unit = supplied(values.waterDepthUnit) ? normalizeDepthUnit(values.waterDepthUnit) : null;
+      if (supplied(values.waterDepthUnit) && !unit && (row.fields.length || row.sources.size)) clarifyDepth("Use metres or centimetres for water depth.");
+      const depths = new Map();
+      for (const key of row.fields) {
+        let session = DEPTH_FIELDS[key];
+        if (!session) {
+          if (row.sessions.size === 1) session = [...row.sessions][0];
+          else if (row.sources.size === 1) session = [...row.sources.keys()][0];
+          else if (row.sessions.size > 1 || row.sources.size > 1) clarifyDepth("Specify the session for the unsuffixed depth value.");
+          else session = "morning";
+        }
+        if (row.excluded.has(session)) clarifyDepth("Water depth was drafted for a session that was not measured or recorded.");
+        const source = row.sources.get(session);
+        if (facts.length && !source) clarifyDepth("Every drafted depth must match a measured source for its pond, date, and session.");
+        const parsed = parseCommandDepth(values[key], unit, key.startsWith("waterDepthCm"));
+        let cm = parsed.cm;
+        if (source) {
+          const matches = parsed.explicitUnit ? cm === source.cm :
+            cm === source.cm || parsed.magnitude === source.magnitude || parsed.magnitude === source.cm;
+          if (!matches) clarifyDepth("The drafted water depth conflicts with the measured source.");
+          cm = source.cm;
+        }
+        if (cm === null) clarifyDepth("Specify metres or centimetres for water depth.");
+        if (depths.has(session) && depths.get(session) !== cm) clarifyDepth("Depth aliases contain conflicting values.");
+        depths.set(session, cm);
+      }
+      for (const [session, source] of row.sources) {
+        if (row.excluded.has(session)) clarifyDepth("Water depth was both measured and marked unrecorded for the same session.");
+        if (!row.pond && !depths.has(session)) clarifyDepth("Choose the pond before adding a water depth reading.");
+        depths.set(session, source.cm);
+      }
+      plans.push({ row, depths });
+    }
+    // Validate the entire batch before changing unit metadata or invoking callbacks.
+    for (const { row, depths } of plans) {
+      if (!row.fields.length && !depths.size && !supplied(row.command.values?.waterDepthUnit)) continue;
+      row.command.values = { ...row.command.values };
+      for (const key of [...Object.keys(DEPTH_FIELDS), "waterDepthUnit"]) delete row.command.values[key];
+      for (const [session, cm] of depths) row.command.values[session === "morning" ? "waterDepthCmMorning" : "waterDepthCmEvening"] = cm;
+    }
+    return null;
+  } catch (error) {
+    if (error.code !== "depth_clarification") throw error;
+    return { status: "needs_depth_clarification", message: error.message };
+  }
+}
 const requestedCurrency = (message) => {
   const matches = [...String(message || "").matchAll(/\b(?:AUD|IDR|USD|THB|CNY|VND)\b|\bRp\.?\s*(?=\d)/gi)];
   const last = matches.at(-1)?.[0];
@@ -326,6 +548,14 @@ function createAgentTools({
           }
         }
       }
+      let catalog;
+      const hasDepth = Array.isArray(rawCommands) && rawCommands.some((c) => c?.type === "upsert_water_quality" &&
+        (depthLabel.test(String(userMessage || "")) || Object.keys(DEPTH_FIELDS).some((k) => supplied(c.values?.[k]))));
+      if (hasDepth) {
+        catalog = await createAgentCatalog(auth);
+        const depthResult = preflightWaterDepth(rawCommands, userMessage, catalog, auth.company);
+        if (depthResult) return depthResult;
+      }
       const commands = normalizeExtractedCommands(rawCommands);
       if (!commands.length && Array.isArray(rawCommands) && rawCommands.length > 0) {
         return {
@@ -338,7 +568,7 @@ function createAgentTools({
         Array.isArray(commands) &&
         commands.some((command) => command.type === "delete_inventory_item");
       await onActivity(isGenericRemoval ? "entity_lookup" : "draft_prepare");
-      const catalog = await createAgentCatalog(auth);
+      catalog ||= await createAgentCatalog(auth);
       if (isGenericRemoval) {
         const routed = routeGenericInventoryRemoval(commands, catalog, userMessage);
         if (routed.status) return routed;
