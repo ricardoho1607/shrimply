@@ -202,3 +202,22 @@ test('summarizePondRisks ranks reports deterministically', () => {
   assert.deepEqual(summary1.reports.map((r) => r.pondId), summary2.reports.map((r) => r.pondId));
   assert.equal(summary1.reports[0].pondId, 'p-high', 'critical pond is ranked first');
 });
+
+test('risk report gracefully handles session-specific waterDepth records', () => {
+  const pond = {
+    id: 'pond-depth',
+    pondName: 'Depth Pond',
+    samplings: [
+      {
+        id: 's1',
+        date: '2026-08-19',
+        waterDepthCmMorning: 120,
+        waterDepthCmEvening: 118,
+      },
+    ],
+  };
+  const report = calculateRiskReport(pond, pond.id, { asOfDate: '2026-08-19' });
+  assert.ok(report);
+  assert.equal(report.pondId, 'pond-depth');
+});
+

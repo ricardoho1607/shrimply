@@ -334,3 +334,55 @@ test('matches UTC timestamps to the farm calendar date in UTC+10', () => {
   assert.equal(report.waterQualityRows.length, 1);
   assert.equal(report.waterQualityRows[0].phMorning, '7.8');
 });
+
+test('water depth keeps AM/PM distinct and preserves legacy unsuffixed compatibility', () => {
+  const eveningOnlyReport = buildDailyOperationsReport({
+    reportDate: '2026-09-02',
+    ponds: [{
+      id: 'pond-pm',
+      pondName: 'PM Pond',
+      samplings: [{
+        date: '2026-09-02',
+        waterDepthCmEvening: '135',
+        waterDepthCm: '135',
+      }],
+    }],
+  });
+  const pmRow = eveningOnlyReport.waterQualityRows[0];
+  assert.equal(pmRow.waterDepthCmMorning, 'N/A');
+  assert.equal(pmRow.waterDepthCmEvening, '135');
+  assert.equal(pmRow.waterDepthCm, '135');
+
+  const morningOnlyReport = buildDailyOperationsReport({
+    reportDate: '2026-09-02',
+    ponds: [{
+      id: 'pond-am',
+      pondName: 'AM Pond',
+      samplings: [{
+        date: '2026-09-02',
+        waterDepthCmMorning: '142',
+      }],
+    }],
+  });
+  const amRow = morningOnlyReport.waterQualityRows[0];
+  assert.equal(amRow.waterDepthCmMorning, '142');
+  assert.equal(amRow.waterDepthCmEvening, 'N/A');
+  assert.equal(amRow.waterDepthCm, '142');
+
+  const legacyReport = buildDailyOperationsReport({
+    reportDate: '2026-09-02',
+    ponds: [{
+      id: 'pond-legacy',
+      pondName: 'Legacy Pond',
+      samplings: [{
+        date: '2026-09-02',
+        waterDepthCm: '155',
+      }],
+    }],
+  });
+  const legacyRow = legacyReport.waterQualityRows[0];
+  assert.equal(legacyRow.waterDepthCmMorning, '155');
+  assert.equal(legacyRow.waterDepthCmEvening, 'N/A');
+  assert.equal(legacyRow.waterDepthCm, '155');
+});
+

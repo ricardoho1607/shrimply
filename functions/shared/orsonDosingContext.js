@@ -17,14 +17,47 @@ const buildDosingContext = ({ pondId, pond, report, analyte, today }) => {
   const area = value(pond.pondArea);
   const records = (Array.isArray(pond.samplings) ? pond.samplings : []).filter(row => recent(row.date, today))
     .sort((a, b) => b.date.localeCompare(a.date));
-  const water = records.find(row => value(row.waterDepthCm) > 0);
-  const depth = value(water?.waterDepthCm);
-  if (current === null || current < 0 || !(area > 0) || !(depth > 0)) return null;
-  // Saved depth is a measurement, not an invented standard pond depth.
-  // Its suitability as representative depth is explicitly reviewed before release.
+  let water = null;
+  let depth = null;
+  let session = null;
+  for (const row of records) {
+    const evening = value(row.waterDepthCmEvening);
+    const morning = value(row.waterDepthCmMorning);
+    const legacy = value(row.waterDepthCm);
+    if (evening !== null && evening > 0) {
+      water = row;
+      depth = evening;
+      session = 'evening';
+      break;
+    }
+    if (morning !== null && morning > 0) {
+      water = row;
+      depth = morning;
+      session = 'morning';
+      break;
+    }
+    if (legacy !== null && legacy > 0) {
+      water = row;
+      depth = legacy;
+      session = null;
+      break;
+    }
+  }
+  if (current === null || current < 0 || !(area > 0) || !(depth > 0) || !water) return null;
+  // Saved depth is a spot measurement, not an invented standard or pond-average depth.
+  // Its suitability as representative depth is explicitly reviewed before release;
+  // a spot reading never silently authorizes dosing or represents average depth.
   return { pond_id: pondId, pond: pond.pondName || pondId, analyte, basis: 'elemental_mg_L',
     current_mg_L: current, measurement_date: report.sampleDate, volume_m3: area * depth / 100,
-    volume_basis: { area_m2: area, measured_depth_cm: depth, date: water.date, requires_representative_depth_confirmation: true },
+    volume_basis: {
+      area_m2: area,
+      measured_depth_cm: depth,
+      date: water.date,
+      session: session || null,
+      is_spot_reading: true,
+      represents_average_depth: false,
+      requires_representative_depth_confirmation: true,
+    },
     water_records: records.slice(0, 5), lab_result: result, stocking_date: pond.docStart || null,
     species: pond.species || null, source: 'server_firestore' };
 };

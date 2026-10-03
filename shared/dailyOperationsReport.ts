@@ -304,8 +304,13 @@ const buildWaterQualityRow = (
   const tempEvening = textValue(latestValue('temperatureEvening'));
   const appearanceMorning = textValue(latestValue('waterAppearanceMorning') ?? latestValue('waterAppearance'));
   const appearanceEvening = textValue(latestValue('waterAppearanceEvening'));
-  const depthMorning = textValue(latestValue('waterDepthCmMorning') ?? latestValue('waterDepthCm'));
-  const depthEvening = textValue(latestValue('waterDepthCmEvening'));
+  const latestMorningDepth = latestValue('waterDepthCmMorning');
+  const latestEveningDepth = latestValue('waterDepthCmEvening');
+  const latestLegacyDepth = latestValue('waterDepthCm');
+  const depthMorning = textValue(
+    latestMorningDepth ?? (latestEveningDepth === undefined ? latestLegacyDepth : undefined)
+  );
+  const depthEvening = textValue(latestEveningDepth);
   const transpMorning = textValue(latestValue('transparencyMorning') ?? latestValue('transparency'));
   const transpEvening = textValue(latestValue('transparencyEvening'));
   const dailyFeedRecords = dailyRecords.filter((record) => !isBaselineRecord(record) && numberValue(record.feedData?.totalDailyFeed) > 0);
@@ -339,7 +344,7 @@ const buildWaterQualityRow = (
     waterAppearance: (appearanceMorning !== 'N/A' ? appearanceMorning : appearanceEvening) || 'N/A',
     waterDepthCmMorning: depthMorning || 'N/A',
     waterDepthCmEvening: depthEvening || 'N/A',
-    waterDepthCm: (depthMorning !== 'N/A' ? depthMorning : depthEvening) || 'N/A',
+    waterDepthCm: (depthMorning !== 'N/A' ? depthMorning : (depthEvening !== 'N/A' ? depthEvening : textValue(latestLegacyDepth))) || 'N/A',
     transparencyMorning: transpMorning || 'N/A',
     transparencyEvening: transpEvening || 'N/A',
     transparency: (transpMorning !== 'N/A' ? transpMorning : transpEvening) || 'N/A',
