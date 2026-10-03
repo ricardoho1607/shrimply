@@ -275,6 +275,10 @@ export const validDate = (date: unknown): date is string =>
   Number.isFinite(Date.parse(date)) &&
   new Date(date).toISOString().slice(0, 10) === date;
 
+const booleanFields = new Set([
+  "surfaceScum",
+]);
+
 const textFields = new Set([
   "pondName",
   "notes",
@@ -294,6 +298,10 @@ const textFields = new Set([
   "expiry",
   "feedName",
   "additiveName",
+  "weatherEvent",
+  "sludgeLoad",
+  "shrimpBehaviour",
+  "nitriteBasis",
 ]);
 
 const requiredFields: Record<string, string[]> = {
@@ -314,6 +322,10 @@ const fieldEnums: Record<string, string[]> = {
   harvestType: ["partial", "final"],
   cycleEndReason: ["harvested", "disease", "reset", "other"],
   paymentType: ["Unconfirmed", "Cash", "Mobile Payment", "Bank Transfer"],
+  weatherEvent: ["rain", "heavy_rain", "sudden_cloud"],
+  sludgeLoad: ["low", "moderate", "high"],
+  shrimpBehaviour: ["normal", "abnormal"],
+  nitriteBasis: ["NO2"],
 };
 
 export function normalizeCommand(input: any): OrsonCommand {
@@ -389,13 +401,29 @@ export function normalizeCommand(input: any): OrsonCommand {
     if (!config.fields.includes(key as never)) {
       fail(`Unsupported field: ${key}.`, "invalid-argument");
     }
-    if (raw === "" || raw === null || raw === undefined) continue;
-    if (textFields.has(key)) {
+    if (
+      raw === "" ||
+      raw === null ||
+      raw === undefined ||
+      (typeof raw === "string" && raw.trim() === "")
+    ) {
+      continue;
+    }
+    if (booleanFields.has(key)) {
+      if (typeof raw !== "boolean") {
+        fail(`${key} must be a boolean.`);
+      }
+      result.values[key] = raw;
+    } else if (textFields.has(key)) {
       if (typeof raw !== "string" || raw.length > 1000) fail(`Invalid ${key}.`);
-      result.values[key] = raw.trim();
-      if (fieldEnums[key] && !fieldEnums[key].includes(raw as string)) {
+      const trimmed = raw.trim();
+      if (key === "nitriteBasis" && trimmed !== "NO2") {
+        fail("Ambiguous or NO2-N nitrite is unresolved; only explicit NO2 is accepted.");
+      }
+      if (fieldEnums[key] && !fieldEnums[key].includes(trimmed)) {
         fail(`Choose a valid ${key}.`);
       }
+      result.values[key] = trimmed;
     } else {
       if (
         !["number", "string"].includes(typeof raw) ||
@@ -405,9 +433,14 @@ export function normalizeCommand(input: any): OrsonCommand {
         fail(`${key} must be a non-negative number.`);
       }
       const n = Number(raw);
-      if (key.startsWith("ph") && n > 14) fail("pH must be between 0 and 14.");
+      if (key.startsWith("ph") && (n < 0 || n > 14)) {
+        fail("pH must be between 0 and 14.");
+      }
+      if (key === "waterExchangePercent" && (n < 0 || n > 100)) {
+        fail("waterExchangePercent must be between 0 and 100.");
+      }
       if (
-        ["mbw", "quantity", "size", "pondArea", "density", "initialWeight"].includes(key) &&
+        ["mbw", "quantity", "size", "subSize", "pondArea", "density", "initialWeight"].includes(key) &&
         n <= 0
       ) {
         fail(`${key} must be greater than zero.`);
@@ -417,6 +450,13 @@ export function normalizeCommand(input: any): OrsonCommand {
       }
       result.values[key] = n;
     }
+  }
+
+  if (result.values.nitriteMgL !== undefined && result.values.nitriteBasis !== "NO2") {
+    fail("Ambiguous or NO2-N nitrite is unresolved; only explicit NO2 is accepted.");
+  }
+  if (result.values.nitriteBasis !== undefined && result.values.nitriteMgL === undefined) {
+    fail("Ambiguous or NO2-N nitrite is unresolved; only explicit NO2 is accepted.");
   }
 
   for (const field of requiredFields[input.type] || []) {
