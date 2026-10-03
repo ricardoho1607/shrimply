@@ -469,7 +469,7 @@ function OperationCard({
                         </select>
                       ) : (
                         <input
-                          value={c.values?.[field] ?? ""}
+                          value={stringVal}
                           onChange={(e) =>
                             handleFieldChange(index, field, e.target.value)
                           }
