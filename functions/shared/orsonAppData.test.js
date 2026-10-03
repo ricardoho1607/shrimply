@@ -1,6 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createOrsonAppDataReader } = require('./orsonAppData');
+const {
+  toWaterQualityRecordDto,
+  toPondSummaryDto,
+  hasWaterQualityData,
+} = require('./readOnlyFarmApi');
 const fixture = (role = 'technician', data = {}, more = false, timeZone = 'UTC') => {
   const paths = [];
   const makeRef = path => ({
@@ -183,4 +188,231 @@ test('pond timeline assigns exact measurement timestamps to farm-local dates', a
   assert.equal(farmDay?.feedKg, 12);
   assert.equal(farmDay?.feedMeasuredAt, '2026-08-31T17:30:00Z');
   assert.equal(farmDay?.feedPrecision, 'timestamp');
+});
+
+test('observation values: false and zero survive, basis and sessions retained, missing stays unknown', async () => {
+  const reader = fixture('technician', {
+    pondName: 'Observation Pond',
+    samplings: [
+      {
+        id: 'obs-d1',
+        date: '2026-09-01',
+        surfaceScum: false,
+        nitriteMgL: 0,
+        nitriteBasis: 'NO2',
+        waterDepthCmMorning: 110,
+        waterExchangePercent: 0,
+        temperatureMorning: 27.5,
+      },
+      {
+        id: 'obs-d2',
+        date: '2026-09-02',
+        surfaceScum: true,
+        nitriteMgL: 0.25,
+        nitriteBasis: 'NO2',
+        waterDepthCmEvening: 115,
+        waterExchangePercent: 15,
+        temperatureEvening: 29.0,
+      },
+      {
+        id: 'obs-d3',
+        date: '2026-09-03',
+        phMorning: 7.8,
+      },
+    ],
+  });
+
+  const timelineResult = await reader.execute('read_pond_timeline', { pondId: 'pond-obs', days: 7, endDate: '2026-09-03' });
+  const d1 = timelineResult.timeline.find(d => d.date === '2026-09-01');
+  const d2 = timelineResult.timeline.find(d => d.date === '2026-09-02');
+  const d3 = timelineResult.timeline.find(d => d.date === '2026-09-03');
+
+  // Day 1: false and zero survive, basis and morning session retained
+  assert.equal(d1?.surfaceScum, false, 'surfaceScum: false must survive as boolean false');
+  assert.equal(d1?.nitriteMgL, 0, 'nitriteMgL: 0 must survive as number 0');
+  assert.equal(d1?.nitriteBasis, 'NO2', 'nitriteBasis: NO2 must be retained');
+  assert.equal(d1?.waterDepthCmMorning, 110, 'waterDepthCmMorning must be 110');
+  assert.equal(d1?.waterDepthCmEvening, null, 'waterDepthCmEvening must be null when omitted');
+  assert.equal(d1?.waterDepthCm, 110, 'waterDepthCm should reflect morning depth');
+  assert.equal(d1?.waterExchangePercent, 0, 'waterExchangePercent: 0 must survive as 0');
+  assert.equal(d1?.temperatureMorningC, 27.5);
+  assert.equal(d1?.temperatureEveningC, null);
+  assert.ok(d1?.events.includes('No surface scum'));
+  assert.ok(d1?.events.includes('Water exchange: 0%'));
+
+  // Day 2: positive values and evening session retained
+  assert.equal(d2?.surfaceScum, true);
+  assert.equal(d2?.nitriteMgL, 0.25);
+  assert.equal(d2?.nitriteBasis, 'NO2');
+  assert.equal(d2?.waterDepthCmMorning, null, 'waterDepthCmMorning must remain null when omitted');
+  assert.equal(d2?.waterDepthCmEvening, 115, 'waterDepthCmEvening must be 115');
+  assert.equal(d2?.waterDepthCm, 115);
+  assert.equal(d2?.waterExchangePercent, 15);
+  assert.ok(d2?.events.includes('Surface scum observed'));
+  assert.ok(d2?.events.includes('Water exchange: 15%'));
+
+  // Day 3: missing stays unknown (null), never converted to 0 or false
+  assert.equal(d3?.surfaceScum, null, 'missing surfaceScum remains null');
+  assert.equal(d3?.nitriteMgL, null, 'missing nitriteMgL remains null');
+  assert.equal(d3?.nitriteBasis, null, 'missing nitriteBasis remains null');
+  assert.equal(d3?.waterDepthCmMorning, null, 'missing waterDepthCmMorning remains null');
+  assert.equal(d3?.waterDepthCmEvening, null, 'missing waterDepthCmEvening remains null');
+  assert.equal(d3?.waterDepthCm, null, 'missing waterDepthCm remains null');
+  assert.equal(d3?.waterExchangePercent, null, 'missing waterExchangePercent remains null');
+
+  // lineSeries: zero survives, missing dates are excluded without converting to 0
+  assert.deepEqual(timelineResult.lineSeries.nitriteMgL, [
+    { date: '2026-09-01', value: 0 },
+    { date: '2026-09-02', value: 0.25 },
+  ]);
+  assert.deepEqual(timelineResult.lineSeries.waterDepthCmMorning, [
+    { date: '2026-09-01', value: 110 },
+  ]);
+  assert.deepEqual(timelineResult.lineSeries.waterDepthCmEvening, [
+    { date: '2026-09-02', value: 115 },
+  ]);
+  assert.deepEqual(timelineResult.lineSeries.waterExchangePercent, [
+    { date: '2026-09-01', value: 0 },
+    { date: '2026-09-02', value: 15 },
+  ]);
+
+  // read_app_records: raw array read preserves primitives
+  const appRecords = await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-obs', field: 'samplings' });
+  assert.equal(appRecords.data[0].surfaceScum, false);
+  assert.equal(appRecords.data[0].nitriteMgL, 0);
+  assert.equal(appRecords.data[0].waterExchangePercent, 0);
+  assert.equal(appRecords.data[0].waterDepthCmMorning, 110);
+  assert.equal(appRecords.data[2].surfaceScum ?? null, null);
+});
+
+test('observation freshness: later corrections on same day overwrite earlier values without dropping unaffected sessions', async () => {
+  const reader = fixture('technician', {
+    pondName: 'Correction Pond',
+    samplings: [
+      {
+        id: 'obs-am',
+        date: '2026-09-05',
+        measuredAt: '2026-09-05T07:00:00Z',
+        updatedAt: '2026-09-05T07:05:00Z',
+        waterDepthCmMorning: 100,
+        nitriteMgL: 0.4,
+        surfaceScum: true,
+        doMorning: 4.5,
+      },
+      {
+        id: 'obs-pm',
+        date: '2026-09-05',
+        measuredAt: '2026-09-05T18:00:00Z',
+        updatedAt: '2026-09-05T18:05:00Z',
+        waterDepthCmEvening: 108,
+        nitriteMgL: 0,
+        surfaceScum: false,
+        doEvening: 5.8,
+      },
+    ],
+  });
+
+  const result = await reader.execute('read_pond_timeline', { pondId: 'pond-corr', days: 7, endDate: '2026-09-05' });
+  const day = result.timeline.find(d => d.date === '2026-09-05');
+
+  // Both morning and evening sessions survive
+  assert.equal(day?.waterDepthCmMorning, 100, 'morning session is preserved');
+  assert.equal(day?.waterDepthCmEvening, 108, 'evening session is preserved');
+
+  // Later correction of 0 wins over 0.4
+  assert.equal(day?.nitriteMgL, 0, 'later correction to 0 wins');
+  assert.equal(day?.nitriteBasis, 'NO2');
+
+  // Later correction of false wins over true, and conflicting event is deduplicated
+  assert.equal(day?.surfaceScum, false, 'later correction to false wins');
+  assert.ok(day?.events.includes('No surface scum'));
+  assert.ok(!day?.events.includes('Surface scum observed'), 'superseded surface scum event is removed');
+
+  // Evidence freshness metadata tracks the latest record
+  assert.equal(day?.waterQualitySourceId, 'obs-pm');
+  assert.equal(day?.waterQualityPrecision, 'timestamp');
+});
+
+test('readOnlyFarmApi DTOs preserve canonical values, units, basis, sessions and freshness', () => {
+  // hasWaterQualityData recognizes false and 0
+  assert.equal(hasWaterQualityData({ surfaceScum: false }), true);
+  assert.equal(hasWaterQualityData({ nitriteMgL: 0 }), true);
+  assert.equal(hasWaterQualityData({ waterDepthCmMorning: 0 }), true);
+  assert.equal(hasWaterQualityData({ waterExchangePercent: 0 }), true);
+  assert.equal(hasWaterQualityData({ mbw: 12, feed: 25 }), false);
+
+  // toWaterQualityRecordDto: canonical values, units, basis and sessions
+  const dto1 = toWaterQualityRecordDto({
+    id: 'wq-1',
+    date: '2026-09-01',
+    surfaceScum: false,
+    nitriteMgL: 0,
+    nitriteBasis: 'NO2',
+    waterDepthCmMorning: 120,
+    waterExchangePercent: 0,
+  }, 'pond-1');
+
+  assert.equal(dto1.surfaceScum, false);
+  assert.equal(dto1.nitriteMgL, 0);
+  assert.equal(dto1.nitriteBasis, 'NO2');
+  assert.equal(dto1.waterDepthCmMorning, 120);
+  assert.equal(dto1.waterDepthCmEvening, null);
+  assert.equal(dto1.waterDepthCm, 120);
+  assert.equal(dto1.waterExchangePercent, 0);
+  assert.equal(dto1.units.nitriteMgL, 'mg/L NO2');
+  assert.equal(dto1.units.waterDepthCm, 'cm');
+  assert.equal(dto1.units.waterDepthCmMorning, 'cm');
+  assert.equal(dto1.units.waterDepthCmEvening, 'cm');
+  assert.equal(dto1.units.waterExchangePercent, '%');
+
+  // toWaterQualityRecordDto: evening depth does not leak into morning
+  const dtoEvening = toWaterQualityRecordDto({
+    id: 'wq-2',
+    date: '2026-09-02',
+    waterDepthCmEvening: 125,
+    waterDepthCm: 125,
+  }, 'pond-1');
+  assert.equal(dtoEvening.waterDepthCmMorning, null, 'evening depth must not leak into morningDepth');
+  assert.equal(dtoEvening.waterDepthCmEvening, 125);
+  assert.equal(dtoEvening.waterDepthCm, 125);
+
+  // toWaterQualityRecordDto: missing stays null
+  const dtoEmpty = toWaterQualityRecordDto({
+    id: 'wq-3',
+    date: '2026-09-03',
+    phMorning: 7.5,
+  }, 'pond-1');
+  assert.equal(dtoEmpty.surfaceScum, null);
+  assert.equal(dtoEmpty.nitriteMgL, null);
+  assert.equal(dtoEmpty.nitriteBasis, null);
+  assert.equal(dtoEmpty.waterDepthCmMorning, null);
+  assert.equal(dtoEmpty.waterDepthCmEvening, null);
+  assert.equal(dtoEmpty.waterDepthCm, null);
+
+  // toPondSummaryDto: latestWaterQuality selects the freshest update on the same date
+  const summary = toPondSummaryDto({
+    id: 'pond-summary-test',
+    samplings: [
+      {
+        id: 'old-obs',
+        date: '2026-09-01',
+        measuredAt: '2026-09-01T08:00:00Z',
+        updatedAt: '2026-09-01T08:00:00Z',
+        nitriteMgL: 0.5,
+        surfaceScum: true,
+      },
+      {
+        id: 'new-obs',
+        date: '2026-09-01',
+        measuredAt: '2026-09-01T16:00:00Z',
+        updatedAt: '2026-09-01T16:00:00Z',
+        nitriteMgL: 0,
+        surfaceScum: false,
+      },
+    ],
+  }, 'pond-summary-test');
+
+  assert.equal(summary.latestWaterQuality?.nitriteMgL, 0, 'freshest observation wins');
+  assert.equal(summary.latestWaterQuality?.surfaceScum, false, 'freshest surfaceScum wins');
+  assert.equal(summary.latestWaterQuality?.nitriteBasis, 'NO2');
 });

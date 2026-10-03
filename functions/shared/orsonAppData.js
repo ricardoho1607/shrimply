@@ -64,6 +64,31 @@ const round = (value, decimals = 3) => {
   const factor = 10 ** decimals;
   return Math.round((number + Number.EPSILON) * factor) / factor;
 };
+const parseTimestampMs = val => {
+  if (val === null || val === undefined) return null;
+  if (val instanceof Date) return Number.isFinite(val.getTime()) ? val.getTime() : null;
+  if (typeof val === 'number') return Number.isFinite(val) ? val : null;
+  if (typeof val === 'object') {
+    if (typeof val.toMillis === 'function') {
+      try {
+        const ms = val.toMillis();
+        return Number.isFinite(ms) ? ms : null;
+      } catch (_) { return null; }
+    }
+    const sec = val.seconds ?? val._seconds;
+    if (typeof sec === 'number' && Number.isFinite(sec)) {
+      const nanos = val.nanoseconds ?? val._nanoseconds ?? 0;
+      return sec * 1000 + Math.floor(nanos / 1000000);
+    }
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+    const parsed = Date.parse(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
 const dateKey = (value, timeZone) => normalizeFarmDateKey(value, timeZone);
 const farmToday = timeZone => {
   try {
@@ -113,7 +138,27 @@ const buildPondTimeline = (pondId, pond, args, timeZone) => {
       phSwing: null,
       salinityPpt: null,
       temperatureC: null,
+      temperatureMorningC: null,
+      temperatureEveningC: null,
       transparencyCm: null,
+      transparencyMorningCm: null,
+      transparencyEveningCm: null,
+      waterDepthCm: null,
+      waterDepthCmMorning: null,
+      waterDepthCmEvening: null,
+      alkalinityMgL: null,
+      ammoniaMgL: null,
+      nitriteMgL: null,
+      nitriteBasis: null,
+      waterExchangePercent: null,
+      sludgeLoad: null,
+      surfaceScum: null,
+      shrimpBehaviour: null,
+      weatherEvent: null,
+      waterQualityMeasuredAt: null,
+      waterQualityPrecision: 'date-only',
+      waterQualitySourceId: null,
+      waterQualityTimestampMs: null,
       events: []
     });
     return timeline.get(date);
@@ -126,16 +171,42 @@ const buildPondTimeline = (pondId, pond, args, timeZone) => {
     (Array.isArray(pond.samplings) ? pond.samplings : []).filter(record => belongsToCurrentCycle(record, pond)),
     { allowSamplingEstimate: true, asOfDate: endDate, timeZone },
   );
-  for (const record of (Array.isArray(pond.samplings) ? pond.samplings : [])) {
+
+  const sortedSamplings = (Array.isArray(pond.samplings) ? pond.samplings : [])
+    .filter(record => belongsToCurrentCycle(record, pond))
+    .slice()
+    .sort((a, b) => {
+      const da = dateKey(a?.measuredAt ?? a?.observedAt ?? a?.date, timeZone) || '';
+      const db = dateKey(b?.measuredAt ?? b?.observedAt ?? b?.date, timeZone) || '';
+      if (da !== db) return da.localeCompare(db);
+      const ta = parseTimestampMs(a?.updatedAt) ?? parseTimestampMs(a?.measuredAt ?? a?.observedAt) ?? 0;
+      const tb = parseTimestampMs(b?.updatedAt) ?? parseTimestampMs(b?.measuredAt ?? b?.observedAt) ?? 0;
+      if (ta !== tb) return ta - tb;
+      return String(a?.id || '').localeCompare(String(b?.id || ''));
+    });
+
+  for (const record of sortedSamplings) {
     const date = dateKey(record?.measuredAt ?? record?.observedAt ?? record?.date, timeZone);
-    if (!date || date < startDate || date > endDate || !belongsToCurrentCycle(record, pond)) continue;
+    if (!date || date < startDate || date > endDate) continue;
     const day = ensureDay(date);
+
+    const recordTime = parseTimestampMs(record?.updatedAt) ?? parseTimestampMs(record?.measuredAt ?? record?.observedAt) ?? null;
+    const isNewer = day.waterQualityTimestampMs === null || (recordTime !== null && recordTime >= day.waterQualityTimestampMs);
+    if (recordTime !== null && isNewer) {
+      day.waterQualityTimestampMs = recordTime;
+      day.waterQualityMeasuredAt = record?.measuredAt ?? record?.observedAt ?? null;
+      day.waterQualityPrecision = record?.measuredAt || record?.observedAt ? 'timestamp' : 'date-only';
+      day.waterQualitySourceId = record?.id || null;
+    }
+
     const mbw = finite(record.mbw ?? record.abw);
     if (mbw !== null && mbw > 0) day.mbwG = round(mbw);
     const legacyMortality = finite(record.mortality);
     if (legacyMortality !== null && legacyMortality > 0) day.legacyMortalityCount = round((day.legacyMortalityCount ?? 0) + legacyMortality, 0);
 
-    if (typeof record.feedData?.feedingResponse === 'string' && record.feedData.feedingResponse.trim()) day.feedingResponse = record.feedData.feedingResponse.trim().slice(0, 80);
+    if (typeof record.feedData?.feedingResponse === 'string' && record.feedData.feedingResponse.trim()) {
+      day.feedingResponse = record.feedData.feedingResponse.trim().slice(0, 80);
+    }
     setNumber(day, 'doMorningMgL', record.doMorning);
     setNumber(day, 'doEveningMgL', record.doEvening);
     const oxygen = [day.doMorningMgL, day.doEveningMgL].filter(value => value !== null);
@@ -145,12 +216,68 @@ const buildPondTimeline = (pondId, pond, args, timeZone) => {
     day.phSwing = day.phMorning !== null && day.phEvening !== null ? round(Math.abs(day.phEvening - day.phMorning)) : null;
     setNumber(day, 'salinityPpt', record.salinity);
     setNumber(day, 'temperatureC', record.temperature ?? record.temperatureMorning ?? record.temperatureEvening);
+    setNumber(day, 'temperatureMorningC', record.temperatureMorning);
+    setNumber(day, 'temperatureEveningC', record.temperatureEvening);
     setNumber(day, 'transparencyCm', record.transparency ?? record.transparencyMorning ?? record.transparencyEvening);
-    if (record.weatherEvent) day.events.push(`Weather: ${String(record.weatherEvent).slice(0, 80)}`);
-    if (record.waterExchangePercent !== undefined && String(record.waterExchangePercent).trim()) day.events.push(`Water exchange: ${String(record.waterExchangePercent).slice(0, 40)}%`);
-    if (record.sludgeLoad) day.events.push(`Sludge load: ${String(record.sludgeLoad).slice(0, 40)}`);
-    if (record.surfaceScum === true) day.events.push('Surface scum observed');
-    if (record.shrimpBehaviour) day.events.push(`Shrimp behaviour: ${String(record.shrimpBehaviour).slice(0, 80)}`);
+    setNumber(day, 'transparencyMorningCm', record.transparencyMorning);
+    setNumber(day, 'transparencyEveningCm', record.transparencyEvening);
+    const rawMorningDepth = record.waterDepthCmMorning ?? record.waterDepthMorning ??
+      ((record.waterDepthCmEvening !== undefined && record.waterDepthCmEvening !== null) || (record.waterDepthEvening !== undefined && record.waterDepthEvening !== null)
+        ? null
+        : record.waterDepthCm);
+    setNumber(day, 'waterDepthCmMorning', rawMorningDepth);
+    setNumber(day, 'waterDepthCmEvening', record.waterDepthCmEvening ?? record.waterDepthEvening);
+    day.waterDepthCm = day.waterDepthCmMorning ?? day.waterDepthCmEvening ?? (record.waterDepthCm !== undefined ? finite(record.waterDepthCm) : null);
+    setNumber(day, 'alkalinityMgL', record.alkalinity);
+    setNumber(day, 'ammoniaMgL', record.ammonia);
+
+    const rawNitrite = record.nitriteMgL !== undefined && record.nitriteMgL !== null
+      ? record.nitriteMgL
+      : record.nitrite;
+    if (rawNitrite !== undefined && rawNitrite !== null) {
+      const nitriteVal = finite(rawNitrite);
+      if (nitriteVal !== null) {
+        day.nitriteMgL = round(nitriteVal, 3);
+        day.nitriteBasis = record.nitriteBasis || 'NO2';
+      }
+    }
+
+    const rawExchange = record.waterExchangePercent !== undefined && record.waterExchangePercent !== null
+      ? record.waterExchangePercent
+      : record.waterExchange;
+    if (rawExchange !== undefined && rawExchange !== null) {
+      const exVal = finite(rawExchange);
+      if (exVal !== null) {
+        day.waterExchangePercent = round(exVal, 1);
+        day.events = day.events.filter(e => !e.startsWith('Water exchange:'));
+        day.events.push(`Water exchange: ${day.waterExchangePercent}%`);
+      }
+    }
+    if (record.sludgeLoad) {
+      day.sludgeLoad = String(record.sludgeLoad).slice(0, 40);
+      day.events = day.events.filter(e => !e.startsWith('Sludge load:'));
+      day.events.push(`Sludge load: ${day.sludgeLoad}`);
+    }
+    if (typeof record.surfaceScum === 'boolean') {
+      day.surfaceScum = record.surfaceScum;
+      if (record.surfaceScum === true) {
+        day.events = day.events.filter(e => e !== 'No surface scum');
+        day.events.push('Surface scum observed');
+      } else {
+        day.events = day.events.filter(e => e !== 'Surface scum observed');
+        day.events.push('No surface scum');
+      }
+    }
+    if (record.shrimpBehaviour) {
+      day.shrimpBehaviour = String(record.shrimpBehaviour).slice(0, 80);
+      day.events = day.events.filter(e => !e.startsWith('Shrimp behaviour:'));
+      day.events.push(`Shrimp behaviour: ${day.shrimpBehaviour}`);
+    }
+    if (record.weatherEvent) {
+      day.weatherEvent = String(record.weatherEvent).slice(0, 80);
+      day.events = day.events.filter(e => !e.startsWith('Weather:'));
+      day.events.push(`Weather: ${day.weatherEvent}`);
+    }
     if (record.harvestData) day.events.push('Harvest recorded');
   }
   for (const entry of selectedFeedEntries) {
@@ -217,6 +344,10 @@ const buildPondTimeline = (pondId, pond, args, timeZone) => {
       phSwing: series('phSwing'),
       feedKg: series('feedKg'),
       mbwG: series('mbwG'),
+      nitriteMgL: series('nitriteMgL'),
+      waterDepthCmMorning: series('waterDepthCmMorning'),
+      waterDepthCmEvening: series('waterDepthCmEvening'),
+      waterExchangePercent: series('waterExchangePercent'),
     },
   };
 };

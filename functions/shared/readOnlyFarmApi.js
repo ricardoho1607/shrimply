@@ -77,7 +77,8 @@ const parseTimestampMs = (val) => {
     }
     const sec = val.seconds ?? val._seconds;
     if (typeof sec === 'number' && Number.isFinite(sec)) {
-      return sec * 1000;
+      const nanos = val.nanoseconds ?? val._nanoseconds ?? 0;
+      return sec * 1000 + Math.floor(nanos / 1000000);
     }
   }
   if (typeof val === 'string') {
@@ -300,8 +301,10 @@ const hasWaterQualityData = (sampling) => {
     sampling.waterDepthCmEvening,
     sampling.alkalinity,
     sampling.ammonia,
+    sampling.nitriteMgL ?? sampling.nitrite,
+    sampling.nitriteBasis,
     sampling.weatherEvent,
-    sampling.waterExchangePercent,
+    sampling.waterExchangePercent ?? sampling.waterExchange,
     sampling.sludgeLoad,
     sampling.surfaceScum,
     sampling.shrimpBehaviour,
@@ -436,26 +439,52 @@ const toPondDto = (data = {}, id = null) => {
 const toWaterQualityRecordDto = (sampling = {}, pondId = null, index = 0, timeZone = 'UTC') => {
   const recId = getDeterministicRecordId(sampling, pondId, index);
   const normalizedDate = normalizeFarmDateKey(sampling.measuredAt || sampling.observedAt || sampling.date, timeZone);
+  const rawNitrite = sampling.nitriteMgL !== undefined && sampling.nitriteMgL !== null
+    ? sampling.nitriteMgL
+    : sampling.nitrite;
+  const nitriteVal = finiteNumber(rawNitrite, 3);
+  const nitriteBasis = sampling.nitriteBasis
+    ? boundedString(sampling.nitriteBasis, 20)
+    : (nitriteVal !== null ? 'NO2' : null);
+  const surfaceScum = typeof sampling.surfaceScum === 'boolean' ? sampling.surfaceScum : null;
+  const rawMorningDepth = sampling.waterDepthCmMorning ?? sampling.waterDepthMorning ??
+    ((sampling.waterDepthCmEvening !== undefined && sampling.waterDepthCmEvening !== null) || (sampling.waterDepthEvening !== undefined && sampling.waterDepthEvening !== null)
+      ? null
+      : sampling.waterDepthCm);
+  const morningDepth = finiteNumber(rawMorningDepth, 1);
+  const eveningDepth = finiteNumber(sampling.waterDepthCmEvening ?? sampling.waterDepthEvening, 1);
+
   return {
     id: recId,
     pondId: pondId ? String(pondId) : (sampling.pondId ? String(sampling.pondId) : null),
     date: normalizedDate,
     measuredAt: boundedString(sampling.measuredAt || sampling.observedAt, 40),
+    observedAt: boundedString(sampling.observedAt, 40),
     phMorning: finiteNumber(sampling.phMorning, 2),
     phEvening: finiteNumber(sampling.phEvening, 2),
     doMorning: finiteNumber(sampling.doMorning, 2),
     doEvening: finiteNumber(sampling.doEvening, 2),
     salinity: finiteNumber(sampling.salinity, 2),
     temperature: finiteNumber(sampling.temperature ?? sampling.temperatureMorning ?? sampling.temperatureEvening, 2),
+    temperatureMorning: finiteNumber(sampling.temperatureMorning, 2),
+    temperatureEvening: finiteNumber(sampling.temperatureEvening, 2),
     transparency: finiteNumber(sampling.transparency ?? sampling.transparencyMorning ?? sampling.transparencyEvening, 2),
+    transparencyMorning: finiteNumber(sampling.transparencyMorning, 2),
+    transparencyEvening: finiteNumber(sampling.transparencyEvening, 2),
     alkalinity: finiteNumber(sampling.alkalinity, 2),
     ammonia: finiteNumber(sampling.ammonia, 3),
-    waterDepthCm: finiteNumber(sampling.waterDepthCm ?? sampling.waterDepthCmMorning, 1),
+    nitriteMgL: nitriteVal,
+    nitriteBasis,
+    waterDepthCm: morningDepth ?? eveningDepth ?? (sampling.waterDepthCm !== undefined ? finiteNumber(sampling.waterDepthCm, 1) : null),
+    waterDepthCmMorning: morningDepth,
+    waterDepthCmEvening: eveningDepth,
     waterAppearance: boundedString(sampling.waterAppearance ?? sampling.waterAppearanceMorning, 80),
+    waterAppearanceMorning: boundedString(sampling.waterAppearanceMorning, 80),
+    waterAppearanceEvening: boundedString(sampling.waterAppearanceEvening, 80),
     weatherEvent: boundedString(sampling.weatherEvent, 50),
-    waterExchangePercent: finiteNumber(sampling.waterExchangePercent, 1),
+    waterExchangePercent: finiteNumber(sampling.waterExchangePercent ?? sampling.waterExchange, 1),
     sludgeLoad: boundedString(sampling.sludgeLoad, 30),
-    surfaceScum: typeof sampling.surfaceScum === 'boolean' ? sampling.surfaceScum : null,
+    surfaceScum,
     shrimpBehaviour: boundedString(sampling.shrimpBehaviour, 50),
     units: {
       ph: 'pH',
@@ -465,7 +494,10 @@ const toWaterQualityRecordDto = (sampling = {}, pondId = null, index = 0, timeZo
       transparency: 'cm',
       alkalinity: 'mg/L',
       ammonia: 'mg/L',
+      nitriteMgL: 'mg/L NO2',
       waterDepthCm: 'cm',
+      waterDepthCmMorning: 'cm',
+      waterDepthCmEvening: 'cm',
       waterExchangePercent: '%',
     },
   };
@@ -518,8 +550,8 @@ const toPondSummaryDto = (pond = {}, id = null, timeZone = 'UTC') => {
     const da = normalizeFarmDateKey(a.measuredAt || a.observedAt || a.date, timeZone) || '';
     const db = normalizeFarmDateKey(b.measuredAt || b.observedAt || b.date, timeZone) || '';
     if (da !== db) return da.localeCompare(db);
-    const ta = parseTimestampMs(a.measuredAt || a.observedAt) ?? 0;
-    const tb = parseTimestampMs(b.measuredAt || b.observedAt) ?? 0;
+    const ta = parseTimestampMs(a.updatedAt) ?? parseTimestampMs(a.measuredAt || a.observedAt) ?? 0;
+    const tb = parseTimestampMs(b.updatedAt) ?? parseTimestampMs(b.measuredAt || b.observedAt) ?? 0;
     if (ta !== tb) return ta - tb;
     return String(a.id || '').localeCompare(String(b.id || ''));
   });
@@ -908,8 +940,8 @@ const getWaterQualityRecords = async ({
     const da = normalizeFarmDateKey(a.measuredAt || a.observedAt || a.date, auth.timeZone) || '';
     const db = normalizeFarmDateKey(b.measuredAt || b.observedAt || b.date, auth.timeZone) || '';
     if (da !== db) return da.localeCompare(db);
-    const ta = parseTimestampMs(a.measuredAt || a.observedAt) ?? 0;
-    const tb = parseTimestampMs(b.measuredAt || b.observedAt) ?? 0;
+    const ta = parseTimestampMs(a.updatedAt) ?? parseTimestampMs(a.measuredAt || a.observedAt) ?? 0;
+    const tb = parseTimestampMs(b.updatedAt) ?? parseTimestampMs(b.measuredAt || b.observedAt) ?? 0;
     if (ta !== tb) return ta - tb;
     const ida = getDeterministicRecordId(a, pondSnap.id);
     const idb = getDeterministicRecordId(b, pondSnap.id);
