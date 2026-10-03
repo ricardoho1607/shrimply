@@ -1,5 +1,6 @@
 const { hash } = require("./shared/orsonCommandPlan");
 const { ORSON_ACTIONS, isExplicitFarmCorrection } = require("./shared/orsonAgentContract");
+const { isExplicitFarmAction } = require("./shared/orsonDomain/orsonAgentContract");
 const { createOperationService } = require("./shared/orsonOperations");
 const {
   createAgentCatalog,
@@ -60,7 +61,8 @@ const commandSchema = {
 const AGENT_INSTRUCTION =
   "\nFARM ACTION TOOLS: Only prepare a draft when the latest user explicitly requests recording, correcting, voiding, or deleting farm data. Advice, hypothetical examples, documents and past messages are not write authorization. Never claim data saved or deleted: these tools only prepare user-confirmed drafts. Ask for missing required values and units; do not infer feed consumption or treatment doses. For adding a new feed or additive inventory item, use stock_in_inventory with itemType, itemName, category, quantity, price, unit and date; for an existing item use its authorized itemId. Ask for missing purchase details instead of inventing them. Feeding allocations are desired TOTALS for a pond/day: clarify addition vs replacement. Sampling feed is a biological observation and never inventory usage. Use discover_farm_action_targets for exact authorized IDs. Call prepare_farm_actions once with all related rows, then tell the user to review the card. Preserve ordinary read/analysis behavior. When asked to change a displayed draft, use read_recent_farm_action_drafts to find its operationId/revision and revise only that draft. When asked to correct a SAVED record, do not revise its completed operation: prepare a NEW audited operation. For an inventory purchase correction, discover the existing item and purchase record IDs and carry forward its original date, quantity and unit; change only what the user requested. Do not add notes or other fields the user did not request. Do not invent an exchange rate or silently reinterpret a stated currency. If the requested monetary currency differs from the company's currency, ask only for a value in the company currency before preparing a draft; do not give a sample exchange rate or conversion." +
   "\nREMOVING INVENTORY PURCHASES FROM ACTIVE RECORDS: If the user asks to remove inventory or an inventory post, including a duplicate, use discover_farm_action_targets to match the authorized item and its purchase history. If exactly one active purchase belongs to the uniquely matched item, treat that as the target even when the user just says 'remove the inventory' and even if it has usage; prepare void_inventory_purchase with its exact authorized itemId, itemType, and purchase recordId. The user does not need to say 'duplicate' or 'void'. On confirmation, this reverses that purchase's stock and cost and marks its linked finance expense voided so it is excluded from active finance views and reports. Keep both records as voided audit history; never hard-delete either record. If it is unclear whether the user means a purchase post or the entire inventory item after checking the catalog, or if multiple items or purchases match, ask which exact record they mean before drafting. If there is no active purchase, ask whether they mean permanent deletion; never infer permanent deletion from a generic removal request. For an inventory purchase record, voiding is allowed despite usage history only when remaining quantity and valuation are safely supported by signed movement history, remaining stock and valuation do not become negative, payment is Unconfirmed, and there are no settlements. Never void consumed purchases that would make stock or valuation negative, and never repeat a void. If the user specifically asks to erase the audit history, explain that only audited voiding is supported." +
-  "\nOBSERVATION UNITS: For water depth, use waterDepthCmMorning or waterDepthCmEvening, normalize an explicit metre value to centimetres, and include waterDepthUnit as 'm' or 'cm' when providing an unconverted number. Ask for the unit when it is unclear. For nitrite, include nitriteUnit and nitriteBasis from the user's explicit measurement; only mg/L as NO2 is supported. Never convert ppm or NO2-N into the stored mg/L NO2 value.";
+  "\nOBSERVATION UNITS: For water depth, use waterDepthCmMorning or waterDepthCmEvening, normalize an explicit metre value to centimetres, and include waterDepthUnit as 'm' or 'cm' when providing an unconverted number. Ask for the unit when it is unclear. For nitrite, include nitriteUnit and nitriteBasis from the user's explicit measurement; only mg/L as NO2 is supported. Never convert ppm or NO2-N into the stored mg/L NO2 value." +
+  "\nWATER-QUALITY DRAFT COMPLETENESS: Carry every observation stated in the current request into the corresponding upsert_water_quality values. Include weatherEvent as its accepted enum when the user reports an observed event; do not mention it only in prose. Preserve explicit zero and false values.";
 const DELETE_AGENT_INSTRUCTION =
   "\nDELETION: When the user explicitly requests permanent deletion of a feed or additive inventory item, resolve its exact authorized itemId and itemType, prepare delete_inventory_item, and state the stock and cost that will be removed. Never claim deletion until the user confirms. Do not delete arbitrary Firestore paths, company settings, users, roles, permissions, or billing data. Deletion is only available for items without purchase, usage, or linked finance history; explain server validation errors clearly.";
 const VOID_AGENT_INSTRUCTION =
@@ -74,6 +76,26 @@ const EDIT_REQUIRES_RECORD_ID = new Set([
   "apply_pond_treatment", "stock_in_inventory", "record_harvest",
   "record_expense", "record_revenue", "void_inventory_purchase",
 ]);
+const extractExplicitObservedWeatherEvent = (message) => {
+  const text = String(message || "").normalize("NFKC").toLowerCase();
+  if (!isExplicitFarmAction(text) || isAdviceInstructionOrHypothetical(text)) return null;
+
+  const weatherMentions = [...text.matchAll(/\bheavy\s+rain\b|\bsudden\s+cloud\b|\brain\b|\bhujan\s+lebat\b|\bmendung\s+tiba-tiba\b|\bhujan\b/gi)];
+  const eventFor = (mention) => {
+    const value = mention[0].toLowerCase();
+    if (value === "heavy rain" || value === "hujan lebat") return "heavy_rain";
+    if (value === "sudden cloud" || value === "mendung tiba-tiba") return "sudden_cloud";
+    return "rain";
+  };
+  const events = [...new Set(weatherMentions.map(eventFor))];
+  if (events.length !== 1) return null;
+
+  const forecastOrFuture = /\b(?:forecast(?:ed)?|predict(?:ed|ion)?|expect(?:ed|ing|ation)?)\b.{0,50}\b(?:heavy\s+rain|sudden\s+cloud|rain|hujan(?:\s+lebat)?|mendung\s+tiba-tiba)\b|\b(?:heavy\s+rain|sudden\s+cloud|rain|hujan(?:\s+lebat)?|mendung\s+tiba-tiba)\b.{0,35}\b(?:forecast|predicted|expected|tomorrow|next\s+week)\b|\b(?:will|may|might)\s+(?:rain|have\s+(?:heavy\s+)?rain|be\s+(?:heavy\s+)?rain)\b/i;
+  const negated = /\b(?:no|not|without|never|did\s+not|didn't)\s+(?:(?:any|observ(?:e|ed)|see|saw|notic(?:e|ed)|experienc(?:e|ed)|have|had)\s+){0,2}(?:heavy\s+rain|sudden\s+cloud|rain|hujan(?:\s+lebat)?|mendung\s+tiba-tiba)\b/i;
+  const notObservedAfter = /\b(?:heavy\s+rain|sudden\s+cloud|rain|hujan(?:\s+lebat)?|mendung\s+tiba-tiba)\b.{0,20}\b(?:was|were|is|are|has\s+been)?\s+(?:not|never)\s+observ(?:e|ed)\b/i;
+  if (forecastOrFuture.test(text) || negated.test(text) || notObservedAfter.test(text)) return null;
+  return events[0];
+};
 const requestedCurrency = (message) => {
   const matches = [...String(message || "").matchAll(/\b(?:AUD|IDR|USD|THB|CNY|VND)\b|\bRp\.?\s*(?=\d)/gi)];
   const last = matches.at(-1)?.[0];
@@ -292,6 +314,18 @@ function createAgentTools({
               : {}),
           }))
         : args.commands;
+      const observedWeatherEvent = extractExplicitObservedWeatherEvent(userMessage);
+      if (observedWeatherEvent && Array.isArray(rawCommands)) {
+        for (const command of rawCommands) {
+          if (
+            command?.type === "upsert_water_quality" &&
+            command.values &&
+            !Object.hasOwn(command.values, "weatherEvent")
+          ) {
+            command.values.weatherEvent = observedWeatherEvent;
+          }
+        }
+      }
       const commands = normalizeExtractedCommands(rawCommands);
       if (!commands.length && Array.isArray(rawCommands) && rawCommands.length > 0) {
         return {

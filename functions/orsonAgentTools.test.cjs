@@ -66,6 +66,95 @@ const mockOperationService = (onPrepare) => ({
   },
 });
 
+const observationAuth = () => ({
+  company: { currency: "AUD" },
+  uid: "test-user",
+  companyId: "farm",
+  allowed: () => true,
+  base: {
+    collection: (name) => ({
+      get: async () => ({
+        docs: name === "ponds" ? [{ id: "pond-a", data: () => ({ pondName: "SIM-A1", cycleStatus: "active" }) }] : [],
+      }),
+    }),
+  },
+});
+
+test("an explicitly observed weather event is preserved in typed water-quality drafts", async () => {
+  let preparedCommands;
+  const agent = createAgentTools({
+    db: {},
+    auth: observationAuth(),
+    service: mockOperationService((commands) => { preparedCommands = commands; }),
+    userMessage: "Please record water quality for pond SIM-A1 today: observed heavy rain, 0% exchange, no surface scum.",
+    onActivity: async () => {},
+    onOperation: async () => {},
+  });
+
+  const result = await agent.execute("prepare_farm_actions", {
+    commands: [{
+      id: "row-1",
+      type: "upsert_water_quality",
+      pondId: "SIM-A1",
+      date: "2026-10-03",
+      values: { waterExchangePercent: 0, surfaceScum: false },
+    }],
+  });
+
+  assert.equal(result.status, "awaiting_user_confirmation");
+  assert.equal(preparedCommands[0].values.weatherEvent, "heavy_rain");
+  assert.equal(preparedCommands[0].values.waterExchangePercent, 0);
+  assert.equal(preparedCommands[0].values.surfaceScum, false);
+});
+
+test("weather mentioned only in a forecast is not added to a water-quality draft", async () => {
+  let preparedCommands;
+  const agent = createAgentTools({
+    db: {},
+    auth: observationAuth(),
+    service: mockOperationService((commands) => { preparedCommands = commands; }),
+    userMessage: "Please record water quality for pond SIM-A1 today. The forecast expects heavy rain tomorrow.",
+    onActivity: async () => {},
+    onOperation: async () => {},
+  });
+
+  await agent.execute("prepare_farm_actions", {
+    commands: [{
+      id: "row-1",
+      type: "upsert_water_quality",
+      pondId: "SIM-A1",
+      date: "2026-10-03",
+      values: { waterExchangePercent: 0 },
+    }],
+  });
+
+  assert.equal(Object.hasOwn(preparedCommands[0].values, "weatherEvent"), false);
+});
+
+test("an explicitly absent weather event is not added to a water-quality draft", async () => {
+  let preparedCommands;
+  const agent = createAgentTools({
+    db: {},
+    auth: observationAuth(),
+    service: mockOperationService((commands) => { preparedCommands = commands; }),
+    userMessage: "Please record water quality for pond SIM-A1 today; heavy rain was not observed.",
+    onActivity: async () => {},
+    onOperation: async () => {},
+  });
+
+  await agent.execute("prepare_farm_actions", {
+    commands: [{
+      id: "row-1",
+      type: "upsert_water_quality",
+      pondId: "SIM-A1",
+      date: "2026-10-03",
+      values: { waterExchangePercent: 0 },
+    }],
+  });
+
+  assert.equal(Object.hasOwn(preparedCommands[0].values, "weatherEvent"), false);
+});
+
 const makeInventoryItem = (overrides = {}) => ({
   id: "feed-a",
   feedName: "Feed A",
