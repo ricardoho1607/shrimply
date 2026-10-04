@@ -6,6 +6,12 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function currentSessionAllowed() {
+      let user = userDoc().data;
+      return signedIn() && (user == null || (user.get('founderAccessSuspended', false) != true
+        && request.auth.token.get('auth_time', 0) > user.get('founderSessionValidAfter', -1)));
+    }
+
     function companyDoc(companyId) {
       return firestore.get(/databases/(default)/documents/companies/$(companyId));
     }
@@ -38,7 +44,10 @@ service firebase.storage {
       let user = userDoc().data;
       let overrides = user.get('permissionOverrides', {});
       let role = user.get('role', null);
-      return isCompanyMember(companyId) && (
+      return user != null
+        && user.get('founderAccessSuspended', false) != true
+        && request.auth.token.get('auth_time', 0) > user.get('founderSessionValidAfter', -1)
+        && isCompanyMember(companyId) && (
         companyDoc(companyId).data.ownerId == request.auth.uid
         || (permission in overrides ? overrides[permission] == true : (
           role in ['owner', 'co-owner']
@@ -93,8 +102,8 @@ service firebase.storage {
     }
 
     match /users/{userId}/profile/{fileName} {
-      allow read: if signedIn();
-      allow write: if signedIn()
+      allow read: if currentSessionAllowed();
+      allow write: if currentSessionAllowed()
         && request.auth.uid == userId
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');

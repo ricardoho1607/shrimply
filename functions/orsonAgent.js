@@ -4,7 +4,8 @@ const {
   normalizeExtractedCommands,
 } = require("./shared/orsonDocumentExtraction");
 const admin = require("./firebaseAdmin");
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { HttpsError } = require("firebase-functions/v2/https");
+const { onCall } = require('./shared/guardedCallable');
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 const { randomUUID } = require("node:crypto");

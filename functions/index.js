@@ -22,3 +22,5 @@ Object.assign(exports, require('./orsonAgent'));
 
 const { readOnlyApi } = require('./readOnlyApi');
 exports.readOnlyApi = readOnlyApi;
+exports.founderDashboardApi = require('./founderDashboard').founderDashboardApi;
+exports.reconcileFounderAccess = require('./founderDashboard').reconcileFounderAccess;

@@ -12,6 +12,7 @@ const timestampMillis = (value) => {
   if (typeof value.toDate === 'function') return value.toDate().getTime();
   if (value instanceof Date) return value.getTime();
   if (typeof value === 'number') return value;
+  if (typeof value === 'string') return Number.isFinite(Date.parse(value)) ? Date.parse(value) : 0;
   return 0;
 };
 
@@ -30,7 +31,7 @@ const legacyEntitlements = (company, nowMs) => {
 
 // Grants are read ONLY from the server-owned subscriptionGrants/current document.
 // Never infer a permanent grant from client-editable company fields or creation dates.
-const resolveEntitlements = (data, company, nowMs = Date.now(), grant = null) => {
+const resolveBaseEntitlements = (data, company, nowMs = Date.now(), grant = null) => {
   if (hasLifetimeGrant(grant)) return buildEntitlements('pro', {
     planId: 'lifetime', planName: 'Lifetime free', status: 'complimentary', pondLimit: null,
     orson: { dailyChat: null, dailyProjection: null, weeklyProjection: null, monthlyTotal: null },
@@ -52,12 +53,36 @@ const resolveEntitlements = (data, company, nowMs = Date.now(), grant = null) =>
   };
 };
 
+const NINETY_DAYS_MS = 90 * 86400000;
+const activeOverride = (override, nowMs) => Boolean(override
+  && override.status === 'active' && ['plus', 'pro'].includes(override.planId)
+  && timestampMillis(override.startsAt) > 0 && timestampMillis(override.startsAt) <= nowMs
+  && timestampMillis(override.expiresAt) > nowMs
+  && timestampMillis(override.expiresAt) - timestampMillis(override.startsAt) <= NINETY_DAYS_MS);
+const maximumBenefit = (left, right) => left === null || right === null ? null : Math.max(left, right);
+
+// Overlay benefits; never rewrite the paid contract or lifetime grant.
+const resolveEntitlements = (data, company, nowMs = Date.now(), grant = null, override = null) => {
+  const base = resolveBaseEntitlements(data, company, nowMs, grant);
+  if (hasLifetimeGrant(grant) || !activeOverride(override, nowMs)) return base;
+  const temporary = buildEntitlements(override.planId);
+  const higher = base.planId === 'free' || (base.planId === 'plus' && override.planId === 'pro');
+  return {
+    ...base,
+    ...(higher ? { planId: temporary.planId, planName: temporary.planName, status: 'complimentary' } : {}),
+    pondLimit: maximumBenefit(base.pondLimit, temporary.pondLimit),
+    orson: Object.fromEntries(Object.keys(temporary.orson).map(key => [key, maximumBenefit(base.orson[key], temporary.orson[key])])),
+    complimentaryAccess: { planId: override.planId, expiresAt: override.expiresAt, basePlanId: base.planId },
+  };
+};
+
 const getCompanyEntitlements = async (db, companyId, company, nowMs = Date.now()) => {
   const ref = db.collection('companies').doc(companyId).collection('entitlements').doc(ENTITLEMENTS_DOCUMENT_ID);
-  const [snapshot, grant] = await Promise.all([
+  const [snapshot, grant, override] = await Promise.all([
     ref.get(), db.collection('companies').doc(companyId).collection('subscriptionGrants').doc('current').get(),
+    db.collection('companies').doc(companyId).collection('accessOverrides').doc('current').get(),
   ]);
-  return { ref, entitlements: resolveEntitlements(snapshot.exists ? snapshot.data() : null, company, nowMs, grant.data()) };
+  return { ref, entitlements: resolveEntitlements(snapshot.exists ? snapshot.data() : null, company, nowMs, grant.data(), override.data()) };
 };
 
 module.exports = {
@@ -66,5 +91,8 @@ module.exports = {
   hasLifetimeGrant,
   getCompanyEntitlements,
   resolveEntitlements,
+  resolveBaseEntitlements,
+  activeOverride,
+  NINETY_DAYS_MS,
   timestampMillis,
 };

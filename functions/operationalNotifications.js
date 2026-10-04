@@ -1,6 +1,6 @@
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { onCall } = require("firebase-functions/v2/https");
+const { onCall } = require('./shared/guardedCallable');
 const {
   getActiveOverdueTransfer,
   getOperationalCandidates,

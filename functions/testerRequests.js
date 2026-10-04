@@ -1,4 +1,5 @@
-const { HttpsError, onCall } = require("firebase-functions/v2/https");
+const { HttpsError } = require("firebase-functions/v2/https");
+const { onCall } = require('./shared/guardedCallable');
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("./firebaseAdmin");
 const {

@@ -633,6 +633,7 @@ const authorizeFarmReader = async (db, uid, explicitCompanyId = null) => {
   }
 
   const user = userSnap.data() || {};
+  if (user.founderAccessSuspended === true) throw new HttpsError('permission-denied', 'Your Shrimply access has been disabled.');
   const userCompanyId = user.companyId;
 
   if (!isValidId(userCompanyId)) {

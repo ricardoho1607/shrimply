@@ -17,14 +17,14 @@ test("Firestore denies client-side invite and membership approval mutations", ()
 test("company membership requires reciprocal company and user records", () => {
   const rules = read("firestore.rules");
   assert.match(rules, /teamMembers\.hasAny\(\[request\.auth\.uid\]\)[\s\S]*?userDoc\(\)\.data\.companyId == companyId/);
-  assert.match(rules, /match \/companies\/\{companyId\}[\s\S]*?allow read: if signedIn\(\)[\s\S]*?isCompanyMember\(companyId\)/);
-  assert.match(rules, /allow create: if signedIn\(\)[\s\S]*?userDoc\(\)\.data\.companyId == null[\s\S]*?request\.resource\.data\.ownerId == request\.auth\.uid/);
+  assert.match(rules, /match \/companies\/\{companyId\}[\s\S]*?allow read: if (?:currentSessionAllowed\(\) && \()?signedIn\(\)[\s\S]*?isCompanyMember\(companyId\)/);
+  assert.match(rules, /allow create: if (?:currentSessionAllowed\(\) && \()?signedIn\(\)[\s\S]*?userDoc\(\)\.data\.companyId == null[\s\S]*?request\.resource\.data\.ownerId == request\.auth\.uid/);
   assert.match(rules, /resource\.data\.companyId == null \|\| resource\.data\.companyId == request\.resource\.data\.companyId/);
 });
 
 test("server-managed summaries are readable by farm members but never writable by clients", () => {
   const rules = read("firestore.rules");
-  assert.match(rules, /match \/summaries\/\{summaryId\}[\s\S]*?allow read: if isFounderAdmin\(\) \|\| hasCompanyPermission\(companyId, 'viewFarm'\);[\s\S]*?allow write: if false;/);
+  assert.match(rules, /match \/summaries\/\{summaryId\}[\s\S]*?allow read: if (?:currentSessionAllowed\(\) && \()?isFounderAdmin\(\) \|\| hasCompanyPermission\(companyId, 'viewFarm'\)\)?;[\s\S]*?allow write: if false;/);
 });
 
 test("join requests use one transactional record per user", () => {

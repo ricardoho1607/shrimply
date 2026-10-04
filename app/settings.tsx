@@ -36,6 +36,7 @@ interface CompanyPlanSummary {
     planName: string;
     pondLimit: number | null;
     orson: { monthlyTotal: number | null };
+    complimentaryAccess?: { planId: string; expiresAt: string; basePlanId: string } | null;
   };
   usage: { physicalPonds: number; orsonMonthly: number };
 }
@@ -119,7 +120,8 @@ export default function Settings() {
       }
     };
     void loadPlan();
-    return () => { active = false; };
+    const refresh = setInterval(() => void loadPlan(), 60000);
+    return () => { active = false; clearInterval(refresh); };
   }, [currentCompanyId]);
 
   useEffect(() => {
@@ -476,7 +478,7 @@ export default function Settings() {
               <SettingItem
                 icon="card-outline"
                 title={`${planSummary.entitlements.planName} plan`}
-                subtitle={`${planSummary.usage.physicalPonds} / ${planSummary.entitlements.pondLimit ?? 'Unlimited'} ponds · ${planSummary.usage.orsonMonthly} / ${planSummary.entitlements.orson.monthlyTotal ?? 'Unlimited'} Orson requests this month${planSummary.entitlements.planId === 'lifetime' ? ' · No payment or renewal required' : ''}`}
+                subtitle={`${planSummary.usage.physicalPonds} / ${planSummary.entitlements.pondLimit ?? 'Unlimited'} ponds · ${planSummary.usage.orsonMonthly} / ${planSummary.entitlements.orson.monthlyTotal ?? 'Unlimited'} Orson requests this month${planSummary.entitlements.planId === 'lifetime' ? ' · No payment or renewal required' : ''}${planSummary.entitlements.complimentaryAccess ? ` · Complimentary ${planSummary.entitlements.complimentaryAccess.planId} until ${new Date(planSummary.entitlements.complimentaryAccess.expiresAt).toLocaleDateString()}` : ''}`}
                 showArrow={false}
               />
               <View style={styles.planNote}>

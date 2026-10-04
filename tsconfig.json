@@ -23,6 +23,7 @@
     "functions",
     "dist",
     "out",
-    "artifacts"
+    "artifacts",
+    "sites"
   ]
 }

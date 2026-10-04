@@ -6,6 +6,18 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Evaluate once per allow clause; permission helpers call signedIn repeatedly.
+    function currentSessionAllowed() {
+      return request.auth == null || registeredSessionAllowed();
+    }
+
+    function registeredSessionAllowed() {
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      let profile = get(path);
+      return !exists(path) || (profile.data.get('founderAccessSuspended', false) != true
+        && request.auth.token.get('auth_time', 0) > profile.data.get('founderSessionValidAfter', -1));
+    }
+
     function isFounderAdmin() {
       return signedIn()
         && (
@@ -145,11 +157,15 @@ service cloud.firestore {
     }
 
     function hasCompanyPermission(companyId, permission) {
-      return isCompanyMember(companyId)
-        && (
-          isCompanyOwner(companyId)
-          || userHasFarmPermission(userDoc().data, permission)
-        );
+      let company = companyDoc(companyId);
+      let user = userDoc();
+      return signedIn()
+        && exists(/databases/$(database)/documents/companies/$(companyId))
+        && (company.data.ownerId == request.auth.uid
+          || (company.data.teamMembers.hasAny([request.auth.uid])
+            && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && user.data.companyId == companyId
+            && userHasFarmPermission(user.data, permission)));
     }
 
     function userBelongsToCompany(companyId) {
@@ -849,16 +865,16 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow create: if signedIn() && request.auth.uid == userId && validUserPayload(request.resource.data)
+      allow create: if currentSessionAllowed() && (signedIn() && request.auth.uid == userId && validUserPayload(request.resource.data)
         && request.resource.data.get('companyId', null) == null
         && request.resource.data.get('permissionOverrides', {}).size() == 0
-        && !request.resource.data.keys().hasAny(['permissionsUpdatedAt', 'permissionsUpdatedBy', 'roleUpdatedAt', 'roleUpdatedBy']);
-      allow read: if signedIn() && (
+        && !request.resource.data.keys().hasAny(['permissionsUpdatedAt', 'permissionsUpdatedBy', 'roleUpdatedAt', 'roleUpdatedBy', 'founderAccessSuspended', 'founderSessionValidAfter', 'founderAccountDeleted']));
+      allow read: if currentSessionAllowed() && (signedIn() && (
         isFounderAdmin()
         || request.auth.uid == userId
         || (resource.data.companyId != null && isCompanyMember(resource.data.companyId))
-      );
-      allow update: if signedIn() && (
+      ));
+      allow update: if currentSessionAllowed() && (signedIn() && (
         (
           request.auth.uid == userId
           && validUserPayload(request.resource.data)
@@ -927,27 +943,27 @@ service cloud.firestore {
           && companyDoc(resource.data.companyId).data.ownerId != userId
           && companyDoc(resource.data.companyId).data.teamMembers.hasAny([userId])
         )
-      );
-      allow delete: if isFounderAdmin();
+      ));
+      allow delete: if currentSessionAllowed() && (isFounderAdmin());
 
       match /monitoredCompanies/{companyId} {
-        allow read, write: if signedIn() && request.auth.uid == userId;
+        allow read, write: if currentSessionAllowed() && (signedIn() && request.auth.uid == userId);
       }
     }
 
     match /companies/{companyId} {
-      allow create: if signedIn()
+      allow create: if currentSessionAllowed() && (signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && (!('companyId' in userDoc().data) || userDoc().data.companyId == null)
         && validCompanyPayload(request.resource.data)
         && validRequiredCompanySetup(request.resource.data)
         && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.teamMembers.hasAny([request.auth.uid]);
-      allow read: if signedIn() && (
+        && request.resource.data.teamMembers.hasAny([request.auth.uid]));
+      allow read: if currentSessionAllowed() && (signedIn() && (
         isFounderAdmin()
         || isCompanyMember(companyId)
-      );
-      allow update: if isFounderAdmin()
+      ));
+      allow update: if currentSessionAllowed() && (isFounderAdmin()
         || (
           isCompanyMember(companyId)
           && validCompanyPayload(request.resource.data)
@@ -961,24 +977,24 @@ service cloud.firestore {
               'isVerified'
             ])
           )
-        );
-      allow delete: if isCompanyOwner(companyId) || isFounderAdmin();
+        ));
+      allow delete: if currentSessionAllowed() && (isCompanyOwner(companyId) || isFounderAdmin());
 
       match /summaries/{summaryId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm'));
         allow write: if false;
       }
 
       match /blocks/{blockId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
-        allow create: if hasCompanyPermission(companyId, 'manageEnterpriseBlocks')
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm'));
+        allow create: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'manageEnterpriseBlocks')
           && validFarmBlockPayload(request.resource.data, companyId)
-          && request.resource.data.createdBy == request.auth.uid;
-        allow update: if hasCompanyPermission(companyId, 'manageEnterpriseBlocks')
+          && request.resource.data.createdBy == request.auth.uid);
+        allow update: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'manageEnterpriseBlocks')
           && validFarmBlockPayload(request.resource.data, companyId)
           && request.resource.data.companyId == resource.data.companyId
-          && request.resource.data.createdBy == resource.data.createdBy;
-        allow delete: if hasCompanyPermission(companyId, 'manageEnterpriseBlocks') || isFounderAdmin();
+          && request.resource.data.createdBy == resource.data.createdBy);
+        allow delete: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'manageEnterpriseBlocks') || isFounderAdmin());
       }
 
       // A production cycle must occupy a counted physical pond in this company.
@@ -1001,12 +1017,12 @@ service cloud.firestore {
       }
 
       match /ponds/{pondId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
-        allow create: if hasCompanyPermission(companyId, 'managePonds')
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm'));
+        allow create: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'managePonds')
           && validPhysicalPondCycle(request.resource.data, pondId)
           && validEnterprisePondBlock(companyId, request.resource.data)
-          && validEnterprisePondCycle(companyId, request.resource.data);
-        allow update: if (
+          && validEnterprisePondCycle(companyId, request.resource.data));
+        allow update: if currentSessionAllowed() && ((
             hasCompanyPermission(companyId, 'managePonds')
             || ((hasCompanyPermission(companyId, 'recordPondData')
               || hasCompanyPermission(companyId, 'manageFeedInventory')) && validPondObservationUpdate())
@@ -1019,76 +1035,76 @@ service cloud.firestore {
             || resource.data.get('cycleStatus', 'active') == 'active'
             || validPhysicalPondCycle(request.resource.data, pondId))
           && validEnterprisePondBlock(companyId, request.resource.data)
-          && validEnterprisePondCycle(companyId, request.resource.data);
-        allow delete: if (hasCompanyPermission(companyId, 'managePonds')
+          && validEnterprisePondCycle(companyId, request.resource.data));
+        allow delete: if currentSessionAllowed() && ((hasCompanyPermission(companyId, 'managePonds')
           && resource.data.get('cycleStatus', 'active') == 'ended'
-          && validEnterprisePondBlock(companyId, resource.data)) || isFounderAdmin();
+          && validEnterprisePondBlock(companyId, resource.data)) || isFounderAdmin());
 
         match /feedOperations/{operationId} {
-          allow read: if hasCompanyPermission(companyId, 'recordPondData');
-          allow create: if hasCompanyPermission(companyId, 'recordPondData')
+          allow read: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'recordPondData'));
+          allow create: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'recordPondData')
             && hasCompanyPermission(companyId, 'manageFeedInventory')
             && request.resource.data.keys().hasOnly(['userId', 'createdAt'])
             && request.resource.data.userId == request.auth.uid
-            && request.resource.data.createdAt == request.time;
+            && request.resource.data.createdAt == request.time);
           allow update, delete: if false;
         }
         match /labSummaries/{labReportId} {
-          allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
-          allow write: if isFounderAdmin();
+          allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm'));
+          allow write: if currentSessionAllowed() && (isFounderAdmin());
         }
 
         match /planktonOverwatchHistory/{evaluationId} {
-          allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
-          allow write: if isFounderAdmin();
+          allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm'));
+          allow write: if currentSessionAllowed() && (isFounderAdmin());
         }
       }
 
       match /labReports/{labReportId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
-        allow create: if hasCompanyPermission(companyId, 'manageLabReports')
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm'));
+        allow create: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'manageLabReports')
           && request.resource.data.companyId == companyId
           && request.resource.data.status in ['draft', 'extracted', 'confirmed', 'failed']
-          && request.resource.data.entryMode in ['manual', 'pdf_upload'];
-        allow update: if hasCompanyPermission(companyId, 'manageLabReports')
+          && request.resource.data.entryMode in ['manual', 'pdf_upload']);
+        allow update: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'manageLabReports')
           && resource.data.status != 'confirmed'
           && request.resource.data.companyId == companyId
           && request.resource.data.status in ['draft', 'extracted', 'confirmed', 'failed']
-          && request.resource.data.entryMode in ['manual', 'pdf_upload'];
-        allow delete: if hasCompanyPermission(companyId, 'manageLabReports') || isFounderAdmin();
+          && request.resource.data.entryMode in ['manual', 'pdf_upload']);
+        allow delete: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'manageLabReports') || isFounderAdmin());
       }
 
       match /labUsage/{usageId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
-        allow write: if isFounderAdmin();
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm'));
+        allow write: if currentSessionAllowed() && (isFounderAdmin());
       }
 
       match /physicalPonds/{physicalPondId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm'));
         // Physical pond creation is server-owned so company plan limits cannot be bypassed.
         allow create: if false;
-        allow update: if hasCompanyPermission(companyId, 'managePonds')
+        allow update: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'managePonds')
           && (request.resource.data.get('activePondId', null) == resource.data.get('activePondId', null)
             || physicalPondCanRelease(resource.data))
-          && validEnterprisePondBlock(companyId, request.resource.data);
-        allow delete: if (hasCompanyPermission(companyId, 'managePonds')
+          && validEnterprisePondBlock(companyId, request.resource.data));
+        allow delete: if currentSessionAllowed() && ((hasCompanyPermission(companyId, 'managePonds')
           && physicalPondCanRelease(resource.data)
-          && validEnterprisePondBlock(companyId, resource.data)) || isFounderAdmin();
+          && validEnterprisePondBlock(companyId, resource.data)) || isFounderAdmin());
       }
 
       match /subscriptionGrants/{grantId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm'));
         allow write: if false;
       }
 
       match /cycles/{cycleId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
-        allow write: if isFounderAdmin() || (hasCompanyPermission(companyId, 'manageCycles')
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm'));
+        allow write: if currentSessionAllowed() && (isFounderAdmin() || (hasCompanyPermission(companyId, 'manageCycles')
           && (
             !('businessSize' in companyDoc(companyId).data)
             || companyDoc(companyId).data.businessSize != 'enterprise'
             || hasCompanyPermission(companyId, 'manageEnterpriseBlocks')
-          ));
+          )));
       }
 
       function harvestLedgerMatches(companyId, data, harvestId) {
@@ -1101,14 +1117,14 @@ service cloud.firestore {
           && entry.voided == data.get('voided', false);
       }
       match /harvestRecords/{harvestId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
-        allow create: if hasCompanyPermission(companyId, 'manageHarvests')
-          && request.resource.data.id == harvestId && harvestLedgerMatches(companyId, request.resource.data, harvestId);
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm'));
+        allow create: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'manageHarvests')
+          && request.resource.data.id == harvestId && harvestLedgerMatches(companyId, request.resource.data, harvestId));
         // Harvest correction uses void + replacement; preserve the original source.
-        allow update: if hasCompanyPermission(companyId, 'manageHarvests')
+        allow update: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'manageHarvests')
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['voided', 'voidedAt', 'voidedBy', 'financeEntry'])
           && request.resource.data.voided == true
-          && harvestLedgerMatches(companyId, request.resource.data, harvestId);
+          && harvestLedgerMatches(companyId, request.resource.data, harvestId));
         allow delete: if false;
       }
 
@@ -1145,14 +1161,14 @@ service cloud.firestore {
           && ledger.amount == entry.amount && ledger.reference == entry.reference && ledger.date == entry.date;
       }
       match /{inventoryCollection}/{inventoryId} {
-        allow read: if inventoryCollection in ['feeds', 'additives'] && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm'));
-        allow create: if inventoryCollection in ['feeds', 'additives'] && hasCompanyPermission(companyId, 'manageFeedInventory')
-          && validInventorySource(companyId, request.resource.data, {}, inventoryCollection, inventoryId);
-        allow update: if inventoryCollection in ['feeds', 'additives'] && hasCompanyPermission(companyId, 'manageFeedInventory')
+        allow read: if currentSessionAllowed() && (inventoryCollection in ['feeds', 'additives'] && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm')));
+        allow create: if currentSessionAllowed() && (inventoryCollection in ['feeds', 'additives'] && hasCompanyPermission(companyId, 'manageFeedInventory')
+          && validInventorySource(companyId, request.resource.data, {}, inventoryCollection, inventoryId));
+        allow update: if currentSessionAllowed() && (inventoryCollection in ['feeds', 'additives'] && hasCompanyPermission(companyId, 'manageFeedInventory')
           && validInventorySource(companyId, request.resource.data, resource.data, inventoryCollection, inventoryId)
-          && request.resource.data.get('inventoryKind', '') == resource.data.get('inventoryKind', '');
-        allow delete: if inventoryCollection in ['feeds', 'additives'] && (isFounderAdmin() || hasCompanyPermission(companyId, 'manageFeedInventory'))
-          && resource.data.get('stockInHistory', []).size() == 0 && resource.data.get('usageHistory', []).size() == 0;
+          && request.resource.data.get('inventoryKind', '') == resource.data.get('inventoryKind', ''));
+        allow delete: if currentSessionAllowed() && (inventoryCollection in ['feeds', 'additives'] && (isFounderAdmin() || hasCompanyPermission(companyId, 'manageFeedInventory'))
+          && resource.data.get('stockInHistory', []).size() == 0 && resource.data.get('usageHistory', []).size() == 0);
       }
 
       function protectedFinanceReference(data) {
@@ -1188,43 +1204,43 @@ service cloud.firestore {
           && source.get('voided', false) == data.get('voided', false);
       }
       match /expenses/{expenseId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFinance');
-        allow create: if (hasCompanyPermission(companyId, 'manageFinance') && !protectedFinanceReference(request.resource.data))
-          || (hasCompanyPermission(companyId, 'manageFeedInventory') && matchingInventorySource(companyId, expenseId));
-        allow update: if (hasCompanyPermission(companyId, 'manageFinance')
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFinance'));
+        allow create: if currentSessionAllowed() && ((hasCompanyPermission(companyId, 'manageFinance') && !protectedFinanceReference(request.resource.data))
+          || (hasCompanyPermission(companyId, 'manageFeedInventory') && matchingInventorySource(companyId, expenseId)));
+        allow update: if currentSessionAllowed() && ((hasCompanyPermission(companyId, 'manageFinance')
             && ((!protectedFinanceReference(resource.data) && !protectedFinanceReference(request.resource.data)) || paymentOnlyUpdate()))
           || (hasCompanyPermission(companyId, 'manageFeedInventory') && matchingInventorySource(companyId, expenseId)
-            && request.resource.data.get('settlements', []) == resource.data.get('settlements', []));
-        allow delete: if (isFounderAdmin() || hasCompanyPermission(companyId, 'manageFinance')) && !protectedFinanceReference(resource.data);
+            && request.resource.data.get('settlements', []) == resource.data.get('settlements', [])));
+        allow delete: if currentSessionAllowed() && ((isFounderAdmin() || hasCompanyPermission(companyId, 'manageFinance')) && !protectedFinanceReference(resource.data));
       }
       match /revenues/{revenueId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFinance');
-        allow create: if (hasCompanyPermission(companyId, 'manageFinance') && !protectedFinanceReference(request.resource.data))
-          || (hasCompanyPermission(companyId, 'manageHarvests') && matchingHarvestSource(companyId, revenueId));
-        allow update: if (hasCompanyPermission(companyId, 'manageFinance')
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFinance'));
+        allow create: if currentSessionAllowed() && ((hasCompanyPermission(companyId, 'manageFinance') && !protectedFinanceReference(request.resource.data))
+          || (hasCompanyPermission(companyId, 'manageHarvests') && matchingHarvestSource(companyId, revenueId)));
+        allow update: if currentSessionAllowed() && ((hasCompanyPermission(companyId, 'manageFinance')
             && ((!protectedFinanceReference(resource.data) && !protectedFinanceReference(request.resource.data)) || paymentOnlyUpdate()))
           || (hasCompanyPermission(companyId, 'manageHarvests') && matchingHarvestSource(companyId, revenueId)
-            && request.resource.data.get('settlements', []) == resource.data.get('settlements', []));
-        allow delete: if (isFounderAdmin() || hasCompanyPermission(companyId, 'manageFinance')) && !protectedFinanceReference(resource.data);
+            && request.resource.data.get('settlements', []) == resource.data.get('settlements', [])));
+        allow delete: if currentSessionAllowed() && ((isFounderAdmin() || hasCompanyPermission(companyId, 'manageFinance')) && !protectedFinanceReference(resource.data));
       }
 
       match /billing/{docId} {
-        allow read: if isFounderAdmin() || isCompanyOwner(companyId);
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || isCompanyOwner(companyId));
         allow write: if false;
       }
 
       match /billingPayments/{paymentId} {
-        allow read: if isFounderAdmin() || isCompanyOwner(companyId);
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || isCompanyOwner(companyId));
         allow write: if false;
       }
 
       match /entitlements/{docId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || isCompanyMember(companyId));
         allow write: if false;
       }
 
       match /planUsage/{docId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || isCompanyMember(companyId));
         allow write: if false;
       }
 
@@ -1232,106 +1248,106 @@ service cloud.firestore {
       // here before calling Orson, so keep that path backward-compatible but prevent
       // resets, jumps, or changes to both counters in one write.
       match /aiUsage/{usageDateId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
-        allow create: if hasCompanyPermission(companyId, 'useOrson')
-          && validLegacyAiUsageCreate(request.resource.data, usageDateId);
-        allow update: if hasCompanyPermission(companyId, 'useOrson')
-          && validLegacyAiUsageUpdate(request.resource.data, usageDateId);
-        allow delete: if isFounderAdmin();
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson'));
+        allow create: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'useOrson')
+          && validLegacyAiUsageCreate(request.resource.data, usageDateId));
+        allow update: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'useOrson')
+          && validLegacyAiUsageUpdate(request.resource.data, usageDateId));
+        allow delete: if currentSessionAllowed() && (isFounderAdmin());
       }
 
       // Authoritative Orson quotas live here. Only Cloud Functions/Admin SDK writes
       // these counters; client SDKs can never reserve, reset, or forge them.
       match /orsonUsage/{usageDateId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
-        allow write: if isFounderAdmin();
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson'));
+        allow write: if currentSessionAllowed() && (isFounderAdmin());
       }
 
       match /orsonUsageMonthly/{usageMonthId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson'));
         allow write: if false;
       }
 
       match /orsonUsageWeekly/{usageWeekId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson'));
         allow write: if false;
       }
 
       match /orsonCost/{usageMonthId} {
-        allow read: if isFounderAdmin() || isCompanyOwner(companyId);
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || isCompanyOwner(companyId));
         allow write: if false;
       }
 
       match /orsonPredictions/{predictionId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
-        allow write: if isFounderAdmin();
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson'));
+        allow write: if currentSessionAllowed() && (isFounderAdmin());
       }
 
       match /orsonCycleOutcomes/{outcomeId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
-        allow write: if isFounderAdmin();
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson'));
+        allow write: if currentSessionAllowed() && (isFounderAdmin());
       }
 
       match /orsonCalibration/{calibrationId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
-        allow write: if isFounderAdmin();
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson'));
+        allow write: if currentSessionAllowed() && (isFounderAdmin());
       }
 
       match /orsonCalibrationEvaluations/{evaluationId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
-        allow write: if isFounderAdmin();
+        allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson'));
+        allow write: if currentSessionAllowed() && (isFounderAdmin());
       }
 
       match /userActivitySessions/{sessionId} {
-        allow read: if isFounderAdmin()
+        allow read: if currentSessionAllowed() && (isFounderAdmin()
           || hasCompanyPermission(companyId, 'manageTeam')
-          || (isCompanyMember(companyId) && resource.data.userId == request.auth.uid);
-        allow create: if isCompanyMember(companyId)
-          && validActivitySessionCreate(request.resource.data, companyId);
-        allow update: if isCompanyMember(companyId)
-          && validActivitySessionUpdate(request.resource.data, companyId);
-        allow delete: if isFounderAdmin();
+          || (isCompanyMember(companyId) && resource.data.userId == request.auth.uid));
+        allow create: if currentSessionAllowed() && (isCompanyMember(companyId)
+          && validActivitySessionCreate(request.resource.data, companyId));
+        allow update: if currentSessionAllowed() && (isCompanyMember(companyId)
+          && validActivitySessionUpdate(request.resource.data, companyId));
+        allow delete: if currentSessionAllowed() && (isFounderAdmin());
       }
 
       match /userActivityDaily/{summaryId} {
-        allow read: if isFounderAdmin()
+        allow read: if currentSessionAllowed() && (isFounderAdmin()
           || hasCompanyPermission(companyId, 'manageTeam')
-          || (isCompanyMember(companyId) && resource.data.userId == request.auth.uid);
-        allow create: if isCompanyMember(companyId)
-          && validActivityDailyCreate(request.resource.data, companyId);
-        allow update: if isCompanyMember(companyId)
-          && validActivityDailyUpdate(request.resource.data, companyId);
-        allow delete: if isFounderAdmin();
+          || (isCompanyMember(companyId) && resource.data.userId == request.auth.uid));
+        allow create: if currentSessionAllowed() && (isCompanyMember(companyId)
+          && validActivityDailyCreate(request.resource.data, companyId));
+        allow update: if currentSessionAllowed() && (isCompanyMember(companyId)
+          && validActivityDailyUpdate(request.resource.data, companyId));
+        allow delete: if currentSessionAllowed() && (isFounderAdmin());
       }
     }
 
     match /publicCompanyProfiles/{companyId} {
-      allow read: if signedIn() && (
+      allow read: if currentSessionAllowed() && (signedIn() && (
         isFounderAdmin()
         || resource.data.isPublicProfile == true
         || isCompanyMember(companyId)
-      );
-      allow create: if signedIn()
+      ));
+      allow create: if currentSessionAllowed() && (signedIn()
         && hasCompanyPermission(companyId, 'editCompanySettings')
-        && validPublicCompanyProfile(request.resource.data, companyId);
-      allow update: if signedIn()
+        && validPublicCompanyProfile(request.resource.data, companyId));
+      allow update: if currentSessionAllowed() && (signedIn()
         && hasCompanyPermission(companyId, 'editCompanySettings')
         && (
           validPublicCompanyProfile(request.resource.data, companyId)
           || validPublicMemberCountUpdate(companyId)
-        );
-      allow delete: if signedIn() && hasCompanyPermission(companyId, 'editCompanySettings');
+        ));
+      allow delete: if currentSessionAllowed() && (signedIn() && hasCompanyPermission(companyId, 'editCompanySettings'));
     }
 
     match /joinRequests/{requestId} {
       allow create: if false;
-      allow read: if signedIn() && (
+      allow read: if currentSessionAllowed() && (signedIn() && (
         isFounderAdmin()
         || resource.data.userId == request.auth.uid
         || hasCompanyPermission(resource.data.companyId, 'manageTeam')
-      );
+      ));
       allow update: if false;
-      allow delete: if isFounderAdmin();
+      allow delete: if currentSessionAllowed() && (isFounderAdmin());
     }
 
     match /companyInvites/{inviteId} {
@@ -1347,101 +1363,109 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow create: if signedIn()
+      allow create: if currentSessionAllowed() && (signedIn()
         && isCompanyMember(request.resource.data.companyId)
-        && validNotificationCreate(request.resource.data);
-      allow read: if signedIn() && (
+        && validNotificationCreate(request.resource.data));
+      allow read: if currentSessionAllowed() && (signedIn() && (
         isFounderAdmin()
         || isCompanyMember(resource.data.companyId)
-      );
-      allow update: if signedIn()
+      ));
+      allow update: if currentSessionAllowed() && (signedIn()
         && isCompanyMember(resource.data.companyId)
-        && validNotificationReadUpdate();
-      allow delete: if signedIn() && isCompanyMember(resource.data.companyId);
+        && validNotificationReadUpdate());
+      allow delete: if currentSessionAllowed() && (signedIn() && isCompanyMember(resource.data.companyId));
     }
 
     match /publicDiseaseAlerts/{reportId} {
-      allow read: if signedIn();
+      allow read: if currentSessionAllowed() && (signedIn());
       allow write: if false;
     }
 
     match /diseaseReports/{reportId} {
-      allow read: if isFounderAdmin() || hasCompanyPermission(resource.data.companyId, 'viewFarm');
-      allow create: if signedIn()
+      allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(resource.data.companyId, 'viewFarm'));
+      allow create: if currentSessionAllowed() && (signedIn()
         && hasCompanyPermission(request.resource.data.companyId, 'submitDiseaseReports')
-        && validDiseaseReportCreate(request.resource.data);
-      allow update: if signedIn()
+        && validDiseaseReportCreate(request.resource.data));
+      allow update: if currentSessionAllowed() && (signedIn()
         && hasCompanyPermission(resource.data.companyId, 'resolveDiseaseReports')
-        && validDiseaseReportStatusUpdate();
-      allow delete: if signedIn()
-        && (hasCompanyPermission(resource.data.companyId, 'resolveDiseaseReports') || isFounderAdmin());
+        && validDiseaseReportStatusUpdate());
+      allow delete: if currentSessionAllowed() && (signedIn()
+        && (hasCompanyPermission(resource.data.companyId, 'resolveDiseaseReports') || isFounderAdmin()));
     }
 
     match /marketplace_listings/{listingId} {
-      allow read: if signedIn();
-      allow create: if signedIn()
+      allow read: if currentSessionAllowed() && (signedIn());
+      allow create: if currentSessionAllowed() && (signedIn()
         && hasCompanyPermission(request.resource.data.companyId, 'manageMarketplace')
-        && validMarketplaceListingCreate(request.resource.data);
-      allow update: if signedIn() && (
+        && validMarketplaceListingCreate(request.resource.data));
+      allow update: if currentSessionAllowed() && (signedIn() && (
         validMarketplaceListingUpdate()
         || validMarketplaceViewCountUpdate()
-      );
-      allow delete: if signedIn() && isMarketplaceListingOwner(resource.data);
+      ));
+      allow delete: if currentSessionAllowed() && (signedIn() && isMarketplaceListingOwner(resource.data));
     }
 
     match /marketplace_responses/{responseId} {
-      allow read: if signedIn() && (
+      allow read: if currentSessionAllowed() && (signedIn() && (
         isCompanyMember(resource.data.sellerId)
         || isMarketplaceResponseBuyer(resource.data)
-      );
-      allow create: if signedIn() && validMarketplaceResponseCreate(request.resource.data);
-      allow update: if signedIn() && validMarketplaceResponseStatusUpdate();
-      allow delete: if signedIn() && (
+      ));
+      allow create: if currentSessionAllowed() && (signedIn() && validMarketplaceResponseCreate(request.resource.data));
+      allow update: if currentSessionAllowed() && (signedIn() && validMarketplaceResponseStatusUpdate());
+      allow delete: if currentSessionAllowed() && (signedIn() && (
         isCompanyMember(resource.data.sellerId)
         || isMarketplaceResponseBuyer(resource.data)
-      );
+      ));
     }
 
     match /assets/{assetId} {
-      allow create: if signedIn() && hasCompanyPermission(request.resource.data.companyId, 'manageAssets');
-      allow read: if signedIn() && (
+      allow create: if currentSessionAllowed() && (signedIn() && hasCompanyPermission(request.resource.data.companyId, 'manageAssets'));
+      allow read: if currentSessionAllowed() && (signedIn() && (
         isFounderAdmin()
         || hasCompanyPermission(resource.data.companyId, 'viewAssets')
-      );
-      allow update: if signedIn() && (
+      ));
+      allow update: if currentSessionAllowed() && (signedIn() && (
         hasCompanyPermission(resource.data.companyId, 'manageAssets')
         || (hasCompanyPermission(resource.data.companyId, 'logAssetMaintenance') && validMechanicAssetUpdate())
-      );
-      allow delete: if signedIn() && hasCompanyPermission(resource.data.companyId, 'manageAssets');
+      ));
+      allow delete: if currentSessionAllowed() && (signedIn() && hasCompanyPermission(resource.data.companyId, 'manageAssets'));
     }
 
     match /apiRequests/{requestId} {
-      allow read: if isFounderAdmin();
+      allow read: if currentSessionAllowed() && (isFounderAdmin());
       allow write: if false;
     }
 
     match /requestLogs/{requestId} {
-      allow read: if isFounderAdmin();
+      allow read: if currentSessionAllowed() && (isFounderAdmin());
       allow write: if false;
     }
 
     match /adminAuditEvents/{eventId} {
-      allow read, create: if isFounderAdmin();
+      allow read, create: if currentSessionAllowed() && (isFounderAdmin());
       allow update, delete: if false;
     }
 
+    // Founder mutation state is private and writable only by the server.
+    match /founderOperations/{id} { allow read, write: if false; }
+    match /founderAudit/{id} { allow read, write: if false; }
+    match /founderUserAccess/{id} { allow read, write: if false; }
+    match /founderAttention/{id} { allow read, write: if false; }
+    match /companies/{companyId}/founderNotes/{id} { allow read, write: if false; }
+    match /companies/{companyId}/accessOverrides/{id} { allow read, write: if false; }
+
     match /securityEvents/{eventId} {
-      allow read: if isFounderAdmin();
+      allow read: if currentSessionAllowed() && (isFounderAdmin());
       allow write: if false;
     }
 
     match /testerRequests/{requestId} {
-      allow read: if isFounderAdmin();
+      allow read: if currentSessionAllowed() && (isFounderAdmin());
       allow write: if false;
     }
 
     match /{path=**}/aiUsage/{usageDateId} {
-      allow read: if isFounderAdmin();
+      allow read: if currentSessionAllowed() && (isFounderAdmin());
       allow write: if false;
     }
 

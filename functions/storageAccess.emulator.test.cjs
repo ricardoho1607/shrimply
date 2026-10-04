@@ -3,7 +3,7 @@ const { initializeTestEnvironment, assertSucceeds, assertFails } = require('@fir
 const { doc, setDoc, updateDoc } = require('firebase/firestore');
 const { ref, uploadBytes, getMetadata } = require('firebase/storage');
 let env;
-test.before(async () => { env = await initializeTestEnvironment({ projectId: 'demo-shrimply-audit', firestore: { rules: fs.readFileSync(path.join(__dirname, '../firestore.rules'), 'utf8') }, storage: { rules: fs.readFileSync(path.join(__dirname, '../storage.rules'), 'utf8') } }); });
+test.before(async () => { env = await initializeTestEnvironment({ projectId: process.env.GCLOUD_PROJECT || 'demo-shrimply-audit', firestore: { rules: fs.readFileSync(path.join(__dirname, '../firestore.rules'), 'utf8') }, storage: { rules: fs.readFileSync(path.join(__dirname, '../storage.rules'), 'utf8') } }); });
 test.after(async () => env?.cleanup());
 test.beforeEach(async () => {
   await env.clearFirestore(); await env.clearStorage();

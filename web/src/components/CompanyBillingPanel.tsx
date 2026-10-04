@@ -31,6 +31,7 @@ interface BillingSummary {
     currentPeriodEnd: string | null;
     graceUntil: string | null;
     scheduledPlanId: PlanId | null;
+    complimentaryAccess?: { planId: string; expiresAt: string; basePlanId: string } | null;
   };
   usage: { physicalPonds: number; orsonMonthly: number };
   plans: PlanDefinition[];
@@ -54,8 +55,8 @@ export default function CompanyBillingPanel({ companyId }: { companyId: string }
   const [error, setError] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<PlanDefinition | null>(null);
 
-  const loadSummary = useCallback(async () => {
-    setLoading(true);
+  const loadSummary = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
     setError('');
     try {
       const callable = httpsCallable<{ companyId: string }, BillingSummary>(
@@ -73,6 +74,8 @@ export default function CompanyBillingPanel({ companyId }: { companyId: string }
 
   useEffect(() => {
     queueMicrotask(() => { void loadSummary(); });
+    const refresh = window.setInterval(() => { if (document.visibilityState === "visible") void loadSummary(true); }, 60000);
+    return () => window.clearInterval(refresh);
   }, [loadSummary]);
 
   const changePlan = async (plan: PlanDefinition) => {
@@ -157,9 +160,11 @@ export default function CompanyBillingPanel({ companyId }: { companyId: string }
         ))}
       </div>
 
+      {summary.entitlements.complimentaryAccess && <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>Complimentary {summary.entitlements.complimentaryAccess.planId} access until {new Date(summary.entitlements.complimentaryAccess.expiresAt).toLocaleDateString()}. Your underlying {summary.entitlements.complimentaryAccess.basePlanId} benefits and payment history are preserved.</p>}
+
       {summary.entitlements.currentPeriodEnd && (
         <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 12 }}>
-          Current access ends {new Date(summary.entitlements.currentPeriodEnd).toLocaleDateString()}.
+          Paid contract access ends {new Date(summary.entitlements.currentPeriodEnd).toLocaleDateString()}.
           {summary.entitlements.scheduledPlanId ? ` ${summary.entitlements.scheduledPlanId} is scheduled next.` : ' Renew from this page before that date.'}
         </p>
       )}

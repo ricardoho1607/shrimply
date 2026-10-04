@@ -24,6 +24,7 @@ const assertCompanyMemberForCallable = async (db, uid, companyId, permission) =>
   }
   const company = companySnap.data() || {};
   const user = userSnap.exists ? userSnap.data() : null;
+  if (user?.founderAccessSuspended === true) throw new HttpsError("permission-denied", "Your Shrimply access has been disabled.");
   const teamMembers = Array.isArray(company.teamMembers) ? company.teamMembers : [];
   if (company.ownerId !== uid && !(teamMembers.includes(uid) && user?.companyId === companyId)) {
     throw new HttpsError("permission-denied", "You do not have access to this company.");

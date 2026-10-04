@@ -15,7 +15,8 @@ const { ORSON_EVIDENCE_PROMPT_RULES, ORSON_POND_DIAGNOSTIC_PROMPT_RULES } = requ
 const { META_MODEL_API_MODEL, generateMetaModelResponse, getOrsonGenerationSettings } = require('./shared/metaModelApi');
 const { generateGroundedOrsonResponse } = require('./shared/orsonAnswerGrounding');
 const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require("firebase-functions/v2/firestore");
-const { HttpsError, onCall } = require("firebase-functions/v2/https");
+const { HttpsError } = require("firebase-functions/v2/https");
+const { onCall } = require('./shared/guardedCallable');
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("./firebaseAdmin");
@@ -498,20 +499,21 @@ const reserveServerOrsonRequest = async (db, companyId, aiFunction, timeZone) =>
   const entitlementsRef = companyRef.collection("entitlements").doc("current");
 
   return db.runTransaction(async (transaction) => {
-    const [usageSnap, monthlySnap, weeklySnap, entitlementsSnap, companySnap, grantSnap] = await Promise.all([
+    const [usageSnap, monthlySnap, weeklySnap, entitlementsSnap, companySnap, grantSnap, overrideSnap] = await Promise.all([
       transaction.get(usageRef),
       transaction.get(monthlyRef),
       transaction.get(weeklyRef),
       transaction.get(entitlementsRef),
       transaction.get(companyRef),
       transaction.get(companyRef.collection('subscriptionGrants').doc('current')),
+      transaction.get(companyRef.collection('accessOverrides').doc('current')),
     ]);
     const usage = usageSnap.exists ? usageSnap.data() || {} : {};
     const functions = usage.functions && typeof usage.functions === "object" ? usage.functions : {};
     const entitlements = resolveEntitlements(
       entitlementsSnap.exists ? entitlementsSnap.data() : null,
       companySnap.exists ? companySnap.data() : {},
-      Date.now(), grantSnap.data(),
+      Date.now(), grantSnap.data(), overrideSnap.data(),
     );
     const dailyLimits = {
       chat: entitlements.orson.dailyChat,

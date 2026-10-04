@@ -3,7 +3,8 @@
 const crypto = require('node:crypto');
 const { Buffer } = require('node:buffer');
 const { defineSecret } = require('firebase-functions/params');
-const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
+const { onRequest, HttpsError } = require('firebase-functions/v2/https');
+const { onCall } = require('./shared/guardedCallable');
 const { onDocumentCreated, onDocumentDeleted } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('./firebaseAdmin');
@@ -116,15 +117,17 @@ const serializeEntitlements = (entitlements) => ({
   ),
   scheduledPlanId: entitlements.scheduledPlanId || null,
   priceVersion: entitlements.priceVersion || PRICE_VERSION,
+  complimentaryAccess: entitlements.complimentaryAccess ? { ...entitlements.complimentaryAccess, expiresAt: timestampOrNull(entitlements.complimentaryAccess.expiresAt) } : null,
 });
 
-const ensureEntitlements = async (db, companyId, company) => {
+const ensureEntitlements = async (db, companyId, company, applyOverride = true) => {
   const ref = db.collection('companies').doc(companyId).collection('entitlements').doc('current');
   return db.runTransaction(async (transaction) => {
-    const [snapshot, grant] = await Promise.all([
+    const [snapshot, grant, override] = await Promise.all([
       transaction.get(ref), transaction.get(db.collection('companies').doc(companyId).collection('subscriptionGrants').doc('current')),
+      transaction.get(db.collection('companies').doc(companyId).collection('accessOverrides').doc('current')),
     ]);
-    if (snapshot.exists || hasLifetimeGrant(grant.data())) return { ref, entitlements: resolveEntitlements(snapshot.data(), company, Date.now(), grant.data()) };
+    if (snapshot.exists || hasLifetimeGrant(grant.data())) return { ref, entitlements: resolveEntitlements(snapshot.data(), company, Date.now(), grant.data(), applyOverride ? override.data() : null) };
 
     const entitlements = resolveEntitlements(null, company);
     const payload = {
@@ -138,7 +141,7 @@ const ensureEntitlements = async (db, companyId, company) => {
     };
     delete payload.graceUntilMs;
     transaction.create(ref, payload);
-    return { ref, entitlements: resolveEntitlements(payload, company) };
+    return { ref, entitlements: resolveEntitlements(payload, company, Date.now(), grant.data(), applyOverride ? override.data() : null) };
   });
 };
 
@@ -260,12 +263,13 @@ exports.createCompanyPhysicalPond = onCall(async (request) => {
   const existingCount = (await companyRef.collection('physicalPonds').count().get()).data().count;
 
   const created = await db.runTransaction(async (transaction) => {
-    const [pondSnapshot, usageSnapshot, entitlementsSnapshot, grantSnapshot, userSnapshot] = await Promise.all([
+    const [pondSnapshot, usageSnapshot, entitlementsSnapshot, grantSnapshot, userSnapshot, overrideSnapshot] = await Promise.all([
       transaction.get(pondRef),
       transaction.get(usageRef),
       transaction.get(entitlementsRef),
       transaction.get(companyRef.collection('subscriptionGrants').doc('current')),
       transaction.get(db.collection('users').doc(uid)),
+      transaction.get(companyRef.collection('accessOverrides').doc('current')),
     ]);
     if (company.businessSize === 'enterprise' && company.ownerId !== uid
       && !['co-owner', 'manager', 'admin', 'mechanic', 'buyer'].includes(userSnapshot.data()?.role)) {
@@ -283,7 +287,7 @@ exports.createCompanyPhysicalPond = onCall(async (request) => {
       if (sameRequest) return false;
       throw new HttpsError('already-exists', 'This pond already exists.');
     }
-    const entitlements = resolveEntitlements(entitlementsSnapshot.exists ? entitlementsSnapshot.data() : null, company, Date.now(), grantSnapshot.data());
+    const entitlements = resolveEntitlements(entitlementsSnapshot.exists ? entitlementsSnapshot.data() : null, company, Date.now(), grantSnapshot.data(), overrideSnapshot.data());
     const storedCount = usageSnapshot.exists && Number.isFinite(usageSnapshot.data()?.physicalPondCount)
       ? Math.max(usageSnapshot.data().physicalPondCount, existingCount)
       : existingCount;
@@ -559,7 +563,7 @@ exports.scheduleCompanyPlanChange = onCall(async (request) => {
   if (targetPlanId !== 'free') {
     throw new HttpsError('failed-precondition', 'Paid plan changes require payment.');
   }
-  const { ref, entitlements } = await ensureEntitlements(db, companyId, company);
+  const { ref, entitlements } = await ensureEntitlements(db, companyId, company, false);
   if (entitlements.planId === 'lifetime') throw new HttpsError('failed-precondition', 'Your company has lifetime free access. No plan change is needed.');
   const storedPlanId = typeof entitlements.planId === 'string' ? entitlements.planId : 'free';
   const currentPlanId = storedPlanId === 'legacy' ? 'pro' : normalizePlanId(storedPlanId);
@@ -624,5 +628,6 @@ if (process.env.NODE_ENV === 'test') {
     normalizeReturnUrl,
     resolveMidtransEnvironment,
     serializeEntitlements,
+    ensureEntitlements,
   };
 }

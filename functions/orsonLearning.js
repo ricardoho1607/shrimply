@@ -1,5 +1,6 @@
 const crypto = require("crypto");
-const { HttpsError, onCall } = require("firebase-functions/v2/https");
+const { HttpsError } = require("firebase-functions/v2/https");
+const { onCall } = require('./shared/guardedCallable');
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const {
   enforceFixedWindowLimits,

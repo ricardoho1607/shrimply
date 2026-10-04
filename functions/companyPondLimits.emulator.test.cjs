@@ -12,6 +12,10 @@ test('company-wide pond limits, cycle references and lifetime grants', { skip: !
   const { initializeApp, deleteApp } = require('node:module').createRequire(require.resolve('./firebaseAdmin'))('firebase-admin/app');
   const app = initializeApp({ projectId });
   const admin = require('./firebaseAdmin');
+  for (const uid of ['owner', 'manager', 'outsider']) {
+    try { await admin.auth().createUser({ uid }); }
+    catch (error) { if (error.code !== 'auth/uid-already-exists') throw error; }
+  }
   const { createCompanyPhysicalPond, getCompanyBillingSummary, createMidtransPlanPayment, scheduleCompanyPlanChange, trackPhysicalPondDeletion, midtransBillingWebhook, expireCompanyPlans } = require('./billing');
   const { buildEntitlements } = require('./shared/companyPlans');
   const env = await initializeTestEnvironment({ projectId, firestore: { rules: fs.readFileSync(path.resolve(__dirname, '../firestore.rules'), 'utf8') } });
@@ -76,6 +80,14 @@ test('company-wide pond limits, cycle references and lifetime grants', { skip: !
     assert.equal((await db.doc('companies/guard/planUsage/current').get()).data().physicalPondCount, 9);
     await add('guard', 'replacement-tenth');
     await assert.rejects(add('guard', 'over-limit'), { code: 'resource-exhausted' });
+    await seed('complimentary', 'free', 10);
+    await db.doc('companies/complimentary/accessOverrides/current').set({ planId: 'pro', status: 'active', startsAt: new Date(Date.now() - 1000).toISOString(), expiresAt: new Date(Date.now() + 86400000).toISOString(), revision: 1 });
+    await assertSucceeds(add('complimentary', 'trial-eleventh'));
+    assert.equal((await getCompanyBillingSummary.run(request('complimentary'))).entitlements.pondLimit, 100);
+    await db.doc('companies/complimentary/accessOverrides/current').update({ expiresAt: new Date(Date.now() - 1000).toISOString() });
+    await assert.rejects(add('complimentary', 'expired-twelfth'), { code: 'resource-exhausted' });
+    assert.equal((await db.doc('companies/complimentary/entitlements/current').get()).data().planId, 'free');
+    await seed('guard', 'free', 10);
     await db.doc('companies/guard/subscriptionGrants/current').set({ kind: 'lifetime', status: 'active' });
     await assertSucceeds(add('guard', 'lifetime-eleventh'));
     const summary = await getCompanyBillingSummary.run(request('guard'));
