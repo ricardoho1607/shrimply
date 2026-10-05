@@ -124,6 +124,41 @@ interface InventoryFeed {
 
 const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
   Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
+
+function isFeedStocked(feed: Pick<InventoryFeed, 'totalStock'> | { totalStock?: unknown }): boolean {
+  if (!feed || typeof feed !== 'object') return false;
+  if (typeof feed.totalStock === 'number') {
+    return Number.isFinite(feed.totalStock) && feed.totalStock > 0;
+  }
+  if (typeof feed.totalStock === 'string') {
+    const trimmed = feed.totalStock.trim();
+    if (!trimmed) return false;
+    const stock = Number(trimmed);
+    return Number.isFinite(stock) && stock > 0;
+  }
+  return false;
+}
+
+function getUnusedStockedFeeds(
+  feeds: InventoryFeed[],
+  allocatedFeedIds: string[],
+): InventoryFeed[] {
+  return feeds.filter(
+    (feed) => isFeedStocked(feed) && !allocatedFeedIds.includes(feed.id),
+  );
+}
+
+function getSelectableFeedOptions(
+  feeds: InventoryFeed[],
+  currentAllocationId: string,
+  allAllocatedFeedIds: string[],
+): InventoryFeed[] {
+  return feeds.filter(
+    (feed) =>
+      feed.id === currentAllocationId ||
+      (!allAllocatedFeedIds.includes(feed.id) && isFeedStocked(feed)),
+  );
+}
 export default function FeedRecordsPage() {
   const copy = useDashboardCopy();
   const { t } = useLanguage();
@@ -183,6 +218,21 @@ export default function FeedRecordsPage() {
   const minimumFeedDate = selectedPondStartDate && selectedPondStartDate <= today
     ? selectedPondStartDate
     : today;
+
+  const allocatedFeedIds = useMemo(
+    () => formData.feedAllocations.map((allocation) => allocation.inventoryFeedId),
+    [formData.feedAllocations],
+  );
+
+  const availableStockedFeeds = useMemo(() => (
+    inventoryFeeds.filter(isFeedStocked)
+  ), [inventoryFeeds]);
+
+  const unusedStockedFeeds = useMemo(() => (
+    getUnusedStockedFeeds(inventoryFeeds, allocatedFeedIds)
+  ), [inventoryFeeds, allocatedFeedIds]);
+
+  const hasUnusedStockedFeed = unusedStockedFeeds.length > 0;
 
   useEffect(() => {
     if (
@@ -329,7 +379,7 @@ export default function FeedRecordsPage() {
       quantityKg: Number(allocation.quantityKg),
     }));
     if (allocationInputs.length === 0) {
-      alert(inventoryFeeds.length === 0 ? t.feed.noFeedsAvailable : t.feed.selectFeedFirst);
+      alert(availableStockedFeeds.length === 0 ? t.feed.noFeedsAvailable : t.feed.selectFeedFirst);
       return;
     }
     if (allocationInputs.some((allocation) => !inventoryFeeds.some((feed) => feed.id === allocation.inventoryFeedId))) {
@@ -569,9 +619,7 @@ export default function FeedRecordsPage() {
     inventoryFeedId: allocation.inventoryFeedId,
     quantityKg: Number(allocation.quantityKg) || 0,
   })));
-  const hasUnusedInventoryFeed = inventoryFeeds.some((feed) => (
-    !formData.feedAllocations.some((allocation) => allocation.inventoryFeedId === feed.id)
-  ));
+
 
   const openHistoryEditor = (log: FeedHistoryEntry) => {
     if (!selectedPondForHistory || !canEditFeed) return;
@@ -1108,7 +1156,7 @@ export default function FeedRecordsPage() {
                       <TriangleAlert size={20} style={{ flexShrink: 0 }} />
                       <div>
                         <strong style={{ display: 'block', fontSize: '13px', marginBottom: '2px' }}>{t.feed.inventoryRequired}</strong>
-                        <span style={{ fontSize: '13px', fontWeight: 600 }}>{inventoryFeeds.length === 0 ? t.feed.noFeedsAvailable : t.feed.selectFeedFirst}</span>
+                        <span style={{ fontSize: '13px', fontWeight: 600 }}>{availableStockedFeeds.length === 0 ? t.feed.noFeedsAvailable : t.feed.selectFeedFirst}</span>
                       </div>
                     </div>
                   )}
@@ -1127,8 +1175,7 @@ export default function FeedRecordsPage() {
                         {!inventoryFeeds.some((feed) => feed.id === allocation.inventoryFeedId) && (
                           <option value={allocation.inventoryFeedId}>{t.feed.feedUnavailable}</option>
                         )}
-                        {inventoryFeeds
-                          .filter((feed) => feed.id === allocation.inventoryFeedId || !formData.feedAllocations.some((item) => item.inventoryFeedId === feed.id))
+                        {getSelectableFeedOptions(inventoryFeeds, allocation.inventoryFeedId, allocatedFeedIds)
                           .map((feed) => (
                             <option key={feed.id} value={feed.id}>{feed.feedName || feed.brand || 'Feed'} — {formatFeedQuantityForDisplay(feed.totalStock)} {feed.unit || 'kg'}</option>
                           ))}
@@ -1162,21 +1209,31 @@ export default function FeedRecordsPage() {
                       </button>
                     </div>
                   ))}
-                  <button
-                    type="button"
-                    disabled={savePending || (!hasUnusedInventoryFeed)}
-                    onClick={() => {
-                      const nextFeed = inventoryFeeds.find((feed) => !formData.feedAllocations.some((allocation) => allocation.inventoryFeedId === feed.id));
-                      if (!nextFeed) return;
-                      setFormData((current) => ({
-                        ...current,
-                        feedAllocations: [...current.feedAllocations, { inventoryFeedId: nextFeed.id, quantityKg: '' }],
-                      }));
-                    }}
-                    style={{ alignSelf: 'flex-start', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border)', background: 'white', color: 'var(--primary)', fontWeight: 600, cursor: hasUnusedInventoryFeed ? 'pointer' : 'not-allowed', opacity: hasUnusedInventoryFeed ? 1 : 0.5 }}
-                  >
-                    + {t.feed.addFeedType}
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      disabled={savePending || !hasUnusedStockedFeed}
+                      title={!hasUnusedStockedFeed ? (availableStockedFeeds.length === 0 ? t.feed.noFeedsAvailable : copy('All stocked feeds have been added.')) : undefined}
+                      onClick={() => {
+                        const nextFeed = unusedStockedFeeds[0];
+                        if (!nextFeed) return;
+                        setFormData((current) => ({
+                          ...current,
+                          feedAllocations: [...current.feedAllocations, { inventoryFeedId: nextFeed.id, quantityKg: '' }],
+                        }));
+                      }}
+                      style={{ alignSelf: 'flex-start', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border)', background: 'white', color: 'var(--primary)', fontWeight: 600, cursor: hasUnusedStockedFeed ? 'pointer' : 'not-allowed', opacity: hasUnusedStockedFeed ? 1 : 0.5 }}
+                    >
+                      + {t.feed.addFeedType}
+                    </button>
+                    {!hasUnusedStockedFeed && (
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>
+                        {availableStockedFeeds.length === 0
+                          ? t.feed.noFeedsAvailable
+                          : copy('All stocked feeds have been added.')}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>

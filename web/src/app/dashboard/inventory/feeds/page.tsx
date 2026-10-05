@@ -139,6 +139,12 @@ const formatQuantity = (value: number) => new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 2,
 }).format(Number.isFinite(value) ? value : 0);
 
+function formatUsageDisplay(quantity: number | string): string {
+  const numeric = typeof quantity === 'number' ? quantity : Number(quantity);
+  const magnitude = Number.isFinite(numeric) ? Math.abs(numeric) : 0;
+  return `-${formatQuantity(magnitude)}`;
+}
+
 export default function InventoryFeedsPage() {
   const { t, currentLanguage } = useLanguage();
   const copy = useDashboardCopy();
@@ -942,7 +948,7 @@ export default function InventoryFeedsPage() {
                         style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, bottom: 'auto', left: 'auto', width: 'min(210px, calc(100vw - 24px))' }}
                       >
                         {([
-                          { id: 'all', label: 'All active transactions', description: 'Show active stock movements' },
+                          { id: 'all', label: 'All transactions', description: 'Show active stock movements' },
                           { id: 'stockIn', label: 'Stock in', description: 'Show active incoming stock' },
                           { id: 'usage', label: 'Stock out', description: 'Show inventory usage only' },
                           { id: 'audit', label: 'Audit history', description: 'Show voided purchase history' },
@@ -995,7 +1001,7 @@ export default function InventoryFeedsPage() {
                           textDecoration: tx.voided ? 'line-through' : 'none',
                           fontVariantNumeric: 'tabular-nums'
                         }}>
-                          {tx.type === 'Stock In' ? '+' : '-'}{formatQuantity(tx.quantity)}
+                          {tx.type === 'Stock In' ? `+${formatQuantity(tx.quantity)}` : formatUsageDisplay(tx.quantity)}
                         </div>
                         <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>{tx.unit}</div>
                       </div>
@@ -1405,7 +1411,7 @@ export default function InventoryFeedsPage() {
                             <strong>{formatDate(h.date)}</strong>
                             <small>{copy('Applied to')}: {h.pondId ? (ponds.find(p => p.id === h.pondId)?.pondName || copy('Unknown Pond')) : copy('General Inventory Usage')}</small>
                           </div>
-                          <strong className={styles.historyQuantity}>−{formatQuantity(h.quantity)} {historyItem.unit}</strong>
+                          <strong className={styles.historyQuantity}>{formatUsageDisplay(h.quantity)} {historyItem.unit}</strong>
                         </div>
                         {h.notes && <p className={styles.historyNote}>{h.notes}</p>}
                       </div>

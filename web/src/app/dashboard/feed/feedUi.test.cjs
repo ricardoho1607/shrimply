@@ -61,3 +61,94 @@ test('inventory quantities are formatted for display without changing stock math
   assert.match(source, /formatFeedQuantityForDisplay\(feed\.totalStock\)/);
   assert.doesNotMatch(source, /\{feed\.totalStock \|\| 0\} \{feed\.unit \|\| 'kg'\}/);
 });
+
+test('page module does not export helpers as named exports', () => {
+  assert.doesNotMatch(source, /export\s+(const|function|let|var)\s+isFeedStocked/);
+});
+
+test('production feed helpers correctly filter and allocate feeds across all lifecycle states', () => {
+  const ts = require('typescript');
+
+  const helperMatch = source.match(
+    /(function isFeedStocked[\s\S]*?function getSelectableFeedOptions[\s\S]*?\n\})/
+  );
+  assert.ok(helperMatch, 'helper functions should be declared in page.tsx');
+  const compiled = ts.transpileModule(
+    `${helperMatch[1]}\nmodule.exports = { isFeedStocked, getUnusedStockedFeeds, getSelectableFeedOptions };`,
+    { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }
+  ).outputText;
+  const helpersModule = { exports: {} };
+  new Function('module', 'exports', 'require', compiled)(helpersModule, helpersModule.exports, require);
+  const { isFeedStocked, getUnusedStockedFeeds, getSelectableFeedOptions } = helpersModule.exports;
+
+  // 1. Stocked predicate checks
+  assert.equal(isFeedStocked({ totalStock: 15 }), true);
+  assert.equal(isFeedStocked({ totalStock: 0.5 }), true);
+  assert.equal(isFeedStocked({ totalStock: '12' }), true);
+  assert.equal(isFeedStocked({ totalStock: 0 }), false);
+  assert.equal(isFeedStocked({ totalStock: -1 }), false);
+  assert.equal(isFeedStocked({ totalStock: null }), false);
+  assert.equal(isFeedStocked({ totalStock: undefined }), false);
+  assert.equal(isFeedStocked({ totalStock: NaN }), false);
+  assert.equal(isFeedStocked({ totalStock: Infinity }), false);
+  assert.equal(isFeedStocked({ totalStock: -Infinity }), false);
+  assert.equal(isFeedStocked({ totalStock: true }), false);
+  assert.equal(isFeedStocked({ totalStock: false }), false);
+  assert.equal(isFeedStocked({ totalStock: [12] }), false);
+  assert.equal(isFeedStocked({ totalStock: {} }), false);
+  assert.equal(isFeedStocked({ totalStock: '' }), false);
+  assert.equal(isFeedStocked({ totalStock: '   ' }), false);
+
+  // 2. zero-stock-first: zero stock at head of inventory is skipped
+  const zeroStockFirstInventory = [
+    { id: 'feed-depleted-first', totalStock: 0 },
+    { id: 'feed-available-second', totalStock: 50 },
+  ];
+  const unusedFromZeroFirst = getUnusedStockedFeeds(zeroStockFirstInventory, []);
+  assert.equal(unusedFromZeroFirst.length, 1);
+  assert.equal(unusedFromZeroFirst[0].id, 'feed-available-second');
+
+  // 3. no available stock: returns empty list
+  const emptyStockInventory = [
+    { id: 'feed-0', totalStock: 0 },
+    { id: 'feed-neg', totalStock: -10 },
+    { id: 'feed-missing' },
+  ];
+  assert.deepEqual(getUnusedStockedFeeds(emptyStockInventory, []), []);
+
+  // 4. duplicate exclusion: already allocated feeds cannot be re-added
+  const activeInventory = [
+    { id: 'feed-a', totalStock: 100 },
+    { id: 'feed-b', totalStock: 80 },
+    { id: 'feed-c', totalStock: 60 },
+  ];
+  const unusedAfterA = getUnusedStockedFeeds(activeInventory, ['feed-a']);
+  assert.deepEqual(unusedAfterA.map((f) => f.id), ['feed-b', 'feed-c']);
+
+  // 5. historical selected depleted feed: stays selectable, other depleted items excluded
+  const inventoryWithHistory = [
+    { id: 'historical-depleted', totalStock: 0 },
+    { id: 'other-depleted', totalStock: 0 },
+    { id: 'fresh-available', totalStock: 45 },
+  ];
+  const selectableForHistoryRow = getSelectableFeedOptions(
+    inventoryWithHistory,
+    'historical-depleted',
+    ['historical-depleted']
+  );
+  assert.deepEqual(selectableForHistoryRow.map((f) => f.id), ['historical-depleted', 'fresh-available']);
+  assert.equal(selectableForHistoryRow.some((f) => f.id === 'other-depleted'), false);
+
+  // 6. selection of an available feed: unused stocked feed can be selected
+  const availableSelection = getUnusedStockedFeeds(inventoryWithHistory, ['historical-depleted']);
+  assert.deepEqual(availableSelection.map((f) => f.id), ['fresh-available']);
+});
+
+test('UI wiring connects helpers and disables Add Feed with clear guidance', () => {
+  assert.match(source, /getUnusedStockedFeeds\(inventoryFeeds,\s*allocatedFeedIds\)/);
+  assert.match(source, /getSelectableFeedOptions\(inventoryFeeds,\s*allocation\.inventoryFeedId,\s*allocatedFeedIds\)/);
+  assert.match(source, /disabled=\{savePending \|\| !hasUnusedStockedFeed\}/);
+  assert.match(source, /availableStockedFeeds\.length === 0\s*\?\s*t\.feed\.noFeedsAvailable\s*:\s*t\.feed\.selectFeedFirst/);
+  assert.match(source, /!hasUnusedStockedFeed && \(/);
+  assert.match(source, /All stocked feeds have been added/);
+});

@@ -22,8 +22,10 @@ test('inventory cards keep header and actions compact without decorative icons',
   assert.match(source, /copy\('History'\)/);
   assert.match(source, /copy\('Delete'\)/);
   assert.match(source, /copy\(activeTab === 'additive' \? 'Product' : 'Threshold'\)/);
-  assert.doesNotMatch(source, /<History size=/);
-  assert.doesNotMatch(source, /<Trash2 size=/);
+  const cardSection = source.match(/className=\{styles\.inventoryCardHeader\}[\s\S]*?className=\{styles\.inventoryCardActions\}[\s\S]*?<\/div>\s*<\/div>/);
+  assert.ok(cardSection, 'inventory card section should exist');
+  assert.doesNotMatch(cardSection[0], /<History size=/);
+  assert.doesNotMatch(cardSection[0], /<Trash2 size=/);
   assert.match(stylesheet, /\.inventoryCardActions\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/s);
 });
 
@@ -90,4 +92,31 @@ test('inventory stock intake records the selected arrival date without batch fie
   assert.match(source, /type="date"[^>]*value=\{formData\.stockDate\}/);
   assert.match(source, /const stockDate = formData\.stockDate/);
   assert.doesNotMatch(source, /formData\.batch|Batch Number|Lot\/Batch/);
+});
+
+test('usage display helper normalizes positive and negative stored usage to one negative magnitude', () => {
+  const ts = require('typescript');
+
+  const helperMatch = source.match(/(function formatUsageDisplay[\s\S]*?\n\})/);
+  assert.ok(helperMatch, 'formatUsageDisplay should be declared in page.tsx');
+  const compiled = ts.transpileModule(
+    `const formatQuantity = (value) => new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(Number.isFinite(value) ? value : 0);\n${helperMatch[1]}\nmodule.exports = { formatUsageDisplay };`,
+    { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }
+  ).outputText;
+  const helperModule = { exports: {} };
+  new Function('module', 'exports', 'require', compiled)(helperModule, helperModule.exports, require);
+  const { formatUsageDisplay } = helperModule.exports;
+
+  assert.equal(formatUsageDisplay(25), '-25');
+  assert.equal(formatUsageDisplay(-25), '-25');
+  assert.equal(formatUsageDisplay('14.2'), '-14.2');
+  assert.equal(formatUsageDisplay('-14.2'), '-14.2');
+  assert.equal(formatUsageDisplay(0), '-0');
+
+  assert.match(source, /\{tx\.type === 'Stock In' \? `\+\$\{formatQuantity\(tx\.quantity\)\}` : formatUsageDisplay\(tx\.quantity\)\}/);
+  assert.match(source, /<strong className=\{styles\.historyQuantity\}>\{formatUsageDisplay\(h\.quantity\)\} \{historyItem\.unit\}<\/strong>/);
+});
+
+test('stock-in display preserves raw quantity without changing signs or arithmetic', () => {
+  assert.match(source, /\+\{formatQuantity\(h\.quantity\)\} \{historyItem\.unit\}/);
 });
