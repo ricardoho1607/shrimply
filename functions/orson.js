@@ -745,7 +745,6 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
       userMessage,
       onOperation: async operation => {
         agentOperations.push(operation);
-        if (request.acceptsStreaming) await callableResponse.sendChunk({ type: 'agent_operation', operation });
       },
     }) : null;
     const activeLookups = new Map();
@@ -838,6 +837,13 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
       const sourceText = `\n\nSources:\n${sources.map((source) => `- ${source.title || "Official source"}: ${source.uri}`).join("\n")}`;
       text += sourceText;
       if (request.acceptsStreaming) await callableResponse.sendChunk({ type: "text_delta", text: sourceText });
+    }
+    // Keep the farm-entry card after Orson's complete conversational response.
+    // Tool execution can finish before the model has generated its explanation.
+    if (request.acceptsStreaming) {
+      for (const operation of agentOperations) {
+        await callableResponse.sendChunk({ type: 'agent_operation', operation });
+      }
     }
     console.info("orson_response_latency", {
       route: questionRoute,
