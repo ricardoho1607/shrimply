@@ -132,6 +132,15 @@ const calculateReplenishmentShortfall = (availableStock, requiredQuantity, optio
         reason: `Incompatible units: required ${reqUnit} vs inventory ${itUnit}. Units must be verified before calculating shortfall.`,
       };
     }
+  } else if (options.unit && !options.itemUnit) {
+    return {
+      shortfall: null,
+      hasSufficientStock: null,
+      unitMismatch: true,
+      requiredUnit: String(options.unit).toLowerCase().trim(),
+      itemUnit: null,
+      reason: 'Inventory item lacks a verified unit; cannot compare against required quantity.',
+    };
   }
   const available = Math.max(0, Number(availableStock));
   if (available >= required) {
@@ -159,10 +168,19 @@ const evaluateReplenishmentScenario = ({
   requiredQuantity,
   requiredUnit,
   plannedDays = 7,
+  lookbackDays = 14,
+  todayKey: optTodayKey,
+  asOfDate: optAsOfDate,
+  currentDateKey: optCurrentDateKey,
 } = {}) => {
   const stockStatus = classifyStockStatus(item);
+  const lookback = Math.min(60, Math.max(3, Number(lookbackDays) || 14));
+  const horizonDays = Math.min(90, Math.max(1, Number(plannedDays) || 7));
 
   let burnRate = null;
+  let windowStartKey = null;
+  let effectiveTodayKey = null;
+
   if (burnRateKgPerDay !== undefined && burnRateKgPerDay !== null) {
     burnRate = Number.isFinite(Number(burnRateKgPerDay)) ? Number(burnRateKgPerDay) : null;
   } else {
@@ -174,16 +192,75 @@ const evaluateReplenishmentScenario = ({
 
     if (Array.isArray(history)) {
       if (history.length === 0) {
-        burnRate = 0;
+        burnRate = null;
       } else {
-        const validRows = history.filter(
-          (h) => h && Number.isFinite(Number(h.quantity)) && Number(h.quantity) >= 0,
-        );
-        if (validRows.length === 0) {
+        // Collect candidate valid rows and dates
+        const itemUnit = item?.unit ? String(item.unit).trim().toLowerCase() : null;
+        const parsedRows = [];
+
+        for (const h of history) {
+          if (!h || typeof h !== 'object') continue;
+          if (h.voided === true || h.isVoid === true) continue;
+          if (h.transfer === true || h.source === 'treatmentMixProduction') continue;
+
+          // Unit compatibility
+          if (h.unit && itemUnit) {
+            const rowU = String(h.unit).trim().toLowerCase();
+            if (rowU !== itemUnit) continue;
+          }
+
+          const qty = Number(h.quantity);
+          if (!Number.isFinite(qty) || qty < 0) continue;
+
+          // Date extraction - exclude undated rows
+          let dateKey = null;
+          if (typeof h.date === 'string') {
+            const match = h.date.match(/^(\d{4}-\d{2}-\d{2})/);
+            if (match) dateKey = match[1];
+          } else if (h.date) {
+            const d = new Date(h.date);
+            if (!Number.isNaN(d.getTime())) {
+              dateKey = d.toISOString().slice(0, 10);
+            }
+          }
+          if (!dateKey) continue; // Undated rows strictly excluded
+
+          parsedRows.push({ dateKey, quantity: qty });
+        }
+
+        if (parsedRows.length === 0) {
           burnRate = null;
         } else {
-          const sum = validRows.reduce((acc, h) => acc + Number(h.quantity), 0);
-          burnRate = Math.round((sum / validRows.length) * 100) / 100;
+          // Determine effective today key
+          const rawRefDate = optTodayKey || optAsOfDate || optCurrentDateKey;
+          if (rawRefDate && /^\d{4}-\d{2}-\d{2}$/.test(String(rawRefDate))) {
+            effectiveTodayKey = String(rawRefDate);
+          } else {
+            // Default to latest date present in history or farm today
+            const sortedHistoryDates = parsedRows.map((r) => r.dateKey).sort();
+            effectiveTodayKey = sortedHistoryDates[sortedHistoryDates.length - 1];
+          }
+
+          const refMs = Date.parse(`${effectiveTodayKey}T00:00:00.000Z`);
+          windowStartKey = new Date(refMs - (lookback - 1) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+          // Strictly bound window: windowStartKey <= dateKey <= effectiveTodayKey
+          const windowRows = parsedRows.filter(
+            (r) => r.dateKey >= windowStartKey && r.dateKey <= effectiveTodayKey,
+          );
+
+          if (windowRows.length === 0) {
+            burnRate = null;
+          } else {
+            const dailyTotals = new Map();
+            for (const row of windowRows) {
+              dailyTotals.set(row.dateKey, (dailyTotals.get(row.dateKey) || 0) + row.quantity);
+            }
+
+            const distinctDates = Array.from(dailyTotals.keys()).sort();
+            const sum = distinctDates.reduce((acc, d) => acc + dailyTotals.get(d), 0);
+            burnRate = Math.round((sum / distinctDates.length) * 100) / 100;
+          }
         }
       }
     }
@@ -220,7 +297,6 @@ const evaluateReplenishmentScenario = ({
     urgency = 'unknown';
   }
 
-  const horizonDays = Math.max(1, Number(plannedDays) || 7);
   let recommendedReorderQuantity = null;
   if (burnRate !== null && burnRate > 0) {
     const targetStock = burnRate * horizonDays;
@@ -244,12 +320,14 @@ const evaluateReplenishmentScenario = ({
     itemId: item?.id || null,
     itemName: item?.feedName || item?.additiveName || item?.name || null,
     itemType: item?.itemType || (item?.feedName ? 'feed' : item?.additiveName ? 'additive' : null),
-    unit: item?.unit || 'kg',
+    unit: item?.unit ? String(item.unit).trim() : null,
     stockStatus,
     burnRate: {
       kgPerDay: burnRate,
       isZeroUsage: burnRate === 0,
       isUnknown: burnRate === null,
+      lookbackDays: lookback,
+      window: windowStartKey && effectiveTodayKey ? { startDate: windowStartKey, endDate: effectiveTodayKey } : null,
     },
     runway,
     shortfall,

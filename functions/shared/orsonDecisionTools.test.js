@@ -26,31 +26,21 @@ const buildMockDb = (data = {}) => {
     feeds: data.feeds || {},
     additives: data.additives || {},
     users: data.users || {},
+    cycles: data.cycles || {},
   };
 
-  const makeQuery = (items, filters = []) => ({
+  const makeQuery = (items, filters = [], limitCount = null) => ({
     where: (field, op, val) =>
-      makeQuery(items, [...filters, { field, op, val }]),
-    orderBy: () => makeQuery(items, filters),
-    limit: (n) => ({
-      get: async () => {
-        let res = [...items];
-        for (const f of filters) {
-          if (f.op === '==') res = res.filter((it) => it.data[f.field] === f.val);
-        }
-        return {
-          docs: res.slice(0, n).map((it) => ({
-            id: it.id,
-            exists: true,
-            data: () => ({ ...it.data }),
-          })),
-        };
-      },
-    }),
+      makeQuery(items, [...filters, { field, op, val }], limitCount),
+    orderBy: () => makeQuery(items, filters, limitCount),
+    limit: (n) => makeQuery(items, filters, n),
     get: async () => {
       let res = [...items];
       for (const f of filters) {
         if (f.op === '==') res = res.filter((it) => it.data[f.field] === f.val);
+      }
+      if (typeof limitCount === 'number') {
+        res = res.slice(0, limitCount);
       }
       return {
         docs: res.map((it) => ({
@@ -63,55 +53,54 @@ const buildMockDb = (data = {}) => {
   });
 
   return {
-    collection: (collName) => ({
-      doc: (docId) => ({
-        get: async () => {
-          const docData = store[collName]?.[docId];
-          return {
-            id: docId,
-            exists: !!docData,
-            data: () => (docData ? { ...docData } : undefined),
-          };
-        },
-        collection: (subColl) => {
-          const subMap = store[subColl]?.[docId] || {};
-          const items = Object.entries(subMap).map(([id, itemData]) => ({
-            id,
-            data: itemData,
-          }));
-          return {
-            doc: (subDocId) => ({
-              get: async () => {
-                const subData = subMap[subDocId];
-                return {
-                  id: subDocId,
-                  exists: !!subData,
-                  data: () => (subData ? { ...subData } : undefined),
-                };
-              },
-            }),
-            where: (field, op, val) => makeQuery(items, [{ field, op, val }]),
-            get: async () => makeQuery(items).get(),
-          };
-        },
-      }),
-      where: (field, op, val) => {
-        const topMap = store[collName] || {};
-        const items = Object.entries(topMap).map(([id, itemData]) => ({
-          id,
-          data: itemData,
-        }));
-        return makeQuery(items, [{ field, op, val }]);
-      },
-      get: async () => {
-        const topMap = store[collName] || {};
-        const items = Object.entries(topMap).map(([id, itemData]) => ({
-          id,
-          data: itemData,
-        }));
-        return makeQuery(items).get();
-      },
-    }),
+    collection: (collName) => {
+      const topMap = store[collName] || {};
+      const items = Object.entries(topMap).map(([id, itemData]) => ({
+        id,
+        data: itemData,
+      }));
+      const query = makeQuery(items);
+      return {
+        doc: (docId) => ({
+          get: async () => {
+            const docData = store[collName]?.[docId];
+            return {
+              id: docId,
+              exists: !!docData,
+              data: () => (docData ? { ...docData } : undefined),
+            };
+          },
+          collection: (subColl) => {
+            const subMap = store[subColl]?.[docId] || {};
+            const subItems = Object.entries(subMap).map(([id, itemData]) => ({
+              id,
+              data: itemData,
+            }));
+            const subQuery = makeQuery(subItems);
+            return {
+              doc: (subDocId) => ({
+                get: async () => {
+                  const subData = subMap[subDocId];
+                  return {
+                    id: subDocId,
+                    exists: !!subData,
+                    data: () => (subData ? { ...subData } : undefined),
+                  };
+                },
+              }),
+              where: (field, op, val) => makeQuery(subItems, [{ field, op, val }]),
+              orderBy: () => subQuery,
+              limit: (n) => subQuery.limit(n),
+              get: async () => subQuery.get(),
+            };
+          },
+        }),
+        where: (field, op, val) => makeQuery(items, [{ field, op, val }]),
+        orderBy: () => query,
+        limit: (n) => query.limit(n),
+        get: async () => query.get(),
+      };
+    },
   };
 };
 
@@ -152,6 +141,8 @@ const createTestFarmFixture = () => {
           pondArea: 1000,
           cycleStatus: 'active',
           pondCycleId: 'cycle-101',
+          cycleStartedAt: '2026-09-01',
+          docStart: '2026-09-01',
           initialPopulation: 100000,
           initialWeight: 0.8,
           feedCost: 4500,
@@ -261,6 +252,27 @@ const createTestFarmFixture = () => {
           pondId: 'pond-a',
           voided: true, // must be excluded
         },
+        'exp-inv-feed': {
+          date: '2026-09-01',
+          amount: 3000,
+          category: 'feed purchase',
+          reference: 'INVENTORY-FEED-01',
+          linkedInventory: 'feed-starter',
+          pondId: 'pond-a',
+          voided: false, // must be excluded as inventory purchase
+        },
+      },
+    },
+    cycles: {
+      'farm-1': {
+        'cycle-old': {
+          cycleName: 'Cycle 2025 Old',
+          cycleStartedAt: '2026-06-01',
+          startDate: '2026-06-01',
+          initialPopulation: 90000,
+          initialWeight: 0.6,
+          feedCost: 3500,
+        },
       },
     },
     feeds: {
@@ -326,10 +338,11 @@ const createTestFarmFixture = () => {
 };
 
 test('decisionToolSchemas exposes valid tool definitions with parameters', () => {
-  assert.equal(decisionToolSchemas.length, 3);
+  assert.equal(decisionToolSchemas.length, 4);
   assert.equal(periodFeedCostTool.name, 'summarize_period_feed_and_cost');
   assert.equal(comparePondCyclesTool.name, 'compare_pond_cycles');
   assert.equal(inventoryReplenishmentTool.name, 'evaluate_inventory_replenishment');
+  assert.equal(harvestScenarioTool.name, 'evaluate_harvest_scenario');
   assert.ok(periodFeedCostTool.parameters.required.includes('startDate'));
   assert.ok(comparePondCyclesTool.parameters.required.includes('pondId'));
 });
@@ -437,8 +450,11 @@ test('summarize_period_feed_and_cost: aggregates across all accessible ponds whe
   assert.equal(result.feed.totalFeedKg, 200);
   assert.ok(Array.isArray(result.feed.ponds));
   assert.equal(result.feed.ponds.length, 3); // pond-a, pond-b, pond-restricted
+  assert.equal(result.feed.expectedPondDays, 15);
+  assert.equal(result.feed.coveragePercent, 33.3);
+  assert.equal(result.retrieval.complete, true);
 
-  // Farm-wide expenses: exp-1 (500) + exp-2 (250) + exp-3 (800) = 1550
+  // Farm-wide expenses: exp-1 (500) + exp-2 (250) + exp-3 (800) = 1550 (exp-inv-feed 3000 excluded!)
   assert.equal(result.finance.totalExpenses, 1550);
   assert.equal(result.finance.expensesByCategory.energy, 800);
 });
@@ -594,6 +610,40 @@ test('compare_pond_cycles: cycle comparison on same pond aligns at specified asO
   assert.equal(result.scope.alignedAtDoc, 30);
   assert.equal(result.primary.metrics.doc, 30);
   assert.equal(result.secondary.metrics.doc, 30);
+  assert.equal(result.secondary.effectivePond, undefined, 'effectivePond must be omitted from public DTO');
+  assert.equal(result.primary.effectivePond, undefined, 'effectivePond must be omitted from public DTO');
+  assert.equal(result.secondary.metrics.currentPopulation, 90000); // calculated from cycle-old initialPopulation 90000!
+  assert.equal(result.finance.secondaryFeedCost, 3500); // from cycle-old doc, not active pond's 4500!
+  assert.equal(result.finance.feedCostDiff, -1000);
+});
+
+test('compare_pond_cycles: asOfDoc cutoff filters out samplings and mortality after the cutoff DOC', async () => {
+  const db = buildMockDb(createTestFarmFixture());
+  const context = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => ['viewFarm', 'viewFinance'].includes(p),
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+
+  // pond-a has cycle-101 samplings on Sep 1 (3.5g, DOC 1), Sep 2 (3.8g, DOC 2), Sep 5 (4.6g, DOC 5).
+  // Aligning at DOC 2 should filter out Sep 5 (4.6g) and make latestMbw = 3.8g.
+  const result = await comparePondCycles(
+    {
+      pondId: 'pond-a',
+      cycleId: 'cycle-101',
+      compareCycleId: 'cycle-old',
+      asOfDoc: 2,
+    },
+    context,
+  );
+
+  assert.equal(result.status, 'ok');
+  assert.equal(result.primary.metrics.doc, 2);
+  assert.equal(result.primary.metrics.latestMbw, 3.8); // Sep 5 (4.6g) filtered out!
+  assert.equal(result.primary.coverage.samplingsCount, 2); // only Sep 1 and Sep 2 included!
 });
 
 test('compare_pond_cycles: enterprise technician scoping rejects comparison with unassigned block pond', async () => {
@@ -1002,6 +1052,7 @@ test('evaluate_harvest_scenario: technician receives operational growth projecti
   assert.equal(result.today.operatingProfit, undefined);
   assert.equal(result.today.totalCosts, undefined);
   assert.equal(result.today.pricePerKg, undefined);
+  assert.equal(result.assumptions.feedCostUnitPerKg, undefined, 'feedCostUnitPerKg must be stripped from assumptions for non-finance caller');
 
   assert.ok(result.targets.length > 0);
   const target = result.targets[0];
@@ -1056,6 +1107,39 @@ test('evaluate_harvest_scenario: missing critical biological data or missing pri
   assert.equal(missingPriceResult.decision, 'review_data');
   assert.ok(missingPriceResult.missingEvidence.includes('missing_market_price'));
   assert.ok(missingPriceResult.warnings.some((w) => w.includes('Market price tiers are missing')));
+});
+
+test('evaluate_harvest_scenario: missing feed unit cost returns review_data and never defaults to 1.5', async () => {
+  const fixture = createTestFarmFixture();
+  // Clear feed costs and feed inventory
+  fixture.feeds['farm-1'] = {};
+  delete fixture.ponds['farm-1']['pond-a'].feedCost;
+  fixture.expenses['farm-1'] = {};
+
+  const db = buildMockDb(fixture);
+  const context = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => ['viewFarm', 'viewFinance'].includes(p),
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+
+  const priceLadder = [
+    { sizeCountPerKg: 100, pricePerKg: 6.5 },
+    { sizeCountPerKg: 50, pricePerKg: 9.0 },
+  ];
+
+  const result = await evaluateHarvestScenario(
+    { pondId: 'pond-a', priceLadder },
+    context,
+  );
+
+  assert.equal(result.decision, 'review_data');
+  assert.ok(result.missingEvidence.includes('missing_historical_feed_unit_cost'));
+  assert.ok(result.warnings.some((w) => w.includes('Feed unit cost is missing or zero')));
+  assert.equal(result.finance.feedUnitCostPerKg, 0); // Strictly not 1.5!
 });
 
 test('evaluate_harvest_scenario: enterprise technician blocked from unassigned pond in block 2', async () => {
@@ -1127,3 +1211,49 @@ test('evaluate_harvest_scenario: strictly read-only and executes zero Firestore 
   const finalPondJSON = JSON.stringify(fixture.ponds['farm-1']['pond-a']);
   assert.equal(finalPondJSON, initialPondJSON, 'Pond document state in fixture must remain unchanged');
 });
+
+test('non-finance JSON serialization leakage assertion: zero secret financial fields in serialized output', async () => {
+  const db = buildMockDb(createTestFarmFixture());
+  const context = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => p === 'viewFarm', // strictly non-finance caller
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+
+  // 1. Period feed & cost tool
+  const periodRes = await summarizePeriodFeedAndCost({ pondId: 'pond-a', startDate: '2026-09-01' }, context);
+  const periodStr = JSON.stringify(periodRes);
+  assert.ok(!periodStr.includes('"feedCostPerKg"'), 'Must not serialize feedCostPerKg for non-finance');
+  assert.ok(!periodStr.includes('"totalExpenses"'), 'Must not serialize totalExpenses for non-finance');
+
+  // 2. Compare pond cycles tool
+  const compareRes = await comparePondCycles({ pondId: 'pond-a', comparePondId: 'pond-b' }, context);
+  const compareStr = JSON.stringify(compareRes);
+  assert.ok(!compareStr.includes('"effectivePond"'), 'Must not serialize internal effectivePond');
+  assert.ok(!compareStr.includes('"primaryFeedCost"'), 'Must not serialize primaryFeedCost');
+  assert.ok(!compareStr.includes('"secondaryFeedCost"'), 'Must not serialize secondaryFeedCost');
+  assert.ok(!compareStr.includes('"feedCostDiff"'), 'Must not serialize feedCostDiff');
+
+  // 3. Harvest scenario tool
+  const harvestRes = await evaluateHarvestScenario({ pondId: 'pond-a', targetMbwG: 10 }, context);
+  const harvestStr = JSON.stringify(harvestRes);
+  assert.ok(!harvestStr.includes('"revenue"'), 'Must not serialize revenue for non-finance');
+  assert.ok(!harvestStr.includes('"operatingProfit"'), 'Must not serialize operatingProfit for non-finance');
+  assert.ok(!harvestStr.includes('"feedCostUnitPerKg"'), 'Must not serialize feedCostUnitPerKg for non-finance');
+  assert.ok(!harvestStr.includes('"incurredCostsToDate"'), 'Must not serialize incurredCostsToDate for non-finance');
+});
+
+test('pure CommonJS runtime smoke test: orsonDecisionTools loads cleanly without TypeScript compiler or repo-root requires', () => {
+  const resolvedPath = require.resolve('./orsonDecisionTools');
+  delete require.cache[resolvedPath];
+  const reloaded = require('./orsonDecisionTools');
+  assert.ok(reloaded.summarizePeriodFeedAndCost);
+  assert.ok(reloaded.comparePondCycles);
+  assert.ok(reloaded.evaluateInventoryReplenishment);
+  assert.ok(reloaded.evaluateHarvestScenario);
+  assert.equal(reloaded.decisionToolSchemas.length, 4);
+});
+

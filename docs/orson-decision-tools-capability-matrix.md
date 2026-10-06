@@ -107,93 +107,91 @@ All decision scenario tools are strictly read-only, execute deterministically be
 
 ### 3.2 `compare_pond_cycles`
 
-- **Implementation:** `functions/shared/orsonDecisionTools.js#L382-L550`
+- **Implementation:** `functions/shared/orsonDecisionTools.js` (Pure Functions-Local CommonJS)
 - **Schema & Name:** `compare_pond_cycles`
-- **Purpose:** Performs a side-by-side comparative analysis of two cycles: either comparing two active ponds concurrently, or comparing an active cycle against a completed historical benchmark cycle on the same pond.
-- **Required Permission:** `viewFarm` (base comparison). Financial delta metrics require `viewFinance`.
-- **Canonical Calculation Helpers Reused:**
-  - `calculateFeedTotals` (`shared/pondCalculations.ts`)
-  - `calculateFCR` (`shared/pondCalculations.ts`)
-  - `calculateDailyBiomassKg` (`shared/pondCalculations.ts`)
-  - `calculateSurvivalRate` (`shared/pondCalculations.ts`)
+- **Purpose:** Performs a side-by-side comparative analysis of two cycles: either comparing two active ponds concurrently, or comparing an active cycle against a historical benchmark cycle on the same pond, optionally aligned at an exact biological age (`asOfDoc`).
+- **Required Permission:** `viewFarm` (base comparison). Financial delta metrics (`primaryFeedCost`, `secondaryFeedCost`, `feedCostDiff`) require `viewFinance`.
 - **Inputs:**
-  - `basePondId` (string, required)
-  - `comparePondId` (string, optional; defaults to `basePondId` for historical comparison)
-  - `baseCycleId` (string, optional; defaults to active cycle)
-  - `compareCycleId` (string, optional; defaults to previous completed cycle or active cycle of comparison pond)
-- **Output Model:**
-  - `base`: Snapshot of DOC, MBW (g), ADG (g/day), cumulative feed (kg), FCR, survival rate (%), biomass (kg), and feed cost (if permitted).
-  - `compare`: Snapshot of the comparison pond/cycle.
-  - `deltas`: Exact numerical differences (`docDiff`, `mbwDiffG`, `adgDiffGPerDay`, `feedDiffKg`, `fcrDiff`, `survivalRateDiffPercent`, `biomassDiffKg`, `feedCostDiff`).
-  - `missingEvidence`: Array of missing parameter names (e.g., `["survivalRate", "fcr"]`), never fabricated.
-  - `finance`: `{ financeAllowed, currency }`.
-- **Scope & Security:** Enterprise technician block scoping enforced. Cross-company cycle access returns `not_found`.
+  - `pondId` (string, required)
+  - `comparePondId` (string, optional; defaults to `pondId` for cycle-to-cycle comparison)
+  - `cycleId` (string, optional; defaults to active cycle)
+  - `compareCycleId` (string, optional; for historical cycle comparison)
+  - `asOfDoc` (integer 1–200, optional Day of Culture cutoff)
+- **Sanitized Public Output Model:**
+  - `primary`: `{ pondId, pondName, cycleId, metrics, coverage }` (internal `effectivePond` strictly omitted)
+  - `secondary`: `{ pondId, pondName, cycleId, metrics, coverage }` (internal `effectivePond` strictly omitted)
+  - `deltas`: Exact differences (`mbwDiffG`, `adgDiffGPerDay`, `survivalRateDiffPercent`, `fcrDiff`, `biomassDiff`, `biomassDiffKg`, `feedConsumedDiffKg`)
+  - `insights`: Actionable comparative takeaways
+  - `finance`: `{ financeAllowed, primaryFeedCost, secondaryFeedCost, feedCostDiff }` (withheld if `!viewFinance`)
+- **Deterministic Historical Cycle Resolution:**
+  - Explicit cycle document lookup verifies company membership and pond association.
+  - Missing cycles return `{ status: 'not_found' }` rather than silently falling back to the active pond.
+- **DOC Cutoff Invariant:**
+  - When `asOfDoc` is provided, samplings, daily mortalities, and harvest records occurring after the cutoff DOC are filtered out.
+  - Historical harvests on or before the cutoff are aggregated into `totalHarvestedPopulation` and `totalHarvestedBiomass` to maintain post-harvest population integrity.
 
 ### 3.3 `evaluate_inventory_replenishment`
 
-- **Implementation:** `functions/shared/orsonInventoryPolicy.js#L52-L280` & `functions/shared/orsonDecisionTools.js#L552-L730`
+- **Implementation:** `functions/shared/orsonInventoryPolicy.js` & `functions/shared/orsonDecisionTools.js`
 - **Schema & Name:** `evaluate_inventory_replenishment`
 - **Purpose:** Models feed and additive inventory replenishment needs, calculating daily burn rates, remaining stock runway (days), projected shortfall against upcoming dose requirements, and procurement urgency.
-- **Required Permission:** `viewFarm`. Unit purchase price and projected procurement cost require `viewFinance`.
+- **Required Permission:** `viewFarm`. Unit purchase price and projected replenishment cost require `viewFinance`.
 - **Inputs:**
   - `itemId` (string, optional; evaluates single feed/additive or all items)
-  - `inventoryKind` (string: `'feed'`, `'additive'`, or `'all'`, default `'all'`)
-  - `lookbackDays` (integer 3–60, default 14)
-  - `planningHorizonDays` (integer 1–90, default 14)
+  - `itemType` (string: `'feed'`, `'additive'`, or `'all'`, default `'all'`)
+  - `lookbackDays` (integer 3–60, default 14, server-capped)
+  - `plannedDays` (integer 1–90, default 7, server-capped)
   - `requiredQuantity` (number, optional maintenance or dosing requirement)
-  - `requiredUnit` (string, optional unit for verification)
+  - `unit` (string, optional unit for verification)
 - **Output Model:**
   - `items`: Array of evaluated inventory items:
-    - `id`, `name`, `inventoryKind`, `unit`
-    - `currentStock`: Verified positive number or `null`
-    - `stockStatus`: `{ status: 'in_stock' | 'low_stock' | 'zero_stock' | 'negative_stock' | 'unknown_stock', isStockSufficient }`
-    - `burnRate`: `{ lookbackDays, totalUsageRecorded, dailyBurnRate, hasRecordedUsage }`
-    - `runwayDays`: Estimated days of remaining inventory, or `null` if stock or burn rate unknown
-    - `replenishment`: `{ planningHorizonDays, projectedDemand, shortfallQuantity, urgency: 'immediate' | 'high' | 'normal' | 'none' }`
-    - `finance`: `{ financeAllowed, estimatedUnitCost, estimatedReplenishmentCost, currency }`
-  - `guardrails`: `{ noProcurementExecuted: true, isAdvisoryOnly: true, timestamp }`
-- **Strict Grounding Rule (No Fake Stock Adequacy):**
-  - **Missing data is NEVER called adequate stock.**
-  - If stock balance is `null`, `status` is strictly `'unknown_stock'`, `isStockSufficient` is `false`, and `runwayDays` is `null`.
-  - Advisory warnings clearly mandate warehouse verification.
+    - `itemId`, `itemName`, `itemType`, `unit` (unspecified units remain `null`, never defaulted to `'kg'`)
+    - `stockStatus`: `{ status: 'in_stock' | 'low_stock' | 'zero_stock' | 'negative_stock' | 'unknown_stock', availableStock, reorderLevel }`
+    - `burnRate`: `{ kgPerDay, isZeroUsage, isUnknown, lookbackDays, window: { startDate, endDate } }`
+    - `runway`: `{ daysOfSupply, runwayStatus, reason }`
+    - `shortfall`: `{ shortfall, surplus, hasSufficientStock, severity, unitMismatch }`
+    - `reorderAssessment`: `{ isReorderNeeded, urgency, plannedHorizonDays, recommendedReorderQuantity }`
+    - `finance`: `{ financeAllowed, unitCost, estimatedReplenishmentCost }`
+  - `guardrails`: `{ advisoryOnly: true, noProcurementExecuted: true, requiresUserConfirmation: true }`
+- **Strict Farm-Calendar Bounding & Unit Invariants:**
+  - Burn rate lookback is strictly bounded between `windowStartKey <= dateKey <= todayKey`.
+  - Undated, stale (`< windowStartKey`), and future (`> todayKey`) records are excluded.
+  - Usage rows with unverified or incompatible units are excluded; items with unknown units never default to `'kg'`.
+  - Empty history produces `burnRate: null` (`isUnknown: true`), distinctly separated from verified zero usage (`burnRate: 0`).
 - **Strict Read-Only Guarantee:**
   - Purely advisory evaluation. Guaranteed zero procurement actions executed (`noProcurementExecuted: true`). No Firestore writes, no purchase orders created, no inventory deducted.
 
 ### 3.4 `evaluate_harvest_scenario`
 
-- **Implementation:** `shared/harvestProfitability.ts#L182-L340` & `functions/shared/orsonDecisionTools.js#L732-L1285`
+- **Implementation:** `functions/shared/orsonDecisionTools.js` (Pure Functions-Local CommonJS)
 - **Schema & Name:** `evaluate_harvest_scenario`
 - **Purpose:** Evaluates read-only harvest scenarios comparing harvesting today versus continuing grow-out to target market sizes or dates.
-- **Required Permission:** `viewFarm`. Revenue projections, gross margin, and margin delta strictly require `viewFinance`.
-- **Canonical Engine Reused:**
-  - `evaluateHarvestDecisionForPond` (`shared/harvestProfitability.ts`)
-  - `calculateProjectedMbw` (`shared/harvestProfitability.ts`)
-  - `calculateGrossBiomassKg` (`shared/harvestProfitability.ts`)
-  - `calculateEstimatedRevenue` (`shared/harvestProfitability.ts`)
-  - `calculateProjectedMargin` (`shared/harvestProfitability.ts`)
+- **Required Permission:** `viewFarm`. Revenue projections, incurred costs, feed unit costs, and operating profit margins strictly require `viewFinance`.
 - **Inputs:**
   - `pondId` (string, required)
   - `cycleId` (string, optional, defaults to active cycle)
   - `targetMbwG` (number, optional target MBW)
   - `targetSizeCountPerKg` (number, optional target shrimp size count)
-  - `daysToHarvest` (integer 1–120, optional grow-out horizon)
+  - `daysToHarvest` (integer 1–120, optional grow-out horizon, server-capped)
   - `pricePerKg` (number, optional flat price in farm currency)
   - `priceLadder` (array of `{ sizeCountPerKg, pricePerKg }`, optional tiered market ladder)
 - **Output Model:**
-  - `baselineHarvestToday`: Current DOC, MBW, population, gross biomass (kg), and financial revenue/margin (if authorized).
-  - `targetScenario`: Projected DOC, projected MBW (using biological growth taper), surviving population, projected biomass (kg), additional feed required (kg), and projected revenue/margin.
-  - `deltas`: Biomass gain, additional grow-out days, feed required, revenue delta, and profit margin delta.
-  - `decisionRecommendation`: Advisory recommendation code and explanatory rationale (`recommendation: 'harvest_now' | 'continue_growout' | 'insufficient_margin' | 'high_biological_risk'`).
-  - `assumptions`: Array of explicit modeling assumptions (mortality rate, growth taper, baseline FCR, market price source).
-  - `missingEvidence`: Array of unrecorded parameters required for higher model confidence.
-  - `finance`: `{ financeAllowed, currency, financialMarginWithheld }`.
-    - Non-finance callers receive complete biological, biomass, and feed projections with financial margins withheld.
-  - `guardrails`: `{ isAdvisory: true, noHarvestExecuted: true, notes: 'Pure read-only decision scenario. No harvest records created and no Firestore writes occurred.' }`.
-- **Strict Grounding Rule (No Guaranteed Outcomes):**
-  - **Scenarios are NEVER presented as guaranteed outcomes.**
-  - All projections are explicitly labeled as hypothesis-based advisory estimates subject to environmental variability, disease risks, feed response, and market price fluctuations.
+  - `today`: Current DOC, MBW, population, survival rate, projected biomass (kg), and financial revenue/operating profit (if authorized).
+  - `targets`: Array of reachable target sizes with projected DOC, MBW (via von Bertalanffy growth taper), surviving population, projected biomass, incremental feed required, and operating profit.
+  - `bestScenario`: The scenario yielding maximum operating profit (or operational recommendation for non-finance callers).
+  - `assumptions`: Modeling parameters (`growthModel`, `assumedAdgGPerDay`, `mortalityBasis`, `mortalityDailyRatePercent`, `feedCostUnitPerKg` [stripped for non-finance callers], `maxProjectionDays`).
+  - `missingEvidence`: Array of missing parameter names (e.g., `missing_historical_feed_unit_cost`, `missing_market_price`).
+  - `finance`: `{ financeAllowed, incurredCostsToDate, feedUnitCostPerKg, marginBasis }`.
+- **Full Cycle Pond Cohort Allocation:**
+  - Shared cycle-level expenses are divided across the full active pond cohort for that cycle (`allCycleCohortPonds`), preventing 100% of cycle expenses from being mistakenly attributed to a single pond.
+- **Zero Cost Fabrication Invariant:**
+  - Feed unit cost is derived exclusively from verified consumed feed records (`totalCost / quantity`).
+  - It NEVER falls back to catalog price averages or `pond.feedCost`.
+  - When feed unit cost is missing or zero, projected operating profit and margins are withheld (`null`) and the recommendation is set to `'review_data'`.
+- **Strict Role-Based DTO Sanitization:**
+  - Non-finance callers receive complete biological and biomass projections with `revenue`, `operatingProfit`, `futureCosts`, `totalCosts`, `pricePerKg`, and `assumptions.feedCostUnitPerKg` completely stripped from the output.
 - **Strict Read-Only Guarantee:**
-  - 0 harvest records created, 0 pond statuses modified, 0 Firestore writes.
+  - 0 harvest records created, 0 pond statuses modified, 0 Firestore writes. Purely advisory evaluation.
 
 ---
 

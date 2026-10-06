@@ -6,6 +6,8 @@ const {
   decisionToolSchemas,
   periodFeedCostTool,
   comparePondCyclesTool,
+  inventoryReplenishmentTool,
+  harvestScenarioTool,
   executeDecisionTool,
 } = require('./orsonDecisionTools');
 const DATASETS = Object.freeze({
@@ -395,7 +397,12 @@ const createOrsonAppDataReader = ({ db, company, user, uid, companyId }) => {
       if (!scoped) throw new Error('Not permitted');
       return buildPondTimeline(snap.id || args.pondId, cleanRecord(scoped, canViewFinance), args, company.timeZone);
     }
-    if (name === periodFeedCostTool.name || name === comparePondCyclesTool.name) {
+    if (
+      name === periodFeedCostTool.name ||
+      name === comparePondCyclesTool.name ||
+      name === inventoryReplenishmentTool.name ||
+      name === harvestScenarioTool.name
+    ) {
       return executeDecisionTool(name, args, {
         db,
         company,

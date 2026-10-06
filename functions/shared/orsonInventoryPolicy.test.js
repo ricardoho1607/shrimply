@@ -159,15 +159,90 @@ test('evaluateReplenishmentScenario: comprehensive evaluation of missing, partia
   assert.equal(partialNoUsage.runway.daysOfSupply, null);
   assert.equal(partialNoUsage.reorderAssessment.isReorderNeeded, false);
 
-  // 3. Zero-usage input: usageHistory is empty array [] (no recorded burn)
-  const zeroUsage = evaluateReplenishmentScenario({
+  // 3. Empty-history input: usageHistory is empty array [] (unknown usage, never zero consumption)
+  const emptyHistory = evaluateReplenishmentScenario({
     item: { id: 'feed-2', feedName: 'Starter Feed', totalStock: 80, usageHistory: [], unit: 'kg' },
+  });
+  assert.equal(emptyHistory.burnRate.kgPerDay, null);
+  assert.equal(emptyHistory.burnRate.isUnknown, true);
+  assert.equal(emptyHistory.burnRate.isZeroUsage, false);
+  assert.equal(emptyHistory.runway.runwayStatus, 'unknown');
+  assert.equal(emptyHistory.runway.daysOfSupply, null);
+  assert.equal(emptyHistory.reorderAssessment.isReorderNeeded, false);
+
+  // 3b. Verified zero-usage input: usageHistory has explicit 0kg consumption records
+  const zeroUsage = evaluateReplenishmentScenario({
+    item: {
+      id: 'feed-2b',
+      feedName: 'Starter Feed',
+      totalStock: 80,
+      usageHistory: [
+        { date: '2026-09-01', quantity: 0 },
+        { date: '2026-09-02', quantity: 0 },
+      ],
+      unit: 'kg',
+    },
   });
   assert.equal(zeroUsage.burnRate.kgPerDay, 0);
   assert.equal(zeroUsage.burnRate.isZeroUsage, true);
+  assert.equal(zeroUsage.burnRate.isUnknown, false);
   assert.equal(zeroUsage.runway.runwayStatus, 'stable_zero_consumption');
   assert.equal(zeroUsage.runway.daysOfSupply, null);
   assert.equal(zeroUsage.reorderAssessment.isReorderNeeded, false);
+
+  // 3c. Filtered usage: excludes voided, transfers, and incompatible units
+  const filteredUsage = evaluateReplenishmentScenario({
+    item: {
+      id: 'feed-2c',
+      feedName: 'Starter Feed',
+      totalStock: 80,
+      unit: 'kg',
+      usageHistory: [
+        { date: '2026-09-01', quantity: 15, unit: 'kg' },
+        { date: '2026-09-01', quantity: 5, unit: 'kg' }, // same day -> grouped into 20kg
+        { date: '2026-09-02', quantity: 999, voided: true, unit: 'kg' }, // voided
+        { date: '2026-09-02', quantity: 999, transfer: true, unit: 'kg' }, // transfer
+        { date: '2026-09-02', quantity: 999, source: 'treatmentMixProduction', unit: 'kg' }, // mix transfer
+        { date: '2026-09-02', quantity: 999, unit: 'liters' }, // incompatible unit
+        { date: '2026-09-02', quantity: 20, unit: 'kg' }, // valid
+      ],
+    },
+  });
+  // Day 1 (Sep 1): 20kg, Day 2 (Sep 2): 20kg -> average 20kg/day
+  assert.equal(filteredUsage.burnRate.kgPerDay, 20);
+
+  // 3d. Strictly bounded window: excludes undated, future (> todayKey), and stale (< windowStartKey) rows
+  const boundedWindowUsage = evaluateReplenishmentScenario({
+    item: {
+      id: 'feed-2d',
+      feedName: 'Grower Feed',
+      totalStock: 100,
+      unit: 'kg',
+      usageHistory: [
+        { date: '2026-08-01', quantity: 999, unit: 'kg' }, // stale (older than 14 days)
+        { date: '2026-09-01', quantity: 10, unit: 'kg' }, // valid
+        { date: '2026-09-02', quantity: 10, unit: 'kg' }, // valid
+        { date: null, quantity: 50, unit: 'kg' }, // undated -> excluded
+        { date: '2026-09-10', quantity: 999, unit: 'kg' }, // future relative to todayKey -> excluded
+      ],
+    },
+    todayKey: '2026-09-02',
+    lookbackDays: 14,
+  });
+  assert.equal(boundedWindowUsage.burnRate.kgPerDay, 10);
+  assert.equal(boundedWindowUsage.burnRate.window.startDate, '2026-08-20');
+  assert.equal(boundedWindowUsage.burnRate.window.endDate, '2026-09-02');
+
+  // 3e. Missing unit handling: item unit is null, missing unit never coerced to kg
+  const missingUnitItem = evaluateReplenishmentScenario({
+    item: { id: 'feed-2e', feedName: 'Unlabeled Feed', totalStock: 50 },
+    requiredQuantity: 10,
+    requiredUnit: 'kg',
+  });
+  assert.equal(missingUnitItem.unit, null);
+  assert.equal(missingUnitItem.shortfall.unitMismatch, true);
+  assert.match(missingUnitItem.shortfall.reason, /verified unit/);
+
 
   // 4. Zero-stock input: totalStock is 0
   const zeroStock = evaluateReplenishmentScenario({
