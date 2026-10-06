@@ -110,6 +110,7 @@ function FeedAdditivesScreenContent() {
   const [modalType, setModalType] = useState<ModalType>('add');
   const [itemType, setItemType] = useState<ItemType>('feed');
   const [selectedItem, setSelectedItem] = useState<Feed | Additive | null>(null);
+  const [removingUsageId, setRemovingUsageId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [stockStatusFilter, setStockStatusFilter] = useState<'all' | 'inStock' | 'outOfStock'>('inStock');
   const [searchQuery, setSearchQuery] = useState('');
@@ -354,6 +355,32 @@ function FeedAdditivesScreenContent() {
     }, `${t.inventory.usageRecorded} — ${qty} ${t.inventory.removed}`);
   }, [selectedItem, formData, itemType, store, handleAction, checkAndCreateLowStockNotification, t, save]);
 
+  const handleRemoveUsage = (usage: { id: string; quantity: number; date: string }) => {
+    if (!canEditInventory || itemType !== 'additive' || !selectedItem || save.busy) return;
+    const additiveId = selectedItem.id;
+    Alert.alert('Remove usage', `Remove ${usage.quantity} ${selectedItem.unit || 'kg'} used on ${formatDate(usage.date)}? This restores the recorded stock and cost and removes this usage expense.`, [
+      { text: t.common.cancel, style: 'cancel' },
+      {
+        text: t.companyDetails.remove,
+        style: 'destructive',
+        onPress: async () => {
+          if (auth.currentUser?.uid !== user?.uid || useFeedAdditiveStore.getState().currentCompanyId !== company?.id || !save.acquire()) return;
+          setRemovingUsageId(usage.id);
+          setVoidError('');
+          try {
+            await store.removeAdditiveUsage(additiveId, usage.id);
+            save.complete();
+          } catch (error) {
+            setVoidError(error instanceof Error ? error.message : 'Could not remove usage. Please try again.');
+          } finally {
+            setRemovingUsageId(null);
+            save.release();
+          }
+        },
+      },
+    ]);
+  };
+
   const handleDelete = useCallback((id: string, type: ItemType) => {
     const item = (type === 'feed' ? store.feeds : store.additives).find(row => row.id === id);
     Alert.alert(item?.archived ? 'Restore inventory item' : 'Archive inventory item', 'Purchase and usage history will be retained. Only items without remaining stock can be archived.', [
@@ -540,7 +567,7 @@ function FeedAdditivesScreenContent() {
             {type === 'stock' && canEditInventory && canUseOrson && h.id && h.date && (
               <TouchableOpacity
                 style={styles.voidRecordBtn}
-                disabled={agent.busy || preparingRecordId === h.id}
+                disabled={savePending || agent.busy || preparingRecordId === h.id}
                 onPress={() => void handlePrepareVoid(h)}
                 accessibilityRole="button"
                 accessibilityLabel={`Void purchase on ${formatDate(h.date)}`}
@@ -551,6 +578,18 @@ function FeedAdditivesScreenContent() {
                   <Ionicons name="trash-outline" size={16} color="#e74c3c" />
                 )}
                 <Text style={styles.voidRecordText}>Void</Text>
+              </TouchableOpacity>
+            )}
+            {type === 'usage' && itemType === 'additive' && canEditInventory && h.id && h.quantity > 0 && h.source !== 'treatmentMixProduction' && (
+              <TouchableOpacity
+                style={styles.voidRecordBtn}
+                disabled={savePending || agent.busy || preparingRecordId !== null}
+                onPress={() => handleRemoveUsage(h)}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${h.quantity} ${currentItem.unit || 'kg'} usage on ${formatDate(h.date)}`}
+              >
+                {removingUsageId === h.id ? <ActivityIndicator size="small" color="#e74c3c" /> : <Ionicons name="trash-outline" size={16} color="#e74c3c" />}
+                <Text style={styles.voidRecordText}>{t.companyDetails.remove}</Text>
               </TouchableOpacity>
             )}
           </View>

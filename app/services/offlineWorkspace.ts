@@ -1,4 +1,5 @@
 import { mergeAssetSave } from '../../shared/assetSave';
+import { removeAdditiveUsage } from '../../shared/additiveUsageRemoval';
 import { applyDailyFeedMutation } from './dailyFeedTransaction';
 import NetInfo from '@react-native-community/netinfo';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -326,8 +327,16 @@ const applyRemoteMutation = async (mutation: OfflineMutation): Promise<void> => 
           totalCost?: number;
           stockInHistory?: Record<string, unknown>[];
           usageHistory?: Record<string, unknown>[];
+          removedUsageIds?: string[];
         };
+        if (adjustment.action === 'removeUsage') {
+          if (inventory.collection !== 'additives') throw new Error('Only additive usage can be removed here.');
+          const update = removeAdditiveUsage(item, adjustment.historyEntry.id);
+          if (update) transaction.update(references[index], { ...update, lastUpdated: serverTimestamp() });
+          return;
+        }
         const historyField = adjustment.action === 'stockIn' ? 'stockInHistory' : 'usageHistory';
+        if (adjustment.action === 'consume' && item.removedUsageIds?.includes(adjustment.historyEntry.id)) return;
         const history = [...(item[historyField] ?? [])];
         if (history.some((entry) => entry.id === adjustment.historyEntry.id)) return;
 

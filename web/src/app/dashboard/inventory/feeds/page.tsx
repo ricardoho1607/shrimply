@@ -1,5 +1,6 @@
 "use client";
 import { requireAvailableStock } from '../../../../../../shared/financeIntegrity';
+import { removeAdditiveUsage } from '../../../../../../shared/additiveUsageRemoval';
 
 import { useSaveOperation } from '../../../../../../shared/useSaveOperation';
 import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
@@ -61,6 +62,9 @@ interface UsageHistory {
   id: string;
   date: string;
   quantity: number;
+  unitPrice?: number;
+  totalCost?: number;
+  source?: string;
   pondId?: string;
   cycleId?: string;
   cycleName?: string;
@@ -221,6 +225,8 @@ export default function InventoryFeedsPage() {
   const [modalType, setModalType] = useState<'add' | 'stockIn' | 'usage' | 'history' | 'editReorder'>('add');
   const [itemType, setItemType] = useState<'feed' | 'additive'>('feed');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [removingUsageId, setRemovingUsageId] = useState<string | null>(null);
+  const [usageRemovalError, setUsageRemovalError] = useState('');
   const [acceptedVoid, setAcceptedVoid] = useState<AcceptedVoid | null>(null);
   const acceptedVoidRef = useRef<AcceptedVoid | null>(null);
   const voidActionLock = useRef(false);
@@ -381,6 +387,7 @@ export default function InventoryFeedsPage() {
     if (!save.reset()) return;
     if (!canEditInventory && type !== 'history') return;
     if (save.busy || voidActionLock.current || agent.busy) return;
+    setUsageRemovalError('');
     if (!acceptedVoidRef.current) setVoidPreparationError('');
     const effectiveItemType = iType || itemType;
     setModalType(type);
@@ -713,7 +720,7 @@ export default function InventoryFeedsPage() {
           const snapshot = await tx.get(ref);
           if (!snapshot.exists()) throw new Error('Item not found');
           const data = snapshot.data();
-          if ((data.usageHistory || []).some((entry: { id?: string }) => entry.id === usageId)) return;
+          if ((data.usageHistory || []).some((entry: { id?: string }) => entry.id === usageId) || data.removedUsageIds?.includes(usageId)) return;
 
           const newStock = requireAvailableStock(data.totalStock, qty);
           const currentStock = data.totalStock || 0;
@@ -766,6 +773,29 @@ export default function InventoryFeedsPage() {
       console.error('Inventory action failed:', err);
       alert(copy('Operation failed. Please try again.'));
     } finally {
+      save.release();
+    }
+  };
+
+  const handleRemoveUsage = async (item: InventoryItem, usage: UsageHistory) => {
+    if (!companyId || !userUid || auth.currentUser?.uid !== userUid || !canEditInventory || itemType !== 'additive' || save.busy) return;
+    if (!window.confirm(`Remove ${formatQuantity(usage.quantity)} ${item.unit || 'kg'} used on ${formatDate(usage.date)}? This restores the recorded stock and cost and removes this usage expense.`)) return;
+    if (!save.acquire()) return;
+    setRemovingUsageId(usage.id);
+    setUsageRemovalError('');
+    try {
+      const ref = doc(db, 'companies', companyId, 'additives', item.id);
+      await runTransaction(db, async tx => {
+        const snapshot = await tx.get(ref);
+        if (!snapshot.exists()) throw new Error('Additive not found.');
+        const update = removeAdditiveUsage(snapshot.data(), usage.id);
+        if (update) tx.update(ref, { ...update, lastUpdated: serverTimestamp() });
+      });
+      save.complete();
+    } catch (error) {
+      setUsageRemovalError(error instanceof Error ? error.message : 'Could not remove usage. Please try again.');
+    } finally {
+      setRemovingUsageId(null);
       save.release();
     }
   };
@@ -1403,6 +1433,7 @@ export default function InventoryFeedsPage() {
                   })()}
                   <section className={styles.historySection}>
                     <h3>{copy('Usage History')} <span>{historyItem.usageHistory?.length || 0}</span></h3>
+                    {usageRemovalError && <p role="alert" className={styles.historyNote} style={{ color: '#b42318' }}>{usageRemovalError}</p>}
                     {(historyItem.usageHistory || []).length === 0 && <p className={styles.overviewEmpty}>{copy('No usage logs found.')}</p>}
                     {[...(historyItem.usageHistory || [])].reverse().map(h => (
                       <div key={h.id} className={styles.historyRecord}>
@@ -1411,7 +1442,22 @@ export default function InventoryFeedsPage() {
                             <strong>{formatDate(h.date)}</strong>
                             <small>{copy('Applied to')}: {h.pondId ? (ponds.find(p => p.id === h.pondId)?.pondName || copy('Unknown Pond')) : copy('General Inventory Usage')}</small>
                           </div>
-                          <strong className={styles.historyQuantity}>{formatUsageDisplay(h.quantity)} {historyItem.unit}</strong>
+                          <div className={styles.usageActions}>
+                            <strong className={styles.historyQuantity}>{formatUsageDisplay(h.quantity)} {historyItem.unit}</strong>
+                            {itemType === 'additive' && canEditInventory && h.id && h.quantity > 0 && h.source !== 'treatmentMixProduction' && (
+                              <button
+                                type="button"
+                                className={styles.removeUsageButton}
+                                disabled={savePending || agent.busy || voidActionBusy || hasOpenVoidOperation}
+                                onClick={() => void handleRemoveUsage(historyItem, h)}
+                                aria-label={`Remove ${formatQuantity(h.quantity)} ${historyItem.unit || 'kg'} usage on ${formatDate(h.date)}`}
+                                title="Restore the recorded stock and cost and remove this usage expense"
+                              >
+                                {removingUsageId === h.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                                {t.companyDetails.remove}
+                              </button>
+                            )}
+                          </div>
                         </div>
                         {h.notes && <p className={styles.historyNote}>{h.notes}</p>}
                       </div>

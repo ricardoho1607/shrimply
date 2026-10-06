@@ -315,3 +315,30 @@
     margin-left: -8px;
   }
 }
+.usageActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.removeUsageButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  border: 1px solid #f2c7c7;
+  border-radius: 8px;
+  background: #fff;
+  color: #b42318;
+  padding: 7px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.removeUsageButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}

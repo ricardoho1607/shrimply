@@ -1,4 +1,5 @@
 import { getUsageReturnCost } from '../../shared/financeIntegrity';
+import { removeAdditiveUsage } from '../../shared/additiveUsageRemoval';
 import { create } from 'zustand';
 import { collection, doc, query, where, onSnapshot, Timestamp } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
@@ -117,6 +118,7 @@ export interface Feed {
 }
 
 export interface Additive {
+  removedUsageIds?: string[];
   archived?: boolean;
   id: string;
   companyId: string;
@@ -166,6 +168,7 @@ interface FeedAdditiveStore {
   addAdditive: (additive: Partial<Additive>) => Promise<void>;
   stockInAdditive: (additiveId: string, quantity: number, price: number, notes?: string, opts?: { stockDate?: string; expiry?: string; unit?: string; operationId?: string }) => Promise<void>;
   useAdditive: (additiveId: string, quantity: number, pondId?: string | null, notes?: string, operationId?: string) => Promise<void>;
+  removeAdditiveUsage: (additiveId: string, usageId: string) => Promise<void>;
   createTreatmentMix: (input: { name: string; yieldLiters: number; components: TreatmentMixComponent[]; notes?: string; operationId?: string }) => Promise<string>;
   makeTreatmentMixBatch: (treatmentMixId: string, operationId?: string) => Promise<void>;
   useTreatmentMix: (treatmentMixId: string, pond: { id: string; name: string; areaM2: number }, ppm: number, notes?: string, operationId?: string) => Promise<{ quantityLiters: number; totalCost: number }>;
@@ -1033,7 +1036,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('Quantity must be greater than 0');
     const additive = get().additives.find((item) => item.id === additiveId);
     if (!additive) throw new Error('Additive not found');
-    if (requestedOperationId && additive.usageHistory.some(entry => entry.id === `${requestedOperationId}:${additive.id}`)) {
+    if (requestedOperationId && (additive.usageHistory.some(entry => entry.id === `${requestedOperationId}:${additive.id}`) || additive.removedUsageIds?.includes(`${requestedOperationId}:${additive.id}`))) {
       await persistInventoryCache(currentCompanyId, get().feeds, get().additives);
       requestOfflineMutationFlush(auth.currentUser!.uid, currentCompanyId);
       return;
@@ -1079,6 +1082,34 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
         additiveId,
       ).catch((error) => console.error('Error creating low-stock notification:', error));
     }
+  },
+
+  removeAdditiveUsage: async (additiveId, usageId) => {
+    const { currentCompanyId, additives } = get();
+    if (!currentCompanyId) throw new Error('No company selected');
+    const userId = auth.currentUser?.uid;
+    if (!userId) throw new Error('No authenticated user');
+    const additive = additives.find(item => item.id === additiveId);
+    if (!additive) throw new Error('Additive not found');
+    const update = removeAdditiveUsage(additive, usageId);
+    if (!update) return;
+    const usage = additive.usageHistory.find(entry => entry.id === usageId);
+    if (!usage) return;
+    await queueInventoryAdjustments(
+      currentCompanyId,
+      'additives',
+      `additive-remove-usage-${additiveId}`,
+      additives,
+      () => [{ itemId: additiveId, action: 'removeUsage', quantity: Number(usage.quantity), historyEntry: { id: usageId } }],
+      undefined,
+      `additive-remove-usage:${additiveId}:${usageId}`,
+    );
+    if (get().currentCompanyId !== currentCompanyId || auth.currentUser?.uid !== userId) return;
+    set({ additives: get().additives.map(item => {
+      if (item.id !== additiveId) return item;
+      const removal = removeAdditiveUsage(item, usageId);
+      return removal ? { ...item, ...removal } : item;
+    }) });
   },
 
   createTreatmentMix: async ({ name, yieldLiters, components, notes, operationId }) => {

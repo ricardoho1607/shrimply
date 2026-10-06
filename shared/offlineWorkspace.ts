@@ -1,4 +1,5 @@
 import { reconcileDailyFeedStock, type DailyFeedIntent, type DailyFeedStock } from './dailyFeedTransaction';
+import { removeAdditiveUsage } from './additiveUsageRemoval';
 import { toCacheSafeValue } from './farmCache.ts';
 import { applyHarvestImpactToPond, reverseHarvestImpactOnPond } from './harvestCalculations.ts';
 
@@ -55,7 +56,7 @@ export type OfflineMutationKind = 'set' | 'delete' | 'inventory';
 
 export interface OfflineInventoryAdjustment {
   itemId: string;
-  action: 'stockIn' | 'consume' | 'restore';
+  action: 'stockIn' | 'consume' | 'restore' | 'removeUsage';
   quantity: number;
   price?: number;
   useFixedUnitPrice?: boolean;
@@ -152,14 +153,16 @@ const isOfflineMutation = (
 
   if (value.kind === 'set' && !isRecord(value.data)) return false;
   if (value.kind === 'inventory') {
-    if (!isRecord(value.inventory)
-      || (value.inventory.collection !== 'feeds' && value.inventory.collection !== 'additives')
-      || !Array.isArray(value.inventory.adjustments)
-      || (value.inventory.adjustments.length === 0 && !value.dailyFeed)
-      || !value.inventory.adjustments.every((adjustment) => (
+    const inventory = value.inventory;
+    if (!isRecord(inventory)
+      || (inventory.collection !== 'feeds' && inventory.collection !== 'additives')
+      || !Array.isArray(inventory.adjustments)
+      || (inventory.adjustments.length === 0 && !value.dailyFeed)
+      || !inventory.adjustments.every((adjustment) => (
         isRecord(adjustment)
         && typeof adjustment.itemId === 'string'
-        && ['stockIn', 'consume', 'restore'].includes(adjustment.action as string)
+        && ['stockIn', 'consume', 'restore', 'removeUsage'].includes(adjustment.action as string)
+        && (adjustment.action !== 'removeUsage' || inventory.collection === 'additives')
         && typeof adjustment.quantity === 'number'
         && adjustment.quantity > 0
         && (adjustment.useFixedUnitPrice === undefined || typeof adjustment.useFixedUnitPrice === 'boolean')
@@ -273,7 +276,19 @@ export const applyOfflineMutationToCollection = <T extends { id: string }>(
           totalCost?: number;
           stockInHistory?: Record<string, unknown>[];
           usageHistory?: Record<string, unknown>[];
+          removedUsageIds?: string[];
         };
+        if (adjustment.action === 'removeUsage') {
+          if (mutation.inventory?.collection !== 'additives') throw new Error('Only additive usage can be removed here.');
+          try {
+            const update = removeAdditiveUsage(inventoryItem, adjustment.historyEntry.id);
+            return update ? { ...inventoryItem, ...update } : item;
+          } catch {
+            // Preserve authoritative stock; the outbox reports the invalid remote history.
+            return item;
+          }
+        }
+        if (adjustment.action === 'consume' && inventoryItem.removedUsageIds?.includes(adjustment.historyEntry.id)) return item;
         const historyField = adjustment.action === 'stockIn' ? 'stockInHistory' : 'usageHistory';
         const history = [...(inventoryItem[historyField] ?? [])];
         if (history.some((entry) => entry.id === adjustment.historyEntry.id)) return item;

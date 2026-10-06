@@ -96,7 +96,7 @@ async function mobileReplay(mutation, initial = {}) {
   };
   const financeSync = load(path.join(root, 'shared/financeSync.ts'));
   const feeding = load(path.join(root, 'shared/feedInventoryUsage.ts'));
-  const deps = { db: {}, doc, runTransaction, serverTimestamp: () => 'server-time', ...financeSync, ...integrity, ...feeding, uploadMutationLocalFiles: async op => op.data || {}, cleanupMutationLocalFiles: async () => {}, Timestamp: class { constructor(seconds, nanoseconds) { this.seconds = seconds; this.nanoseconds = nanoseconds; } } };
+  const deps = { db: {}, doc, runTransaction, serverTimestamp: () => 'server-time', ...financeSync, ...integrity, ...feeding, ...load(path.join(root, 'shared/additiveUsageRemoval.ts')), uploadMutationLocalFiles: async op => op.data || {}, cleanupMutationLocalFiles: async () => {}, Timestamp: class { constructor(seconds, nanoseconds) { this.seconds = seconds; this.nanoseconds = nanoseconds; } } };
   const apply = new Function(...Object.keys(deps), compiled + '\nreturn applyRemoteMutation;')(...Object.values(deps));
   await apply(mutation);
   return data;
@@ -112,6 +112,29 @@ test('mobile creation and restock post one linked expense atomically, including 
   assert.equal(second['companies/farm/feeds/feed'].totalStock, 15);
   assert.equal(second['companies/farm/expenses/sync_INVENTORY-feed-feed-s2'].amount, 100);
   assert.deepEqual(await mobileReplay(restock, second), second);
+});
+
+test('mobile usage removal restores authoritative cost once and leaves other usage and purchases intact', async () => {
+  const key = 'companies/farm/additives/mineral';
+  const source = {
+    totalStock: 20, totalCost: 600, stockInHistory: [{ id: 'stock', quantity: 30, price: 25 }],
+    usageHistory: [{ id: 'remove', quantity: 5, totalCost: 50 }, { id: 'keep', quantity: 5, totalCost: 100 }],
+  };
+  const initial = { [key]: source, 'companies/farm/expenses/purchase': { amount: 750 } };
+  const mutation = { id: 'removal', companyId: 'farm', userId: 'owner', kind: 'inventory', inventory: { collection: 'additives', adjustments: [{ itemId: 'mineral', action: 'removeUsage', quantity: 99, historyEntry: { id: 'remove', totalCost: 999 } }] } };
+  const result = await mobileReplay(mutation, initial);
+  assert.equal(result[key].totalStock, 25);
+  assert.equal(result[key].totalCost, 650);
+  assert.deepEqual(result[key].usageHistory, [source.usageHistory[1]]);
+  assert.deepEqual(result[key].stockInHistory, source.stockInHistory);
+  assert.deepEqual(result['companies/farm/expenses/purchase'], initial['companies/farm/expenses/purchase']);
+  assert.deepEqual(await mobileReplay(mutation, result), result);
+  const delayedUse = structuredClone(mutation);
+  delayedUse.inventory.adjustments[0] = { itemId: 'mineral', action: 'consume', quantity: 5, historyEntry: { id: 'remove', unitPrice: 10 } };
+  assert.deepEqual(await mobileReplay(delayedUse, result), result, 'a delayed original consumption retry cannot recreate removed usage');
+  const invalid = structuredClone(initial); delete invalid[key].usageHistory[0].totalCost;
+  await assert.rejects(mobileReplay(mutation, invalid), /recorded usage/);
+  assert.deepEqual(invalid[key].usageHistory, [{ id: 'remove', quantity: 5 }, source.usageHistory[1]]);
 });
 test('mobile replay blocks deletion of stock with history and validates payment against current balance', async () => {
   await assert.rejects(mobileReplay({ kind: 'delete', path: ['companies', 'farm', 'feeds', 'feed'] }, { 'companies/farm/feeds/feed': { stockInHistory: [{ id: 's1' }] } }));
