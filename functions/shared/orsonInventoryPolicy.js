@@ -41,4 +41,241 @@ const INVENTORY_DOSING_RULES = [
   'This mass-balance formula is a theoretical addition, not proof of a safe or effective field dose. Never use it for lowering a parameter, pH adjustment, lime dissolution, probiotics, ammonia or nitrite removal without a separately verified applicable method. Do not promise a product removes a measured amount. Consider salinity, pH, alkalinity, oxygen, shrimp stage and recent treatments, label limits, staged application and retesting; withhold dosing when suitability is uncertain.',
   'Compare required product amount against current stock only in compatible verified units. Show required, available and shortfall when calculable; unknown stock is not zero. Never deduct stock or record a treatment from advice alone.',
 ];
-module.exports = { getOrsonRequestConstraints, isTreatmentQuestion, needsInventoryContext, INVENTORY_DOSING_RULES };
+
+const REPLENISHMENT_STOCK_STATUS = Object.freeze({
+  IN_STOCK: 'in_stock',
+  LOW_STOCK: 'low_stock',
+  ZERO_STOCK: 'zero_stock',
+  NEGATIVE_STOCK: 'negative_stock',
+  UNKNOWN_STOCK: 'unknown_stock',
+});
+
+const classifyStockStatus = (item) => {
+  if (!item || typeof item !== 'object') {
+    return { status: REPLENISHMENT_STOCK_STATUS.UNKNOWN_STOCK, availableStock: null, reason: 'missing_item' };
+  }
+  const rawStock = item.totalStock ?? item.stock;
+  if (rawStock === null || rawStock === undefined || !Number.isFinite(Number(rawStock))) {
+    return { status: REPLENISHMENT_STOCK_STATUS.UNKNOWN_STOCK, availableStock: null, reason: 'unspecified_stock' };
+  }
+  const stock = Number(rawStock);
+  if (stock < 0) {
+    return { status: REPLENISHMENT_STOCK_STATUS.NEGATIVE_STOCK, availableStock: 0, rawStock: stock, reason: 'negative_balance_anomaly' };
+  }
+  if (stock === 0) {
+    return { status: REPLENISHMENT_STOCK_STATUS.ZERO_STOCK, availableStock: 0, reason: 'completely_depleted' };
+  }
+
+  const rawReorder = item.reorderLevel;
+  if (rawReorder !== null && rawReorder !== undefined && Number.isFinite(Number(rawReorder)) && Number(rawReorder) > 0) {
+    const reorderLevel = Number(rawReorder);
+    const isBelow = stock <= reorderLevel;
+    return {
+      status: isBelow ? REPLENISHMENT_STOCK_STATUS.LOW_STOCK : REPLENISHMENT_STOCK_STATUS.IN_STOCK,
+      availableStock: stock,
+      reorderLevel,
+      isBelowReorderLevel: isBelow,
+    };
+  }
+
+  return {
+    status: REPLENISHMENT_STOCK_STATUS.IN_STOCK,
+    availableStock: stock,
+    reorderLevel: null,
+    isBelowReorderLevel: false,
+  };
+};
+
+const calculateDaysOfSupply = (availableStock, burnRateKgPerDay) => {
+  if (availableStock === null || availableStock === undefined) {
+    return { daysOfSupply: null, runwayStatus: 'unknown', reason: 'unknown_stock' };
+  }
+  if (availableStock <= 0) {
+    return { daysOfSupply: 0, runwayStatus: 'depleted', reason: 'zero_stock' };
+  }
+  if (burnRateKgPerDay === null || burnRateKgPerDay === undefined || !Number.isFinite(Number(burnRateKgPerDay))) {
+    return { daysOfSupply: null, runwayStatus: 'unknown', reason: 'unknown_burn_rate' };
+  }
+  const burn = Number(burnRateKgPerDay);
+  if (burn === 0) {
+    return { daysOfSupply: null, runwayStatus: 'stable_zero_consumption', reason: 'zero_daily_usage' };
+  }
+  if (burn < 0) {
+    return { daysOfSupply: null, runwayStatus: 'invalid_negative_rate', reason: 'negative_burn_rate' };
+  }
+  const days = Math.round((availableStock / burn) * 10) / 10;
+  const runwayStatus = days <= 3 ? 'critical' : days <= 7 ? 'warning' : 'adequate';
+  return { daysOfSupply: days, runwayStatus, reason: 'calculated_from_burn_rate' };
+};
+
+const calculateReplenishmentShortfall = (availableStock, requiredQuantity, options = {}) => {
+  if (requiredQuantity === null || requiredQuantity === undefined || !Number.isFinite(Number(requiredQuantity))) {
+    return { shortfall: 0, hasSufficientStock: null, reason: 'no_requirement_specified' };
+  }
+  const required = Number(requiredQuantity);
+  if (required <= 0) {
+    return { shortfall: 0, hasSufficientStock: true, reason: 'zero_or_negative_requirement' };
+  }
+  if (availableStock === null || availableStock === undefined) {
+    return { shortfall: null, hasSufficientStock: null, reason: 'unknown_available_stock' };
+  }
+  if (options.unit && options.itemUnit) {
+    const reqUnit = String(options.unit).toLowerCase().trim();
+    const itUnit = String(options.itemUnit).toLowerCase().trim();
+    if (reqUnit !== itUnit) {
+      return {
+        shortfall: null,
+        hasSufficientStock: null,
+        unitMismatch: true,
+        requiredUnit: reqUnit,
+        itemUnit: itUnit,
+        reason: `Incompatible units: required ${reqUnit} vs inventory ${itUnit}. Units must be verified before calculating shortfall.`,
+      };
+    }
+  }
+  const available = Math.max(0, Number(availableStock));
+  if (available >= required) {
+    return {
+      shortfall: 0,
+      surplus: Math.round((available - required) * 100) / 100,
+      hasSufficientStock: true,
+      severity: 'none',
+    };
+  }
+  const shortfall = Math.round((required - available) * 100) / 100;
+  const severity = available <= 0 ? 'critical_stockout' : 'partial_shortfall';
+  return {
+    shortfall,
+    surplus: 0,
+    hasSufficientStock: false,
+    severity,
+  };
+};
+
+const evaluateReplenishmentScenario = ({
+  item,
+  burnRateKgPerDay,
+  recentUsageHistory,
+  requiredQuantity,
+  requiredUnit,
+  plannedDays = 7,
+} = {}) => {
+  const stockStatus = classifyStockStatus(item);
+
+  let burnRate = null;
+  if (burnRateKgPerDay !== undefined && burnRateKgPerDay !== null) {
+    burnRate = Number.isFinite(Number(burnRateKgPerDay)) ? Number(burnRateKgPerDay) : null;
+  } else {
+    const history = Array.isArray(item?.usageHistory)
+      ? item.usageHistory
+      : Array.isArray(recentUsageHistory)
+        ? recentUsageHistory
+        : null;
+
+    if (Array.isArray(history)) {
+      if (history.length === 0) {
+        burnRate = 0;
+      } else {
+        const validRows = history.filter(
+          (h) => h && Number.isFinite(Number(h.quantity)) && Number(h.quantity) >= 0,
+        );
+        if (validRows.length === 0) {
+          burnRate = null;
+        } else {
+          const sum = validRows.reduce((acc, h) => acc + Number(h.quantity), 0);
+          burnRate = Math.round((sum / validRows.length) * 100) / 100;
+        }
+      }
+    }
+  }
+
+  const runway = calculateDaysOfSupply(stockStatus.availableStock, burnRate);
+  const shortfall = calculateReplenishmentShortfall(stockStatus.availableStock, requiredQuantity, {
+    unit: requiredUnit,
+    itemUnit: item?.unit,
+  });
+
+  const isReorderNeeded = Boolean(
+    stockStatus.status === REPLENISHMENT_STOCK_STATUS.ZERO_STOCK ||
+      stockStatus.isBelowReorderLevel ||
+      runway.runwayStatus === 'critical' ||
+      shortfall.hasSufficientStock === false,
+  );
+
+  let urgency = 'none';
+  if (
+    stockStatus.status === REPLENISHMENT_STOCK_STATUS.ZERO_STOCK ||
+    shortfall.severity === 'critical_stockout'
+  ) {
+    urgency = 'immediate';
+  } else if (
+    stockStatus.status === REPLENISHMENT_STOCK_STATUS.LOW_STOCK ||
+    runway.runwayStatus === 'critical' ||
+    shortfall.hasSufficientStock === false
+  ) {
+    urgency = 'high';
+  } else if (runway.runwayStatus === 'warning') {
+    urgency = 'normal';
+  } else if (stockStatus.status === REPLENISHMENT_STOCK_STATUS.UNKNOWN_STOCK) {
+    urgency = 'unknown';
+  }
+
+  const horizonDays = Math.max(1, Number(plannedDays) || 7);
+  let recommendedReorderQuantity = null;
+  if (burnRate !== null && burnRate > 0) {
+    const targetStock = burnRate * horizonDays;
+    const currentStock = stockStatus.availableStock || 0;
+    recommendedReorderQuantity = Math.max(
+      shortfall.shortfall || 0,
+      Math.round(Math.max(0, targetStock - currentStock) * 10) / 10,
+    );
+  } else if (
+    stockStatus.reorderLevel &&
+    (stockStatus.availableStock || 0) <= stockStatus.reorderLevel
+  ) {
+    recommendedReorderQuantity = Math.round(
+      Math.max(0, stockStatus.reorderLevel * 2 - (stockStatus.availableStock || 0)) * 10,
+    ) / 10;
+  } else if (shortfall.shortfall > 0) {
+    recommendedReorderQuantity = shortfall.shortfall;
+  }
+
+  return {
+    itemId: item?.id || null,
+    itemName: item?.feedName || item?.additiveName || item?.name || null,
+    itemType: item?.itemType || (item?.feedName ? 'feed' : item?.additiveName ? 'additive' : null),
+    unit: item?.unit || 'kg',
+    stockStatus,
+    burnRate: {
+      kgPerDay: burnRate,
+      isZeroUsage: burnRate === 0,
+      isUnknown: burnRate === null,
+    },
+    runway,
+    shortfall,
+    reorderAssessment: {
+      isReorderNeeded,
+      urgency,
+      plannedHorizonDays: horizonDays,
+      recommendedReorderQuantity: isReorderNeeded ? recommendedReorderQuantity : null,
+    },
+    guardrails: {
+      advisoryOnly: true,
+      noProcurementExecuted: true,
+      requiresUserConfirmation: true,
+      notes: 'Pure advisory evaluation. No stock deduction, purchase order, or draft mutation has been made.',
+    },
+  };
+};
+
+module.exports = {
+  getOrsonRequestConstraints,
+  isTreatmentQuestion,
+  needsInventoryContext,
+  INVENTORY_DOSING_RULES,
+  REPLENISHMENT_STOCK_STATUS,
+  classifyStockStatus,
+  calculateDaysOfSupply,
+  calculateReplenishmentShortfall,
+  evaluateReplenishmentScenario,
+};

@@ -5,10 +5,12 @@ const assert = require('node:assert/strict');
 const {
   summarizePeriodFeedAndCost,
   comparePondCycles,
+  evaluateInventoryReplenishment,
   executeDecisionTool,
   decisionToolSchemas,
   periodFeedCostTool,
   comparePondCyclesTool,
+  inventoryReplenishmentTool,
 } = require('./orsonDecisionTools');
 const { createOrsonAppDataReader } = require('./orsonAppData');
 
@@ -19,6 +21,8 @@ const buildMockDb = (data = {}) => {
     blocks: data.blocks || {},
     ponds: data.ponds || {},
     expenses: data.expenses || {},
+    feeds: data.feeds || {},
+    additives: data.additives || {},
     users: data.users || {},
   };
 
@@ -257,13 +261,73 @@ const createTestFarmFixture = () => {
         },
       },
     },
+    feeds: {
+      'farm-1': {
+        'feed-starter': {
+          feedName: 'Starter Crumble',
+          totalStock: 100,
+          reorderLevel: 50,
+          unit: 'kg',
+          costPerUnit: 2.5,
+          usageHistory: [
+            { date: '2026-09-01', quantity: 10 },
+            { date: '2026-09-02', quantity: 10 },
+          ],
+        },
+        'feed-depleted': {
+          feedName: 'Finisher Pellet',
+          totalStock: 0,
+          reorderLevel: 40,
+          unit: 'kg',
+          costPerUnit: 2.2,
+          usageHistory: [
+            { date: '2026-09-01', quantity: 20 },
+          ],
+        },
+        'feed-zero-usage': {
+          feedName: 'Broodstock Specialty',
+          totalStock: 80,
+          reorderLevel: 20,
+          unit: 'kg',
+          costPerUnit: 5.0,
+          usageHistory: [],
+        },
+        'feed-unknown-stock': {
+          feedName: 'Trial Microfeed',
+          totalStock: null,
+          unit: 'kg',
+        },
+      },
+      'farm-2': {
+        'feed-foreign': {
+          feedName: 'Foreign Feed Beta',
+          totalStock: 100,
+          unit: 'kg',
+        },
+      },
+    },
+    additives: {
+      'farm-1': {
+        'add-calcium': {
+          additiveName: 'Calcium Chloride',
+          totalStock: 25,
+          reorderLevel: 30,
+          unit: 'kg',
+          costPerUnit: 1.8,
+          usageHistory: [
+            { date: '2026-09-01', quantity: 5 },
+          ],
+        },
+      },
+    },
   };
 };
 
 test('decisionToolSchemas exposes valid tool definitions with parameters', () => {
-  assert.equal(decisionToolSchemas.length, 2);
+  assert.equal(decisionToolSchemas.length, 3);
   assert.equal(periodFeedCostTool.name, 'summarize_period_feed_and_cost');
   assert.equal(comparePondCyclesTool.name, 'compare_pond_cycles');
+  assert.equal(inventoryReplenishmentTool.name, 'evaluate_inventory_replenishment');
   assert.ok(periodFeedCostTool.parameters.required.includes('startDate'));
   assert.ok(comparePondCyclesTool.parameters.required.includes('pondId'));
 });
@@ -622,6 +686,16 @@ test('createOrsonAppDataReader integrates decision tools and routes execution', 
   assert.equal(comparison.deltas.mbwDiffG, 0.9);
   assert.equal(comparison.finance.financeAllowed, false, 'Finance must be denied to technician');
 
+  // Decision tool: evaluate_inventory_replenishment
+  assert.ok(toolNames.includes('evaluate_inventory_replenishment'));
+  const replEval = await techReader.execute('evaluate_inventory_replenishment', {
+    itemId: 'feed-starter',
+  });
+  assert.equal(replEval.status, 'ok');
+  assert.equal(replEval.items[0].stockStatus.status, 'in_stock');
+  assert.equal(replEval.items[0].finance.financeAllowed, false);
+  assert.equal(replEval.guardrails.noProcurementExecuted, true);
+
   // 2. Owner reader (has viewFinance)
   const ownerReader = createOrsonAppDataReader({
     db,
@@ -638,4 +712,176 @@ test('createOrsonAppDataReader integrates decision tools and routes execution', 
   });
   assert.equal(ownerFeedSummary.finance.financeAllowed, true, 'Owner has finance allowed');
   assert.equal(ownerFeedSummary.finance.totalExpenses, 750);
+});
+
+test('evaluate_inventory_replenishment: evaluates single feed replenishment with burn rate and runway', async () => {
+  const db = buildMockDb(createTestFarmFixture());
+  const context = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => p === 'viewFarm',
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+
+  const result = await evaluateInventoryReplenishment(
+    { itemId: 'feed-starter', itemType: 'feed', plannedDays: 7 },
+    context,
+  );
+
+  assert.equal(result.status, 'ok');
+  assert.equal(result.items.length, 1);
+  const item = result.items[0];
+  assert.equal(item.itemId, 'feed-starter');
+  assert.equal(item.stockStatus.status, 'in_stock');
+  assert.equal(item.stockStatus.availableStock, 100);
+  assert.equal(item.burnRate.kgPerDay, 10);
+  assert.equal(item.runway.daysOfSupply, 10);
+  assert.equal(item.runway.runwayStatus, 'adequate');
+  assert.equal(item.guardrails.noProcurementExecuted, true);
+  assert.equal(item.guardrails.advisoryOnly, true);
+});
+
+test('evaluate_inventory_replenishment: flags zero stock with critical shortfall against required dose and immediate urgency', async () => {
+  const db = buildMockDb(createTestFarmFixture());
+  const context = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => p === 'viewFarm',
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+
+  const result = await evaluateInventoryReplenishment(
+    { itemId: 'feed-depleted', requiredQuantity: 60, unit: 'kg' },
+    context,
+  );
+
+  assert.equal(result.status, 'ok');
+  const item = result.items[0];
+  assert.equal(item.stockStatus.status, 'zero_stock');
+  assert.equal(item.stockStatus.availableStock, 0);
+  assert.equal(item.runway.daysOfSupply, 0);
+  assert.equal(item.shortfall.shortfall, 60);
+  assert.equal(item.shortfall.severity, 'critical_stockout');
+  assert.equal(item.reorderAssessment.isReorderNeeded, true);
+  assert.equal(item.reorderAssessment.urgency, 'immediate');
+  assert.equal(item.reorderAssessment.recommendedReorderQuantity, 60);
+});
+
+test('evaluate_inventory_replenishment: handles zero recorded usage and unknown stock items', async () => {
+  const db = buildMockDb(createTestFarmFixture());
+  const context = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => p === 'viewFarm',
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+
+  // Zero-usage feed
+  const zeroUsageRes = await evaluateInventoryReplenishment(
+    { itemId: 'feed-zero-usage' },
+    context,
+  );
+  assert.equal(zeroUsageRes.status, 'ok');
+  const zeroItem = zeroUsageRes.items[0];
+  assert.equal(zeroItem.burnRate.kgPerDay, 0);
+  assert.equal(zeroItem.burnRate.isZeroUsage, true);
+  assert.equal(zeroItem.runway.runwayStatus, 'stable_zero_consumption');
+  assert.equal(zeroItem.runway.daysOfSupply, null);
+
+  // Unknown stock feed
+  const unknownStockRes = await evaluateInventoryReplenishment(
+    { itemId: 'feed-unknown-stock' },
+    context,
+  );
+  assert.equal(unknownStockRes.status, 'ok');
+  const unknownItem = unknownStockRes.items[0];
+  assert.equal(unknownItem.stockStatus.status, 'unknown_stock');
+  assert.equal(unknownItem.stockStatus.availableStock, null);
+  assert.equal(unknownItem.reorderAssessment.urgency, 'unknown');
+});
+
+test('evaluate_inventory_replenishment: flags unit mismatch when comparing required quantity', async () => {
+  const db = buildMockDb(createTestFarmFixture());
+  const context = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => p === 'viewFarm',
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+
+  const result = await evaluateInventoryReplenishment(
+    { itemId: 'add-calcium', requiredQuantity: 5, unit: 'liters' },
+    context,
+  );
+
+  assert.equal(result.status, 'ok');
+  const item = result.items[0];
+  assert.equal(item.shortfall.unitMismatch, true);
+  assert.equal(item.shortfall.shortfall, null);
+  assert.match(item.shortfall.reason, /Incompatible units/);
+});
+
+test('evaluate_inventory_replenishment: strictly isolates pricing from technician while providing estimated cost to owner', async () => {
+  const db = buildMockDb(createTestFarmFixture());
+
+  // Technician (no viewFinance)
+  const techContext = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => p === 'viewFarm',
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+  const techResult = await evaluateInventoryReplenishment(
+    { itemId: 'add-calcium' },
+    techContext,
+  );
+  assert.equal(techResult.items[0].finance.financeAllowed, false);
+  assert.equal(techResult.items[0].finance.unitCost, undefined);
+  assert.equal(techResult.items[0].finance.estimatedReplenishmentCost, undefined);
+
+  // Owner (has viewFinance)
+  const ownerContext = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => ['viewFarm', 'viewFinance'].includes(p),
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+  const ownerResult = await evaluateInventoryReplenishment(
+    { itemId: 'add-calcium' },
+    ownerContext,
+  );
+  assert.equal(ownerResult.items[0].finance.financeAllowed, true);
+  assert.equal(ownerResult.items[0].finance.unitCost, 1.8);
+  assert.ok(ownerResult.items[0].finance.estimatedReplenishmentCost > 0);
+});
+
+test('evaluate_inventory_replenishment: cross-company item lookup returns not_found', async () => {
+  const db = buildMockDb(createTestFarmFixture());
+  const context = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => p === 'viewFarm',
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+
+  const result = await evaluateInventoryReplenishment(
+    { itemId: 'feed-foreign' },
+    context,
+  );
+  assert.equal(result.status, 'not_found');
+  assert.match(result.message, /not found/);
 });

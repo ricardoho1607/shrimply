@@ -9,6 +9,7 @@ const {
   getPondCurrentDoc,
   toFiniteNumber,
 } = require('./orsonDomain/pondCalculations');
+const { evaluateReplenishmentScenario } = require('./orsonInventoryPolicy');
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -129,7 +130,48 @@ const comparePondCyclesTool = {
   },
 };
 
-const decisionToolSchemas = [periodFeedCostTool, comparePondCyclesTool];
+const inventoryReplenishmentTool = {
+  type: 'function',
+  name: 'evaluate_inventory_replenishment',
+  description:
+    'Evaluate inventory stock levels, burn rate, days of supply (runway), and replenishment needs for feeds or additives. Supports shortfall calculation against a planned dose or consumption target. Purely analytical: executes no procurement actions and makes no Firestore writes.',
+  parameters: {
+    type: 'object',
+    properties: {
+      itemId: {
+        type: 'string',
+        description:
+          'Optional exact inventory item ID (from feeds or additives). If omitted, evaluates all items in catalog.',
+      },
+      itemType: {
+        type: 'string',
+        enum: ['feed', 'additive', 'all'],
+        description: 'Type of inventory items to evaluate (default: all).',
+      },
+      requiredQuantity: {
+        type: 'number',
+        description: 'Optional planned quantity required for treatment or upcoming feeding period.',
+      },
+      unit: {
+        type: 'string',
+        description: 'Unit of required quantity (e.g. kg, L, bags).',
+      },
+      plannedDays: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 90,
+        description: 'Optional planning horizon in days to evaluate safety stock and runway (default: 7).',
+      },
+    },
+    additionalProperties: false,
+  },
+};
+
+const decisionToolSchemas = [
+  periodFeedCostTool,
+  comparePondCyclesTool,
+  inventoryReplenishmentTool,
+];
 
 /**
  * Summarize period feed and costs across one or all accessible ponds.
@@ -566,6 +608,144 @@ const comparePondCycles = async (args = {}, context = {}) => {
 };
 
 /**
+ * Evaluate inventory stock levels, burn rate, days of supply, and replenishment requirements.
+ * Analytical only: executes no procurement action and performs no Firestore writes.
+ */
+const evaluateInventoryReplenishment = async (args = {}, context = {}) => {
+  const { db, companyId, allowed, enterpriseScoped, scopedData } = context;
+  if (!allowed || (!allowed('viewFarm') && !allowed('manageFeedInventory'))) {
+    throw new Error('Not permitted');
+  }
+
+  const itemId = args.itemId ? args.itemId.trim() : null;
+  const itemType = args.itemType || 'all';
+  const requiredQuantity = args.requiredQuantity !== undefined ? finite(args.requiredQuantity) : null;
+  const requiredUnit = args.unit ? String(args.unit).trim() : null;
+  const plannedDays = Number.isInteger(args.plannedDays) && args.plannedDays > 0 ? args.plannedDays : 7;
+
+  if (itemId && !validId(itemId)) throw new Error('Invalid item ID');
+
+  const baseRef = db.collection('companies').doc(companyId);
+  const itemsToEvaluate = [];
+
+  const readCollection = async (collName, defaultType) => {
+    const snap = await baseRef.collection(collName).get();
+    return (snap.docs || []).map((doc) => ({
+      id: doc.id,
+      itemType: defaultType,
+      ...doc.data(),
+    }));
+  };
+
+  if (itemId) {
+    let docSnap = null;
+    let type = 'feed';
+    if (itemType !== 'additive') {
+      const snap = await baseRef.collection('feeds').doc(itemId).get();
+      if (snap.exists) {
+        docSnap = snap;
+        type = 'feed';
+      }
+    }
+    if (!docSnap && itemType !== 'feed') {
+      const snap = await baseRef.collection('additives').doc(itemId).get();
+      if (snap.exists) {
+        docSnap = snap;
+        type = 'additive';
+      }
+    }
+    if (!docSnap) {
+      return { status: 'not_found', message: `Inventory item ${itemId} not found.` };
+    }
+    let itemData = { id: docSnap.id, itemType: type, ...docSnap.data() };
+    if (scopedData) {
+      const scoped = await scopedData(type === 'feed' ? 'feeds' : 'additives', itemData);
+      if (!scoped) throw new Error('Not permitted');
+      itemData = scoped;
+    }
+    itemsToEvaluate.push(itemData);
+  } else {
+    if (itemType === 'feed' || itemType === 'all') {
+      const feeds = await readCollection('feeds', 'feed');
+      for (let f of feeds) {
+        if (scopedData) {
+          f = await scopedData('feeds', f);
+          if (!f) continue;
+        }
+        itemsToEvaluate.push(f);
+      }
+    }
+    if (itemType === 'additive' || itemType === 'all') {
+      const additives = await readCollection('additives', 'additive');
+      for (let a of additives) {
+        if (scopedData) {
+          a = await scopedData('additives', a);
+          if (!a) continue;
+        }
+        itemsToEvaluate.push(a);
+      }
+    }
+  }
+
+  const evaluations = itemsToEvaluate.map((item) => {
+    const evaluation = evaluateReplenishmentScenario({
+      item,
+      requiredQuantity,
+      requiredUnit,
+      plannedDays,
+    });
+
+    const canViewFinance = Boolean(allowed('viewFinance'));
+    let financeAssessment = {
+      financeAllowed: false,
+      reason: 'User lacks viewFinance permission. Pricing withheld.',
+    };
+
+    if (canViewFinance) {
+      const unitCost = finite(item.costPerUnit || item.price || item.averageCost);
+      const reorderQty = evaluation.reorderAssessment.recommendedReorderQuantity;
+      financeAssessment = {
+        financeAllowed: true,
+        unitCost: unitCost !== null ? round(unitCost, 2) : null,
+        estimatedReplenishmentCost:
+          unitCost !== null && reorderQty !== null ? round(unitCost * reorderQty, 2) : null,
+      };
+    }
+
+    return {
+      ...evaluation,
+      finance: financeAssessment,
+    };
+  });
+
+  return {
+    status: 'ok',
+    scope: {
+      companyId,
+      itemId,
+      itemType,
+      itemCount: evaluations.length,
+      enterpriseScoped: Boolean(enterpriseScoped),
+      planningHorizonDays: plannedDays,
+    },
+    items: evaluations,
+    summary: {
+      totalItemsEvaluated: evaluations.length,
+      itemsNeedingReorder: evaluations.filter((e) => e.reorderAssessment.isReorderNeeded).length,
+      itemsWithZeroStock: evaluations.filter((e) => e.stockStatus.status === 'zero_stock').length,
+      itemsWithUnknownStock: evaluations.filter((e) => e.stockStatus.status === 'unknown_stock').length,
+      itemsWithCriticalRunway: evaluations.filter((e) => e.runway.runwayStatus === 'critical').length,
+    },
+    guardrails: {
+      advisoryOnly: true,
+      noProcurementExecuted: true,
+      requiresUserConfirmation: true,
+      notes: 'Pure advisory evaluation. No procurement action, purchase order, or Firestore mutation occurred.',
+    },
+  };
+};
+
+/**
  * Router for executing decision tools by name.
  */
 const executeDecisionTool = async (name, args, context) => {
@@ -575,6 +755,9 @@ const executeDecisionTool = async (name, args, context) => {
   if (name === comparePondCyclesTool.name) {
     return comparePondCycles(args, context);
   }
+  if (name === inventoryReplenishmentTool.name) {
+    return evaluateInventoryReplenishment(args, context);
+  }
   throw new Error(`Unknown decision tool: ${name}`);
 };
 
@@ -582,9 +765,11 @@ module.exports = {
   decisionToolSchemas,
   periodFeedCostTool,
   comparePondCyclesTool,
+  inventoryReplenishmentTool,
   executeDecisionTool,
   summarizePeriodFeedAndCost,
   comparePondCycles,
+  evaluateInventoryReplenishment,
   belongsToCurrentCycle,
   farmToday,
   shiftDate,
