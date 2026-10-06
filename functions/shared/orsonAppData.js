@@ -2,6 +2,12 @@
 const { hasUserPermission } = require('./permissions');
 const { selectDailyFeedEntries } = require('./orsonDomain/orsonEvidence');
 const { normalizeFarmDateKey } = require('./orsonDomain/farmDate');
+const {
+  decisionToolSchemas,
+  periodFeedCostTool,
+  comparePondCyclesTool,
+  executeDecisionTool,
+} = require('./orsonDecisionTools');
 const DATASETS = Object.freeze({
   ponds: 'viewFarm', physicalPonds: 'viewFarm', blocks: 'viewFarm', cycles: 'viewFarm',
   feeds: 'viewFarm', additives: 'viewFarm', harvestRecords: 'viewFarm', labReports: 'viewFarm',
@@ -389,6 +395,19 @@ const createOrsonAppDataReader = ({ db, company, user, uid, companyId }) => {
       if (!scoped) throw new Error('Not permitted');
       return buildPondTimeline(snap.id || args.pondId, cleanRecord(scoped, canViewFinance), args, company.timeZone);
     }
+    if (name === periodFeedCostTool.name || name === comparePondCyclesTool.name) {
+      return executeDecisionTool(name, args, {
+        db,
+        company,
+        user,
+        uid,
+        companyId,
+        allowed,
+        enterpriseScoped,
+        scopedData,
+        timeZone: company.timeZone,
+      });
+    }
     if (name !== recordTool.name || !args || !Object.hasOwn(DATASETS, args.dataset) || !allowed(DATASETS[args.dataset])) throw new Error('Not permitted');
     if (args.documentId !== undefined && !validId(args.documentId)) throw new Error('Invalid document');
     if (args.after !== undefined && !validId(args.after)) throw new Error('Invalid cursor');
@@ -438,7 +457,21 @@ const createOrsonAppDataReader = ({ db, company, user, uid, companyId }) => {
     return { status: 'ok', dataset: args.dataset, records, documentDetailsOmitted: true, nextCursor: snap.docs.length > 10 ? docs.at(-1).id : null, complete: snap.docs.length <= 10 };
   };
   const tools = [{ ...recordTool, parameters: { ...recordTool.parameters, properties: { ...recordTool.parameters.properties, dataset: { type: 'string', enum: Object.keys(DATASETS).filter(key => allowed(DATASETS[key])) } } } }];
-  if (allowed('viewFarm')) tools.push(timelineTool);
+  if (allowed('viewFarm')) {
+    tools.push(timelineTool);
+    tools.push(...decisionToolSchemas);
+  }
   return { tools, execute };
 };
-module.exports = { createOrsonAppDataReader, cleanRecord, buildPondTimeline };
+module.exports = {
+  createOrsonAppDataReader,
+  cleanRecord,
+  buildPondTimeline,
+  belongsToCurrentCycle,
+  farmToday,
+  shiftDate,
+  validDateKey,
+  validId,
+  finite,
+  round,
+};

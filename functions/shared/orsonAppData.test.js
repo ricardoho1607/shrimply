@@ -527,3 +527,39 @@ test('decision input baseline fixtures: data isolation, no synthetic values, and
   assert.equal(pondList.documentDetailsOmitted, true, 'read_app_records list mode omits nested array details');
   assert.equal(pondList.records[0].data.samplings, undefined, 'samplings array omitted in list view');
 });
+
+test('createOrsonAppDataReader registers decision tools and routes period feed and comparison requests', async () => {
+  const farmData = {
+    pondName: 'Pond A',
+    cycleStatus: 'active',
+    pondCycleId: 'cycle-1',
+    initialPopulation: 100000,
+    initialWeight: 0.5,
+    samplings: [
+      { id: 's1', date: '2026-09-01', pondCycleId: 'cycle-1', mbw: 3.0, feedData: { totalDailyFeed: 50 } },
+      { id: 's2', date: '2026-09-02', pondCycleId: 'cycle-1', mbw: 3.4, feedData: { totalDailyFeed: 55 } },
+    ],
+  };
+
+  const reader = fixture('technician', farmData);
+  const toolNames = reader.tools.map((t) => t.name);
+  assert.ok(toolNames.includes('summarize_period_feed_and_cost'), 'summarize_period_feed_and_cost must be in tools');
+  assert.ok(toolNames.includes('compare_pond_cycles'), 'compare_pond_cycles must be in tools');
+
+  const feedSummary = await reader.execute('summarize_period_feed_and_cost', {
+    pondId: 'pond-1',
+    startDate: '2026-09-01',
+    endDate: '2026-09-02',
+  });
+  assert.equal(feedSummary.status, 'ok');
+  assert.equal(feedSummary.feed.totalFeedKg, 105);
+  assert.equal(feedSummary.finance.financeAllowed, false, 'Technician cannot access finance in period summary');
+
+  const comparison = await reader.execute('compare_pond_cycles', {
+    pondId: 'pond-1',
+    compareCycleId: 'cycle-old',
+  });
+  assert.equal(comparison.status, 'ok');
+  assert.equal(comparison.primary.metrics.latestMbw, 3.4);
+  assert.equal(comparison.finance.financeAllowed, false, 'Technician cannot access finance in cycle comparison');
+});
