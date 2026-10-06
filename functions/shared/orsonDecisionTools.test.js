@@ -6,11 +6,13 @@ const {
   summarizePeriodFeedAndCost,
   comparePondCycles,
   evaluateInventoryReplenishment,
+  evaluateHarvestScenario,
   executeDecisionTool,
   decisionToolSchemas,
   periodFeedCostTool,
   comparePondCyclesTool,
   inventoryReplenishmentTool,
+  harvestScenarioTool,
 } = require('./orsonDecisionTools');
 const { createOrsonAppDataReader } = require('./orsonAppData');
 
@@ -686,10 +688,20 @@ test('createOrsonAppDataReader integrates decision tools and routes execution', 
   assert.equal(comparison.deltas.mbwDiffG, 0.9);
   assert.equal(comparison.finance.financeAllowed, false, 'Finance must be denied to technician');
 
-  // Decision tool: evaluate_inventory_replenishment
+  // Decision tool: evaluate_inventory_replenishment & evaluate_harvest_scenario
   assert.ok(toolNames.includes('evaluate_inventory_replenishment'));
-  const replEval = await techReader.execute('evaluate_inventory_replenishment', {
+  assert.ok(toolNames.includes('evaluate_harvest_scenario'));
+  const replEval = await executeDecisionTool('evaluate_inventory_replenishment', {
     itemId: 'feed-starter',
+  }, {
+    db,
+    company: fixture.companies['farm-1'],
+    user: fixture.users['tech-1'],
+    uid: 'tech-1',
+    companyId: 'farm-1',
+    allowed: (p) => p === 'viewFarm',
+    enterpriseScoped: false,
+    timeZone: 'UTC',
   });
   assert.equal(replEval.status, 'ok');
   assert.equal(replEval.items[0].stockStatus.status, 'in_stock');
@@ -884,4 +896,234 @@ test('evaluate_inventory_replenishment: cross-company item lookup returns not_fo
   );
   assert.equal(result.status, 'not_found');
   assert.match(result.message, /not found/);
+});
+
+test('evaluate_harvest_scenario: schema is registered in decisionToolSchemas and routable via executeDecisionTool', async () => {
+  const schema = decisionToolSchemas.find((s) => s.name === 'evaluate_harvest_scenario');
+  assert.ok(schema, 'evaluate_harvest_scenario must be registered in decisionToolSchemas');
+  assert.equal(schema.parameters.required[0], 'pondId');
+
+  const db = buildMockDb(createTestFarmFixture());
+  const context = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => ['viewFarm', 'viewFinance'].includes(p),
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+
+  const routedResult = await executeDecisionTool(
+    'evaluate_harvest_scenario',
+    { pondId: 'pond-a', pricePerKg: 7.0 },
+    context,
+  );
+  assert.equal(routedResult.status, 'ok');
+  assert.equal(routedResult.scope.pondId, 'pond-a');
+});
+
+test('evaluate_harvest_scenario: owner evaluates harvest scenario with price ladder, explicit scope, assumptions, and margins', async () => {
+  const db = buildMockDb(createTestFarmFixture());
+  const ownerContext = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => ['viewFarm', 'viewFinance'].includes(p),
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+
+  const priceLadder = [
+    { sizeCountPerKg: 200, pricePerKg: 4.0 },
+    { sizeCountPerKg: 100, pricePerKg: 6.5 },
+    { sizeCountPerKg: 50, pricePerKg: 9.0 },
+    { sizeCountPerKg: 30, pricePerKg: 12.0 },
+  ];
+
+  const result = await evaluateHarvestScenario(
+    { pondId: 'pond-a', priceLadder },
+    ownerContext,
+  );
+
+  assert.equal(result.status, 'ok');
+  assert.equal(result.scope.pondId, 'pond-a');
+  assert.equal(result.scope.cycleId, 'cycle-101');
+  assert.equal(result.finance.financeAllowed, true);
+  assert.ok(result.finance.incurredCostsToDate.feed > 0);
+  assert.equal(result.marginBasis, 'operating_profit_after_all_incurred_and_projected_costs');
+  assert.equal(result.assumptions.growthModel, 'von_bertalanffy_tapered_growth');
+  assert.equal(result.assumptions.mortalityBasis, 'recorded_mortality_trend');
+  assert.equal(result.guardrails.advisoryOnly, true);
+  assert.equal(result.guardrails.noFarmWrites, true);
+  assert.equal(result.guardrails.noHarvestDraftCreated, true);
+
+  // Today scenario
+  assert.ok(result.today.projectedBiomassKg > 0);
+  assert.ok(result.today.revenue > 0);
+  assert.ok(result.today.operatingProfit !== null);
+
+  // Target scenarios
+  assert.ok(result.targets.length > 0);
+  const target = result.targets[0];
+  assert.ok(target.daysFromNow > 0);
+  assert.ok(target.projectedMbwG > result.today.targetMbwG);
+  assert.ok(target.revenue > 0);
+  assert.ok(target.operatingProfit !== null);
+  assert.ok(target.futureFeedKg > 0);
+
+  // Decision
+  assert.ok(['keep_growing', 'harvest_now'].includes(result.decision));
+  assert.ok(result.decisionReason.length > 0);
+});
+
+test('evaluate_harvest_scenario: technician receives operational growth projection with finance strictly withheld', async () => {
+  const db = buildMockDb(createTestFarmFixture());
+  const techContext = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => p === 'viewFarm', // strictly lacks viewFinance
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+
+  const result = await evaluateHarvestScenario(
+    { pondId: 'pond-a', targetMbwG: 10 },
+    techContext,
+  );
+
+  assert.equal(result.status, 'ok');
+  assert.equal(result.finance.financeAllowed, false);
+  assert.match(result.finance.reason, /User lacks viewFinance permission/);
+  assert.equal(result.marginBasis, 'none_finance_withheld');
+
+  // Verify finance leakage is strictly prevented
+  assert.equal(result.today.revenue, undefined);
+  assert.equal(result.today.operatingProfit, undefined);
+  assert.equal(result.today.totalCosts, undefined);
+  assert.equal(result.today.pricePerKg, undefined);
+
+  assert.ok(result.targets.length > 0);
+  const target = result.targets[0];
+  assert.equal(target.revenue, undefined);
+  assert.equal(target.operatingProfit, undefined);
+  assert.equal(target.pricePerKg, undefined);
+  assert.equal(target.futureCosts, undefined);
+  assert.equal(target.totalCosts, undefined);
+
+  // Verify operational biological projections are preserved
+  assert.ok(target.projectedBiomassKg > 0);
+  assert.ok(target.projectedPopulation > 0);
+  assert.ok(target.futureFeedKg > 0);
+  assert.equal(target.targetMbwG, 10);
+  assert.equal(result.decision, 'keep_growing');
+  assert.match(result.decisionReason, /positive growth/);
+});
+
+test('evaluate_harvest_scenario: missing critical biological data or missing price ladder returns review_data', async () => {
+  const fixture = createTestFarmFixture();
+  // Clear samplings to simulate unobserved biological data
+  fixture.ponds['farm-1']['pond-unobserved'] = {
+    pondName: 'Pond Unobserved',
+    blockId: 'blk-1',
+    initialPopulation: 100000,
+    initialWeight: 0,
+    samplings: [],
+  };
+
+  const db = buildMockDb(fixture);
+  const context = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => ['viewFarm', 'viewFinance'].includes(p),
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+
+  const missingBioResult = await evaluateHarvestScenario(
+    { pondId: 'pond-unobserved', pricePerKg: 8.0 },
+    context,
+  );
+  assert.equal(missingBioResult.decision, 'review_data');
+  assert.ok(missingBioResult.missingEvidence.includes('missing_valid_sampling_mbw'));
+
+  // Test missing market price ladder for finance user
+  const missingPriceResult = await evaluateHarvestScenario(
+    { pondId: 'pond-a' }, // no pricePerKg and no priceLadder
+    context,
+  );
+  assert.equal(missingPriceResult.decision, 'review_data');
+  assert.ok(missingPriceResult.missingEvidence.includes('missing_market_price'));
+  assert.ok(missingPriceResult.warnings.some((w) => w.includes('Market price tiers are missing')));
+});
+
+test('evaluate_harvest_scenario: enterprise technician blocked from unassigned pond in block 2', async () => {
+  const db = buildMockDb(createTestFarmFixture());
+  const enterpriseTechContext = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => p === 'viewFarm',
+    enterpriseScoped: true,
+    timeZone: 'UTC',
+    scopedData: async (dataset, doc) => {
+      // Technician tech-1 only has block blk-1
+      if (dataset === 'ponds' && doc.blockId !== 'blk-1') return null;
+      return doc;
+    },
+  };
+
+  await assert.rejects(
+    evaluateHarvestScenario({ pondId: 'pond-restricted' }, enterpriseTechContext),
+    /Not permitted/,
+    'Enterprise technician must be denied access to ponds outside assigned block',
+  );
+});
+
+test('evaluate_harvest_scenario: cross-company pond lookup returns not_found', async () => {
+  const db = buildMockDb(createTestFarmFixture());
+  const context = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => ['viewFarm', 'viewFinance'].includes(p),
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+
+  const result = await evaluateHarvestScenario(
+    { pondId: 'pond-other' }, // pond-other belongs to farm-2
+    context,
+  );
+  assert.equal(result.status, 'not_found');
+  assert.match(result.message, /not found/);
+});
+
+test('evaluate_harvest_scenario: strictly read-only and executes zero Firestore mutations', async () => {
+  const fixture = createTestFarmFixture();
+  const db = buildMockDb(fixture);
+  const context = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => ['viewFarm', 'viewFinance'].includes(p),
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+
+  const initialPondJSON = JSON.stringify(fixture.ponds['farm-1']['pond-a']);
+  const result = await evaluateHarvestScenario(
+    { pondId: 'pond-a', pricePerKg: 7.5, daysToHarvest: 14 },
+    context,
+  );
+
+  assert.equal(result.status, 'ok');
+  assert.equal(result.guardrails.noFarmWrites, true);
+  assert.equal(result.guardrails.noHarvestDraftCreated, true);
+  assert.equal(result.guardrails.advisoryOnly, true);
+
+  // Assert pond data is untouched
+  const finalPondJSON = JSON.stringify(fixture.ponds['farm-1']['pond-a']);
+  assert.equal(finalPondJSON, initialPondJSON, 'Pond document state in fixture must remain unchanged');
 });

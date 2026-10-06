@@ -754,6 +754,27 @@ export interface HarvestDecisionScenarioEvaluation {
   costSnapshot: PondProfitabilityCostSnapshot;
   recordedMortality: { dailyRatePercent: number; recordedDays: number; estimatedDeaths: number };
   recentDailyFeedTotals: DailyFeedTotal[];
+  scope: {
+    pondId: string;
+    pondName: string;
+    cycleId: string | null;
+  };
+  assumptions: {
+    growthModel: string;
+    assumedAdgGPerDay: number;
+    mortalityBasis: 'recorded_mortality_trend' | 'biological_fallback' | 'unspecified';
+    mortalityDailyRatePercent: number;
+    feedCostUnitPerKg: number;
+    maxProjectionDays: number;
+  };
+  missingEvidence: string[];
+  marginBasis: 'operating_profit_after_all_incurred_and_projected_costs';
+  guardrails: {
+    advisoryOnly: true;
+    noFarmWrites: true;
+    noHarvestDraftCreated: true;
+    notes: string;
+  };
 }
 
 /**
@@ -827,11 +848,59 @@ export const evaluateHarvestDecisionForPond = ({
     now,
   });
 
+  const missingEvidence: string[] = [];
+  if (metrics.latestMbw <= 0) {
+    missingEvidence.push('missing_valid_sampling_mbw');
+  }
+  if (metrics.currentPopulation <= 0) {
+    missingEvidence.push('missing_current_population');
+  }
+  if (recentDailyFeedTotals.length === 0) {
+    missingEvidence.push('missing_recent_daily_feed_records');
+  }
+  if (recordedMortality.recordedDays === 0) {
+    missingEvidence.push('missing_recorded_mortality_observations');
+  }
+  if (!options.priceLadder || options.priceLadder.length === 0) {
+    missingEvidence.push('missing_market_price_ladder');
+  }
+  if (costSnapshot.feedUnitCostPerKg <= 0) {
+    missingEvidence.push('missing_historical_feed_unit_cost');
+  }
+
+  const mortalityBasis: 'recorded_mortality_trend' | 'biological_fallback' | 'unspecified' =
+    recordedMortality.recordedDays > 0
+      ? 'recorded_mortality_trend'
+      : (metrics.biomassEstimate?.expectedDailyMortalityRatePercent ?? 0) > 0
+        ? 'biological_fallback'
+        : 'unspecified';
+
   return {
     result,
     metrics,
     costSnapshot,
     recordedMortality,
     recentDailyFeedTotals,
+    scope: {
+      pondId: pond.id,
+      pondName: pond.name || (pond as any).pondName || pond.id,
+      cycleId: pond.cycleId || pond.pondCycleId || null,
+    },
+    assumptions: {
+      growthModel: 'von_bertalanffy_tapered_growth',
+      assumedAdgGPerDay: metrics.adg,
+      mortalityBasis,
+      mortalityDailyRatePercent: result.dailyMortalityRatePercent,
+      feedCostUnitPerKg: costSnapshot.feedUnitCostPerKg,
+      maxProjectionDays: options.maxProjectionDays ?? 120,
+    },
+    missingEvidence,
+    marginBasis: 'operating_profit_after_all_incurred_and_projected_costs',
+    guardrails: {
+      advisoryOnly: true,
+      noFarmWrites: true,
+      noHarvestDraftCreated: true,
+      notes: 'Pure read-only analytical evaluation. No harvest records or procurement transactions were created or modified in Firestore.',
+    },
   };
 };

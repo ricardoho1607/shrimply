@@ -5,6 +5,7 @@ import {
   calculateDailyFeedIncreaseRate,
   calculateHarvestProfitability,
   calculateRecordedDailyMortalityRate,
+  evaluateHarvestDecisionForPond,
   expenseToCostRecord,
   inventoryUsageToCostRecord,
   type AllocatableCostRecord,
@@ -186,6 +187,107 @@ export const runHarvestProfitabilitySelfTest = () => {
     projectedDailyGeneralExpense: 20,
   });
   assert(hiddenMortalityFallback.dailyMortalityRatePercent === 0.25, 'uses the biological mortality fallback when logs show zero deaths');
+
+  const fullPond = {
+    id: 'p1',
+    pondName: 'Pond 1',
+    pondCycleId: 'pc1',
+    cycleId: 'c1',
+    cycleStartedAt: '2026-07-01',
+    docStart: '2026-07-01',
+    initialPopulation: 100000,
+    initialWeight: 0.5,
+    samplings: [
+      { id: 's1', date: '2026-07-10', mbw: 10, feed: 30 },
+      { id: 's2', date: '2026-07-19', mbw: 20, feed: 50 },
+    ],
+    mortalityRecords: [
+      { date: '2026-07-18', observationType: 'estimated_total', count: 50 },
+      { date: '2026-07-19', observationType: 'none_observed', count: 0 },
+    ],
+  };
+
+  const decisionEvaluation = evaluateHarvestDecisionForPond({
+    pond: fullPond as any,
+    options: {
+      now: new Date('2026-07-19T00:00:00Z'),
+      currentDateKey: '2026-07-19',
+      priceLadder: [
+        { sizeCountPerKg: 50, pricePerKg: 5 },
+        { sizeCountPerKg: 40, pricePerKg: 7.5 },
+        { sizeCountPerKg: 30, pricePerKg: 9.5 },
+        { sizeCountPerKg: 20, pricePerKg: 12 },
+      ],
+      feeds: [
+        {
+          id: 'feed-1',
+          usageHistory: [
+            { id: 'u1', date: '2026-07-17', quantity: 80, totalCost: 96, pondId: 'p1', pondCycleId: 'pc1', cycleId: 'c1' },
+            { id: 'u2', date: '2026-07-18', quantity: 82, totalCost: 98.4, pondId: 'p1', pondCycleId: 'pc1', cycleId: 'c1' },
+            { id: 'u3', date: '2026-07-19', quantity: 84, totalCost: 100.8, pondId: 'p1', pondCycleId: 'pc1', cycleId: 'c1' },
+          ],
+        },
+      ],
+      additives: [],
+      expenses: [{ id: 'e1', date: '2026-07-10', amount: 500, pondId: 'p1', pondCycleId: 'pc1', cycleId: 'c1' }],
+    },
+  });
+
+  assert(decisionEvaluation.result.decision === 'keep_growing', 'evaluates profitable harvest growth scenario from canonical pond data');
+  assert(decisionEvaluation.scope.pondId === 'p1', 'records explicit pondId scope');
+  assert(decisionEvaluation.scope.cycleId === 'pc1', 'records explicit cycleId scope');
+  assert(decisionEvaluation.assumptions.growthModel === 'von_bertalanffy_tapered_growth', 'explicitly cites tapered growth model');
+  assert(decisionEvaluation.assumptions.mortalityBasis === 'recorded_mortality_trend', 'explicitly cites recorded mortality basis');
+  assert(decisionEvaluation.marginBasis === 'operating_profit_after_all_incurred_and_projected_costs', 'explicitly states full operating profit margin basis');
+  assert(decisionEvaluation.guardrails.advisoryOnly === true, 'enforces advisory-only guardrail');
+  assert(decisionEvaluation.guardrails.noFarmWrites === true, 'enforces no-writes guardrail');
+  assert(decisionEvaluation.missingEvidence.length === 0, 'flags zero missing evidence when all critical inputs present');
+
+  const missingFeedEvaluation = evaluateHarvestDecisionForPond({
+    pond: fullPond as any,
+    options: {
+      now: new Date('2026-07-19T00:00:00Z'),
+      currentDateKey: '2026-07-19',
+      priceLadder: [{ sizeCountPerKg: 50, pricePerKg: 5 }, { sizeCountPerKg: 40, pricePerKg: 7.5 }],
+      feeds: [],
+    },
+  });
+  assert(missingFeedEvaluation.missingEvidence.includes('missing_recent_daily_feed_records'), 'flags missing recent daily feed evidence');
+  assert(missingFeedEvaluation.missingEvidence.includes('missing_historical_feed_unit_cost'), 'flags missing feed unit cost');
+
+  const missingPriceEvaluation = evaluateHarvestDecisionForPond({
+    pond: fullPond as any,
+    options: {
+      now: new Date('2026-07-19T00:00:00Z'),
+      currentDateKey: '2026-07-19',
+      priceLadder: [],
+      feeds: [{ id: 'feed-1', usageHistory: [{ date: '2026-07-19', quantity: 50, totalCost: 100, pondId: 'p1' }] }],
+    },
+  });
+  assert(missingPriceEvaluation.missingEvidence.includes('missing_market_price_ladder'), 'flags missing price ladder evidence');
+  assert(missingPriceEvaluation.result.decision === 'review_data', 'recommends review_data when market prices are missing');
+
+  const unrecordedMortalityEvaluation = evaluateHarvestDecisionForPond({
+    pond: { ...fullPond, mortalityRecords: [] } as any,
+    options: {
+      now: new Date('2026-07-19T00:00:00Z'),
+      currentDateKey: '2026-07-19',
+      priceLadder: [{ sizeCountPerKg: 50, pricePerKg: 5 }, { sizeCountPerKg: 40, pricePerKg: 7.5 }],
+      feeds: [{ id: 'feed-1', usageHistory: [{ date: '2026-07-19', quantity: 50, totalCost: 100, pondId: 'p1' }] }],
+    },
+  });
+  assert(unrecordedMortalityEvaluation.missingEvidence.includes('missing_recorded_mortality_observations'), 'flags missing recorded mortality observations');
+  assert(unrecordedMortalityEvaluation.assumptions.mortalityBasis === 'biological_fallback', 'falls back to biological mortality model');
+
+  const missingMbwEvaluation = evaluateHarvestDecisionForPond({
+    pond: { ...fullPond, samplings: [] } as any,
+    options: {
+      now: new Date('2026-07-19T00:00:00Z'),
+      currentDateKey: '2026-07-19',
+      priceLadder: [{ sizeCountPerKg: 50, pricePerKg: 5 }, { sizeCountPerKg: 40, pricePerKg: 7.5 }],
+    },
+  });
+  assert(missingMbwEvaluation.result.decision === 'review_data', 'recommends review_data when current MBW cannot be reliably established');
 
   return profitableGrowth;
 };

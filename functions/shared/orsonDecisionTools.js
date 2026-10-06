@@ -8,6 +8,9 @@ const {
   calculateAdg,
   getPondCurrentDoc,
   toFiniteNumber,
+  daysToTargetMbwWithTapering,
+  projectMbwWithTapering,
+  calculateExpectedSurvivalRetention,
 } = require('./orsonDomain/pondCalculations');
 const { evaluateReplenishmentScenario } = require('./orsonInventoryPolicy');
 
@@ -32,6 +35,8 @@ const finite = (value) => {
   const parsed = typeof value === 'number' ? value : Number(String(value ?? '').replace(/,/g, ''));
   return Number.isFinite(parsed) ? parsed : null;
 };
+
+const nonNegative = (value) => Math.max(0, finite(value) || 0);
 
 const round = (value, decimals = 2) => {
   const number = finite(value);
@@ -167,10 +172,64 @@ const inventoryReplenishmentTool = {
   },
 };
 
+const harvestScenarioTool = {
+  type: 'function',
+  name: 'evaluate_harvest_scenario',
+  description:
+    'Evaluate read-only harvest scenarios comparing harvesting today versus continuing to grow to target market sizes or dates. Projects population retention, tapered growth, feed requirements, and operating profit against market prices. Non-finance users receive biological and biomass projections with financial margins withheld. Purely advisory: performs no harvest operations and no Firestore writes.',
+  parameters: {
+    type: 'object',
+    properties: {
+      pondId: {
+        type: 'string',
+        description: 'Exact pond ID to evaluate.',
+      },
+      cycleId: {
+        type: 'string',
+        description: 'Optional cycle ID (defaults to active cycle).',
+      },
+      targetMbwG: {
+        type: 'number',
+        description: 'Optional specific target Mean Body Weight in grams (e.g. 25, 30).',
+      },
+      targetSizeCountPerKg: {
+        type: 'number',
+        description: 'Optional target shrimp size count per kg (e.g. 30, 40, 50).',
+      },
+      daysToHarvest: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 120,
+        description: 'Optional projection horizon in days from now (1-120).',
+      },
+      pricePerKg: {
+        type: 'number',
+        description: 'Optional expected flat market price per kg in farm currency.',
+      },
+      priceLadder: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            sizeCountPerKg: { type: 'number' },
+            pricePerKg: { type: 'number' },
+          },
+          required: ['sizeCountPerKg', 'pricePerKg'],
+          additionalProperties: false,
+        },
+        description: 'Optional market price tiers by shrimp count per kg.',
+      },
+    },
+    required: ['pondId'],
+    additionalProperties: false,
+  },
+};
+
 const decisionToolSchemas = [
   periodFeedCostTool,
   comparePondCyclesTool,
   inventoryReplenishmentTool,
+  harvestScenarioTool,
 ];
 
 /**
@@ -746,6 +805,484 @@ const evaluateInventoryReplenishment = async (args = {}, context = {}) => {
 };
 
 /**
+ * Evaluate read-only harvest scenarios comparing harvesting today versus continuing to grow to target sizes or dates.
+ * Reuses canonical calculatePondMetricsWithHarvest, daysToTargetMbwWithTapering, projectMbwWithTapering,
+ * and calculateExpectedSurvivalRetention.
+ * Strictly read-only: creates no harvest records and performs no Firestore writes.
+ * Enforces strict finance isolation: non-finance callers receive operational metrics with finance margins withheld.
+ */
+const evaluateHarvestScenario = async (args = {}, context = {}) => {
+  const { db, companyId, company, allowed, enterpriseScoped, scopedData, timeZone: ctxTimeZone } = context;
+  if (!allowed || !allowed('viewFarm')) {
+    throw new Error('Not permitted');
+  }
+
+  const pondId = args.pondId ? String(args.pondId).trim() : null;
+  if (!pondId || !validId(pondId)) {
+    throw new Error('Invalid pond ID');
+  }
+
+  const cycleId = args.cycleId ? String(args.cycleId).trim() : null;
+  const targetMbwG = args.targetMbwG !== undefined ? finite(args.targetMbwG) : null;
+  const targetSizeCountPerKg = args.targetSizeCountPerKg !== undefined ? finite(args.targetSizeCountPerKg) : null;
+  const requestedDays = Number.isInteger(args.daysToHarvest) && args.daysToHarvest > 0
+    ? Math.min(120, args.daysToHarvest)
+    : null;
+  const expectedPricePerKg = args.pricePerKg !== undefined ? finite(args.pricePerKg) : null;
+  const customPriceLadder = Array.isArray(args.priceLadder)
+    ? args.priceLadder
+        .map((tier) => ({
+          sizeCountPerKg: finite(tier?.sizeCountPerKg),
+          pricePerKg: finite(tier?.pricePerKg),
+        }))
+        .filter((tier) => tier.sizeCountPerKg !== null && tier.sizeCountPerKg > 0 && tier.pricePerKg !== null && tier.pricePerKg > 0)
+        .sort((a, b) => b.sizeCountPerKg - a.sizeCountPerKg)
+    : null;
+
+  const baseRef = db.collection('companies').doc(companyId);
+  const pondSnap = await baseRef.collection('ponds').doc(pondId).get();
+  if (!pondSnap.exists) {
+    return { status: 'not_found', message: `Pond ${pondId} not found.` };
+  }
+
+  let pondData = { id: pondSnap.id, ...pondSnap.data() };
+  if (scopedData) {
+    const scoped = await scopedData('ponds', pondData);
+    if (!scoped) throw new Error('Not permitted');
+    pondData = scoped;
+  }
+
+  const activeCycleId = cycleId || pondData.pondCycleId || pondData.cycleId || 'active';
+  const scopedPond = {
+    ...pondData,
+    samplings: (pondData.samplings || []).filter((s) =>
+      belongsToCurrentCycle(s, { pondCycleId: activeCycleId, cycleId: activeCycleId }),
+    ),
+    mortalityRecords: (pondData.mortalityRecords || []).filter((m) =>
+      belongsToCurrentCycle(m, { pondCycleId: activeCycleId, cycleId: activeCycleId }),
+    ),
+  };
+
+  const timeZone = ctxTimeZone || company?.timeZone || 'UTC';
+  const todayKey = farmToday(timeZone);
+  const now = new Date();
+
+  const metrics = calculatePondMetricsWithHarvest(scopedPond, timeZone, {
+    currentDateKey: todayKey,
+    now,
+  });
+
+  // Calculate recorded mortality rate
+  const mortalityRecords = scopedPond.mortalityRecords || [];
+  const validMortalityDates = new Set();
+  let estimatedDeaths = 0;
+  for (const m of mortalityRecords) {
+    const d = typeof m.date === 'string' ? m.date.slice(0, 10) : null;
+    if (!d || !validDateKey(d)) continue;
+    validMortalityDates.add(d);
+    if (m.observationType === 'estimated_total' || !m.observationType) {
+      estimatedDeaths += nonNegative(m.count);
+    }
+  }
+  const recordedMortalityDays = validMortalityDates.size;
+  const fallbackDailyMortalityRatePercent =
+    metrics.biomassEstimate?.expectedDailyMortalityRatePercent || 0.05;
+
+  let dailyMortalityRatePercent = fallbackDailyMortalityRatePercent;
+  let mortalityBasis = 'biological_fallback';
+  if (recordedMortalityDays > 0 && metrics.currentPopulation > 0) {
+    dailyMortalityRatePercent = (estimatedDeaths / (metrics.currentPopulation * recordedMortalityDays)) * 100;
+    mortalityBasis = 'recorded_mortality_trend';
+  }
+
+  // Fetch feeds and usage for recent daily feed totals
+  const feedsSnap = await baseRef.collection('feeds').get();
+  const feeds = [];
+  for (const doc of feedsSnap.docs || []) {
+    let f = { id: doc.id, ...doc.data() };
+    if (scopedData) {
+      f = await scopedData('feeds', f);
+      if (!f) continue;
+    }
+    feeds.push(f);
+  }
+
+  const dailyFeedMap = new Map();
+  let totalFeedConsumedPondKg = 0;
+  let totalFeedCostPond = 0;
+  for (const feed of feeds) {
+    const usages = feed.usageHistory || [];
+    const unitPrice = finite(feed.costPerUnit || feed.price || feed.averageCost);
+    for (const usage of usages) {
+      if (usage.pondId && usage.pondId !== pondId) continue;
+      if (!belongsToCurrentCycle(usage, { pondCycleId: activeCycleId, cycleId: activeCycleId })) continue;
+      const d = typeof usage.date === 'string' ? usage.date.slice(0, 10) : null;
+      const qty = finite(usage.quantity);
+      if (!d || !validDateKey(d) || qty === null || qty <= 0) continue;
+      dailyFeedMap.set(d, (dailyFeedMap.get(d) || 0) + qty);
+      totalFeedConsumedPondKg += qty;
+      const savedCost = finite(usage.totalCost);
+      if (savedCost !== null) {
+        totalFeedCostPond += savedCost;
+      } else if (unitPrice !== null) {
+        totalFeedCostPond += qty * unitPrice;
+      }
+    }
+  }
+
+  // Build sorted daily feed entries
+  const recentFeedDates = Array.from(dailyFeedMap.keys()).sort();
+  let startingDailyFeedKg = 0;
+  if (recentFeedDates.length > 0) {
+    const latestFeedDate = recentFeedDates[recentFeedDates.length - 1];
+    startingDailyFeedKg = dailyFeedMap.get(latestFeedDate) || 0;
+  }
+
+  // Daily feed increase rate
+  let dailyFeedRate = 0.03;
+  if (recentFeedDates.length >= 2) {
+    const sortedQuantities = recentFeedDates.map((d) => dailyFeedMap.get(d));
+    let totalRate = 0;
+    let rateCount = 0;
+    for (let i = 1; i < sortedQuantities.length; i++) {
+      const prev = sortedQuantities[i - 1];
+      const curr = sortedQuantities[i];
+      if (prev > 0) {
+        totalRate += (curr - prev) / prev;
+        rateCount++;
+      }
+    }
+    if (rateCount > 0) {
+      dailyFeedRate = Math.max(0, Math.min(0.15, totalRate / rateCount));
+    }
+  }
+
+  // Finance gating
+  const canViewFinance = Boolean(allowed('viewFinance'));
+  let feedUnitCostPerKg = null;
+  let costsToDate = { feed: 0, additives: 0, generalExpenses: 0, other: 0 };
+  let projectedDailyAdditive = 0;
+  let projectedDailyGeneral = 0;
+  let resolvedPriceLadder = customPriceLadder || [];
+
+  if (canViewFinance) {
+    if (totalFeedConsumedPondKg > 0 && totalFeedCostPond > 0) {
+      feedUnitCostPerKg = round(totalFeedCostPond / totalFeedConsumedPondKg, 2);
+    } else if (feeds.length > 0) {
+      const prices = feeds.map((f) => finite(f.costPerUnit || f.price)).filter((p) => p !== null && p > 0);
+      if (prices.length > 0) {
+        feedUnitCostPerKg = round(prices.reduce((a, b) => a + b, 0) / prices.length, 2);
+      }
+    }
+
+    costsToDate.feed = round(totalFeedCostPond, 2);
+    try {
+      const expSnap = await baseRef.collection('expenses').get();
+      for (const doc of expSnap.docs || []) {
+        const exp = doc.data();
+        if (exp.voided) continue;
+        const amount = finite(exp.amount);
+        if (amount === null || amount <= 0) continue;
+        if (exp.pondId === pondId) {
+          const cat = String(exp.category || '').toLowerCase();
+          if (cat.includes('feed')) costsToDate.feed = round(costsToDate.feed + amount, 2);
+          else if (cat.includes('additive') || cat.includes('probiotic') || cat.includes('mineral')) {
+            costsToDate.additives = round(costsToDate.additives + amount, 2);
+          } else {
+            costsToDate.generalExpenses = round(costsToDate.generalExpenses + amount, 2);
+          }
+        }
+      }
+    } catch (_) {
+      // safe fallback if expenses collection inaccessible
+    }
+
+    if (!resolvedPriceLadder.length && company?.harvestMarketPrices && typeof company.harvestMarketPrices === 'object') {
+      resolvedPriceLadder = Object.entries(company.harvestMarketPrices)
+        .map(([size, price]) => ({ sizeCountPerKg: finite(size), pricePerKg: finite(price) }))
+        .filter((t) => t.sizeCountPerKg !== null && t.sizeCountPerKg > 0 && t.pricePerKg !== null && t.pricePerKg > 0)
+        .sort((a, b) => b.sizeCountPerKg - a.sizeCountPerKg);
+    }
+  }
+
+  const resolvePriceForSize = (sizeCount) => {
+    if (!canViewFinance) return null;
+    if (expectedPricePerKg !== null) return expectedPricePerKg;
+    if (!resolvedPriceLadder.length) return null;
+    if (sizeCount === null || sizeCount <= 0) return resolvedPriceLadder[0].pricePerKg;
+    let closest = resolvedPriceLadder[0];
+    let minDiff = Math.abs(closest.sizeCountPerKg - sizeCount);
+    for (const tier of resolvedPriceLadder) {
+      const diff = Math.abs(tier.sizeCountPerKg - sizeCount);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = tier;
+      }
+    }
+    return closest.pricePerKg;
+  };
+
+  const currentSizeCount = metrics.latestMbw > 0 ? round(1000 / metrics.latestMbw, 1) : null;
+  const currentPricePerKg = currentSizeCount !== null ? resolvePriceForSize(currentSizeCount) : null;
+
+  const sumCosts = (c) => (c ? c.feed + c.additives + c.generalExpenses + c.other : 0);
+
+  // Today scenario
+  const todayRevenue = canViewFinance && currentPricePerKg !== null && metrics.currentBiomassKg !== null
+    ? round(metrics.currentBiomassKg * currentPricePerKg, 2)
+    : null;
+  const todayOperatingProfit = todayRevenue !== null
+    ? round(todayRevenue - sumCosts(costsToDate), 2)
+    : null;
+
+  const todayScenario = {
+    kind: 'today',
+    targetSizeCountPerKg: currentSizeCount,
+    targetMbwG: metrics.latestMbw,
+    daysFromNow: 0,
+    projectedPopulation: metrics.currentPopulation,
+    projectedSurvivalRatePercent: metrics.adjustedSR,
+    projectedBiomassKg: metrics.currentBiomassKg,
+    ...(canViewFinance
+      ? {
+          pricePerKg: currentPricePerKg,
+          revenue: todayRevenue,
+          futureFeedKg: 0,
+          futureCosts: { feed: 0, additives: 0, generalExpenses: 0, other: 0 },
+          totalCosts: { ...costsToDate },
+          operatingProfit: todayOperatingProfit,
+          incrementalProfitVsToday: 0,
+        }
+      : {}),
+  };
+
+  // Determine candidate targets
+  const candidateTargets = [];
+  const maxMbw = Math.max(50, (metrics.latestMbw || 0) * 1.5);
+
+  if (targetMbwG && targetMbwG > (metrics.latestMbw || 0)) {
+    candidateTargets.push({ targetMbw: targetMbwG, targetSize: round(1000 / targetMbwG, 1) });
+  }
+  if (targetSizeCountPerKg && currentSizeCount && targetSizeCountPerKg < currentSizeCount) {
+    const mbw = 1000 / targetSizeCountPerKg;
+    if (!candidateTargets.some((t) => Math.abs(t.targetMbw - mbw) < 0.5)) {
+      candidateTargets.push({ targetMbw: mbw, targetSize: targetSizeCountPerKg });
+    }
+  }
+  if (requestedDays && requestedDays > 0) {
+    const projectedMbw = projectMbwWithTapering(metrics.latestMbw || 0.5, metrics.adg || 0.2, requestedDays, maxMbw);
+    const targetSize = round(1000 / projectedMbw, 1);
+    if (!candidateTargets.some((t) => Math.abs(t.targetMbw - projectedMbw) < 0.5)) {
+      candidateTargets.push({ targetMbw: projectedMbw, targetSize, forcedDays: requestedDays });
+    }
+  }
+
+  // Add reachable price ladder tiers
+  if (resolvedPriceLadder.length > 0 && currentSizeCount) {
+    for (const tier of resolvedPriceLadder) {
+      if (tier.sizeCountPerKg < currentSizeCount) {
+        const mbw = 1000 / tier.sizeCountPerKg;
+        if (!candidateTargets.some((t) => Math.abs(t.targetMbw - mbw) < 0.5)) {
+          candidateTargets.push({ targetMbw: mbw, targetSize: tier.sizeCountPerKg });
+        }
+      }
+    }
+  }
+
+  // Build target scenarios
+  const targets = [];
+  const warnings = [];
+
+  for (const candidate of candidateTargets) {
+    const targetMbw = candidate.targetMbw;
+    const days = candidate.forcedDays !== undefined
+      ? candidate.forcedDays
+      : Math.max(1, Math.ceil(daysToTargetMbwWithTapering(metrics.latestMbw || 0.5, targetMbw, metrics.adg || 0.2, maxMbw)));
+
+    if (days > 120) continue;
+
+    const projectedMbw = candidate.forcedDays !== undefined
+      ? targetMbw
+      : projectMbwWithTapering(metrics.latestMbw || 0.5, metrics.adg || 0.2, days, maxMbw);
+    const sizeCount = round(1000 / projectedMbw, 1);
+
+    // Biological survival projection
+    const mortalityRetention = Math.max(0.1, Math.min(1.0, Math.pow(1 - dailyMortalityRatePercent / 100, days)));
+    const projectedPopulation = Math.max(0, Math.round((metrics.currentPopulation || 0) * mortalityRetention));
+    const projectedSurvivalRatePercent = metrics.initialPopulation > 0
+      ? round((projectedPopulation / metrics.initialPopulation) * 100, 1)
+      : null;
+    const projectedBiomassKg = round((projectedPopulation * projectedMbw) / 1000, 2);
+
+    const biomassGain = Math.max(0, (projectedBiomassKg || 0) - (metrics.currentBiomassKg || 0));
+    const fcrBenchmark = metrics.adjustedFCR > 0 ? metrics.adjustedFCR : 1.4;
+    const futureFeedKg = round(Math.max(biomassGain * fcrBenchmark, startingDailyFeedKg * days), 2);
+
+    let priceTier = null;
+    let rev = null;
+    let futureCosts = null;
+    let totCosts = null;
+    let opProfit = null;
+    let incProfit = null;
+
+    if (canViewFinance) {
+      priceTier = resolvePriceForSize(sizeCount);
+      rev = priceTier !== null && projectedBiomassKg !== null ? round(projectedBiomassKg * priceTier, 2) : null;
+      const unitCost = feedUnitCostPerKg !== null ? feedUnitCostPerKg : 1.5;
+      const futureFeedCost = round(futureFeedKg * unitCost, 2);
+      futureCosts = {
+        feed: futureFeedCost,
+        additives: round(projectedDailyAdditive * days, 2),
+        generalExpenses: round(projectedDailyGeneral * days, 2),
+        other: 0,
+      };
+      totCosts = {
+        feed: round(costsToDate.feed + futureCosts.feed, 2),
+        additives: round(costsToDate.additives + futureCosts.additives, 2),
+        generalExpenses: round(costsToDate.generalExpenses + futureCosts.generalExpenses, 2),
+        other: round(costsToDate.other + futureCosts.other, 2),
+      };
+      opProfit = rev !== null ? round(rev - sumCosts(totCosts), 2) : null;
+      incProfit = opProfit !== null && todayOperatingProfit !== null ? round(opProfit - todayOperatingProfit, 2) : null;
+    }
+
+    targets.push({
+      kind: 'target',
+      targetSizeCountPerKg: sizeCount,
+      targetMbwG: round(projectedMbw, 2),
+      daysFromNow: days,
+      projectedPopulation,
+      projectedSurvivalRatePercent,
+      projectedBiomassKg,
+      futureFeedKg,
+      ...(canViewFinance
+        ? {
+            pricePerKg: priceTier,
+            revenue: rev,
+            futureCosts,
+            totalCosts: totCosts,
+            operatingProfit: opProfit,
+            incrementalProfitVsToday: incProfit,
+          }
+        : {}),
+    });
+  }
+
+  // Sort targets by daysFromNow ascending
+  targets.sort((a, b) => a.daysFromNow - b.daysFromNow);
+
+  // Missing evidence
+  const missingEvidence = [];
+  if (!metrics.latestMbw || metrics.latestMbw <= 0) missingEvidence.push('missing_valid_sampling_mbw');
+  if (!metrics.currentPopulation || metrics.currentPopulation <= 0) missingEvidence.push('missing_current_population');
+  if (startingDailyFeedKg <= 0 && (!metrics.adjustedFCR || metrics.adjustedFCR <= 0)) {
+    missingEvidence.push('missing_recent_daily_feed');
+    warnings.push('Future feed cost cannot be accurately projected without recent feed records or historical FCR.');
+  }
+  if (recordedMortalityDays === 0) {
+    missingEvidence.push('missing_recorded_mortality_logs');
+  }
+  if (canViewFinance && !resolvedPriceLadder.length && expectedPricePerKg === null) {
+    missingEvidence.push('missing_market_price');
+    warnings.push('Market price tiers are missing. Financial revenue and operating profit require market prices.');
+  }
+  if (canViewFinance && feedUnitCostPerKg === null) {
+    missingEvidence.push('missing_historical_feed_unit_cost');
+  }
+
+  // Decision formulation
+  let decision = 'review_data';
+  let decisionReason = '';
+  let bestScenario = todayScenario;
+
+  const hasCriticalData =
+    metrics.currentPopulation > 0 &&
+    metrics.latestMbw > 0 &&
+    (!canViewFinance || (resolvedPriceLadder.length > 0 || expectedPricePerKg !== null));
+
+  if (!hasCriticalData) {
+    decision = 'review_data';
+    decisionReason = 'Critical biological or market-price data is missing.';
+  } else if (canViewFinance) {
+    const validTargets = targets.filter((t) => t.operatingProfit !== null && t.operatingProfit !== undefined);
+    if (validTargets.length > 0) {
+      bestScenario = [todayScenario, ...validTargets].reduce((best, s) =>
+        s.operatingProfit > best.operatingProfit ? s : best,
+      );
+    }
+    if (bestScenario.kind === 'target' && bestScenario.operatingProfit > (todayScenario.operatingProfit || 0) && bestScenario.operatingProfit > 0) {
+      decision = 'keep_growing';
+      decisionReason = `Target size ${bestScenario.targetSizeCountPerKg} is projected to improve operating profit by ${round(bestScenario.incrementalProfitVsToday)}.`;
+    } else if (targets.length === 0) {
+      decision = 'harvest_now';
+      decisionReason = 'No reachable larger market size has a valid, more profitable projection.';
+    } else {
+      decision = 'harvest_now';
+      decisionReason = 'Harvesting now has equal or higher projected operating profit than reachable larger sizes.';
+    }
+  } else {
+    // Non-finance operational decision
+    if (metrics.adg > 0 && targets.length > 0) {
+      decision = 'keep_growing';
+      decisionReason = `Pond exhibits positive growth (ADG ${metrics.adg}g/day). Target size reachable within projection window.`;
+      bestScenario = targets[0];
+    } else if (metrics.adg <= 0) {
+      decision = 'harvest_now';
+      decisionReason = 'Growth has plateaued or historical ADG is zero/negative.';
+    } else {
+      decision = 'harvest_now';
+      decisionReason = 'Current harvest size meets active cycle operational targets.';
+    }
+  }
+
+  return {
+    status: 'ok',
+    decision,
+    decisionReason,
+    scope: {
+      companyId,
+      pondId,
+      pondName: String(pondData.pondName || pondData.name || pondId).slice(0, 160),
+      cycleId: activeCycleId,
+      enterpriseScoped: Boolean(enterpriseScoped),
+    },
+    assumptions: {
+      growthModel: 'von_bertalanffy_tapered_growth',
+      assumedAdgGPerDay: metrics.adg,
+      mortalityBasis,
+      mortalityDailyRatePercent: round(dailyMortalityRatePercent, 4),
+      feedDailyIncreaseRatePercent: round(dailyFeedRate * 100, 2),
+    },
+    missingEvidence,
+    marginBasis: canViewFinance
+      ? 'operating_profit_after_all_incurred_and_projected_costs'
+      : 'none_finance_withheld',
+    today: todayScenario,
+    targets,
+    bestScenario,
+    finance: canViewFinance
+      ? {
+          financeAllowed: true,
+          incurredCostsToDate: costsToDate,
+          feedUnitCostPerKg,
+          marginBasis: 'operating_profit_after_all_incurred_and_projected_costs',
+        }
+      : {
+          financeAllowed: false,
+          reason: 'User lacks viewFinance permission. Pricing, revenues, and operating profit withheld.',
+          marginBasis: 'none_finance_withheld',
+        },
+    warnings,
+    guardrails: {
+      advisoryOnly: true,
+      noFarmWrites: true,
+      noHarvestDraftCreated: true,
+      notes: 'Pure read-only decision scenario. No harvest records created and no Firestore writes occurred.',
+    },
+  };
+};
+
+/**
  * Router for executing decision tools by name.
  */
 const executeDecisionTool = async (name, args, context) => {
@@ -758,6 +1295,9 @@ const executeDecisionTool = async (name, args, context) => {
   if (name === inventoryReplenishmentTool.name) {
     return evaluateInventoryReplenishment(args, context);
   }
+  if (name === harvestScenarioTool.name) {
+    return evaluateHarvestScenario(args, context);
+  }
   throw new Error(`Unknown decision tool: ${name}`);
 };
 
@@ -766,10 +1306,12 @@ module.exports = {
   periodFeedCostTool,
   comparePondCyclesTool,
   inventoryReplenishmentTool,
+  harvestScenarioTool,
   executeDecisionTool,
   summarizePeriodFeedAndCost,
   comparePondCycles,
   evaluateInventoryReplenishment,
+  evaluateHarvestScenario,
   belongsToCurrentCycle,
   farmToday,
   shiftDate,
