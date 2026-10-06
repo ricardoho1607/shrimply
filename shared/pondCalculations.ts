@@ -534,6 +534,12 @@ export const calculateAdg = (pond: GrowthPond, timeZone?: string): number => {
   return current ? calculateSamplingAdg(pond, current.sampling, timeZone) ?? 0 : 0;
 };
 
+/** Measured interval ADG or null if no valid growth interval is recorded. */
+export const getPondAdgOrNull = (pond: GrowthPond, timeZone?: string): number | null => {
+  const current = datedGrowthSamplings(pond, timeZone).reverse().find(item => !isBaselineSampling(item.sampling));
+  return current ? calculateSamplingAdg(pond, current.sampling, timeZone) : null;
+};
+
 /** Separate forecast trend; never display this as a sampling's measured ADG. */
 export const calculateSmoothedAdg = (pond: GrowthPond, timeZone?: string): number => {
   const daily = new Map(datedGrowthSamplings(pond, timeZone)

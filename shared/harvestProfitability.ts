@@ -1,6 +1,13 @@
 import { isCycleOperatingExpense } from './reportingIntegrity';
 import { differenceInFarmCalendarDays, normalizeFarmDateKey } from './farmDate';
-import { daysToTargetMbwWithTapering } from './pondCalculations';
+import {
+  daysToTargetMbwWithTapering,
+  calculatePondMetricsWithHarvest,
+  type SharedPond,
+  type PondMetricsWithHarvest,
+} from './pondCalculations';
+import { isInventoryTransfer, monetaryValue } from './financeIntegrity';
+import { isCompanyWideExpenseCategory } from './financeCycleAllocation';
 
 export type HarvestDecision = 'harvest_now' | 'keep_growing' | 'review_data';
 
@@ -152,10 +159,7 @@ const round = (value: number, decimals = 2): number => {
   return Math.round(value * factor) / factor;
 };
 
-const finite = (value: unknown): number | null => {
-  const parsed = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
+const finite = (value: unknown): number | null => monetaryValue(value);
 
 const nonNegative = (value: unknown): number => Math.max(0, finite(value) ?? 0);
 
@@ -198,7 +202,7 @@ export const inventoryUsageToCostRecord = (
   fallbackId: string,
   timeZone?: string,
 ): AllocatableCostRecord | null => {
-  if (usage.source === 'treatmentMixProduction') return null;
+  if (isInventoryTransfer(usage)) return null;
   const date = validDate(usage.date, timeZone);
   const quantity = finite(usage.quantity);
   const savedCost = finite(usage.totalCost);
@@ -354,7 +358,7 @@ export const buildPondProfitabilityCostSnapshot = ({
 
   const feedQuantityRecords = feeds.flatMap((item) =>
     (item.usageHistory || []).reduce<AllocatableCostRecord[]>((records, usage, index) => {
-      if (usage.source === 'treatmentMixProduction') return records;
+      if (isInventoryTransfer(usage)) return records;
       const date = validDate(usage.date, timeZone);
       const quantity = finite(usage.quantity);
       if (!date || quantity === null || quantity === 0) return records;
@@ -375,6 +379,9 @@ export const buildPondProfitabilityCostSnapshot = ({
   const warnings: string[] = [];
   if (feedAllocation.allocatedAmount > 0 && feedQuantityAllocation.allocatedAmount <= 0) {
     warnings.push('Consumed feed cost exists, but its allocated quantity is missing.');
+  }
+  if (feedQuantityAllocation.allocatedAmount > 0 && feedAllocation.allocatedAmount <= 0) {
+    warnings.push('Consumed feed quantity exists, but its allocated cost is missing or zero.');
   }
   if (expenseAllocation.unallocatedAmount > 0 || additiveAllocation.unallocatedAmount > 0) {
     warnings.push('Some shared costs could not be allocated because no pond was active on the record date.');
@@ -446,7 +453,7 @@ export const buildDailyFeedTotalsForPond = (
   feeds.forEach((feed) => {
     (feed.usageHistory || []).forEach((usage) => {
       if (usage.pondId !== pondId) return;
-      if (usage.source === 'treatmentMixProduction') return;
+      if (isInventoryTransfer(usage)) return;
       const date = validDate(usage.date, timeZone);
       const quantity = finite(usage.quantity);
       if (!date || quantity === null) return;
@@ -554,7 +561,9 @@ const buildScenario = ({
   const projectedPopulation = Math.max(0, input.currentPopulation * ((1 - mortalityRate) ** daysFromNow));
   const projectedSurvivalRatePercent = input.initialPopulation && input.initialPopulation > 0
     ? (projectedPopulation / input.initialPopulation) * 100
-    : input.currentSurvivalRatePercent ?? 0;
+    : input.currentSurvivalRatePercent !== null && input.currentSurvivalRatePercent !== undefined && input.currentSurvivalRatePercent > 0
+      ? input.currentSurvivalRatePercent * ((1 - mortalityRate) ** daysFromNow)
+      : 0;
   const projectedBiomassKg = (projectedPopulation * targetMbwG) / 1000;
   const currentBiomassKg = (input.currentPopulation * input.currentMbwG) / 1000;
   const biomassGainKg = projectedBiomassKg - currentBiomassKg;
@@ -634,6 +643,12 @@ export const calculateHarvestProfitability = (
   if (startingDailyFeedKg <= 0) warnings.push('No valid recent daily feed total is available for the feed-cost projection.');
   if (!input.historicalFcr || input.historicalFcr <= 0) warnings.push('Historical FCR is unavailable for efficiency comparison.');
 
+  const hasMortalityInput = (input.dailyMortalityRatePercent !== null && input.dailyMortalityRatePercent !== undefined && Number.isFinite(Number(input.dailyMortalityRatePercent)))
+    || (input.fallbackDailyMortalityRatePercent !== null && input.fallbackDailyMortalityRatePercent !== undefined && Number.isFinite(Number(input.fallbackDailyMortalityRatePercent)));
+  if (!hasMortalityInput) {
+    warnings.push('Daily mortality rate is unavailable; future biomass projection assumes zero mortality which carries biological risk.');
+  }
+
   const todayBase = buildScenario({
     kind: 'today',
     targetSizeCountPerKg: currentSizeCountPerKg,
@@ -674,6 +689,11 @@ export const calculateHarvestProfitability = (
       }))
     : [];
 
+  const hasFeedProjectionBasis = startingDailyFeedKg > 0 || (input.historicalFcr !== null && input.historicalFcr !== undefined && input.historicalFcr > 0);
+  if (targets.length > 0 && !hasFeedProjectionBasis) {
+    warnings.push('Future feed cost cannot be projected without recent daily feed or historical FCR.');
+  }
+
   targets.forEach((scenario) => {
     if (scenario.impliedIncrementalFcr !== null && input.historicalFcr && scenario.impliedIncrementalFcr > input.historicalFcr * 1.25) {
       warnings.push(`Target size ${scenario.targetSizeCountPerKg} implies FCR ${scenario.impliedIncrementalFcr}, materially above the historical FCR.`);
@@ -684,18 +704,21 @@ export const calculateHarvestProfitability = (
     scenario.operatingProfit > best.operatingProfit ? scenario : best
   );
   const hasCriticalData = currentPopulation > 0 && currentMbwG > 0 && priceLadder.length > 0 && nearestCurrentTierDistance <= 10;
-  const decision: HarvestDecision = !hasCriticalData
+  const canProjectGrowthSafely = hasFeedProjectionBasis || targets.length === 0;
+  const decision: HarvestDecision = (!hasCriticalData || !canProjectGrowthSafely)
     ? 'review_data'
     : bestScenario.kind === 'target' && bestScenario.operatingProfit > today.operatingProfit && bestScenario.operatingProfit > 0
       ? 'keep_growing'
       : 'harvest_now';
-  const decisionReason = decision === 'review_data'
+  const decisionReason = !hasCriticalData
     ? 'Critical population, MBW, or market-price data is missing.'
-    : decision === 'keep_growing'
-      ? `Target size ${bestScenario.targetSizeCountPerKg} is projected to improve operating profit by ${round(bestScenario.incrementalProfitVsToday)}.`
-      : targets.length === 0
-        ? 'No reachable larger market size has a valid, more profitable projection.'
-        : 'Harvesting now has equal or higher projected operating profit than the reachable larger sizes.';
+    : !canProjectGrowthSafely
+      ? 'Future feed cost cannot be projected without recent feed records or historical FCR.'
+      : decision === 'keep_growing'
+        ? `Target size ${bestScenario.targetSizeCountPerKg} is projected to improve operating profit by ${round(bestScenario.incrementalProfitVsToday)}.`
+        : targets.length === 0
+          ? 'No reachable larger market size has a valid, more profitable projection.'
+          : 'Harvesting now has equal or higher projected operating profit than the reachable larger sizes.';
 
   return {
     decision,
@@ -708,5 +731,107 @@ export const calculateHarvestProfitability = (
     targets,
     bestScenario,
     warnings: Array.from(new Set(warnings)),
+  };
+};
+
+export interface EvaluatePondHarvestDecisionOptions {
+  currentDateKey?: string;
+  now?: Date;
+  timeZone?: string;
+  priceLadder?: PriceTier[];
+  maxProjectionDays?: number;
+  startDate?: string | null;
+  endDate?: string | null;
+  ponds?: ProfitabilityPond[];
+  feeds?: InventoryItemWithUsage[];
+  additives?: InventoryItemWithUsage[];
+  expenses?: ExpenseCostLike[];
+}
+
+export interface HarvestDecisionScenarioEvaluation {
+  result: HarvestProfitabilityResult;
+  metrics: PondMetricsWithHarvest;
+  costSnapshot: PondProfitabilityCostSnapshot;
+  recordedMortality: { dailyRatePercent: number; recordedDays: number; estimatedDeaths: number };
+  recentDailyFeedTotals: DailyFeedTotal[];
+}
+
+/**
+ * Reusable decision scenario evaluator mapping raw pond records, feed inventory,
+ * and cost ledgers into the canonical harvest profitability decision.
+ * Reuses canonical calculatePondMetricsWithHarvest, buildPondProfitabilityCostSnapshot,
+ * and calculateRecordedDailyMortalityRate without fabricating missing data.
+ */
+export const evaluateHarvestDecisionForPond = ({
+  pond,
+  options = {},
+}: {
+  pond: SharedPond & ProfitabilityPond;
+  options?: EvaluatePondHarvestDecisionOptions;
+}): HarvestDecisionScenarioEvaluation => {
+  const timeZone = options.timeZone;
+  const now = options.now ?? new Date();
+  const todayKey = normalizeFarmDateKey(options.currentDateKey ?? now, timeZone) ?? '';
+  const cycleStart = pond.cycleStartedAt || pond.docStart || todayKey;
+
+  const metrics = calculatePondMetricsWithHarvest(pond, timeZone, {
+    currentDateKey: options.currentDateKey,
+    now,
+  });
+
+  const feeds = options.feeds || [];
+  const additives = options.additives || [];
+  const expenses = options.expenses || [];
+  const ponds = options.ponds || [pond];
+
+  const costSnapshot = buildPondProfitabilityCostSnapshot({
+    pond,
+    ponds,
+    feeds,
+    additives,
+    expenses,
+    startDate: options.startDate || cycleStart,
+    endDate: options.endDate || todayKey,
+    timeZone,
+  });
+
+  const recordedMortality = calculateRecordedDailyMortalityRate({
+    records: (pond.mortalityRecords || []) as MortalityRateRecordLike[],
+    currentPopulation: metrics.currentPopulation,
+    now,
+    timeZone,
+  });
+
+  const recentDailyFeedTotals = buildDailyFeedTotalsForPond(feeds, pond.id, timeZone);
+
+  const initialPopulation = Number(pond.initialPopulation || pond.initialStock || 0);
+  const historicalFcr = metrics.biomassGainFCR > 0 ? metrics.biomassGainFCR : metrics.adjustedFCR;
+
+  const result = calculateHarvestProfitability({
+    currentPopulation: metrics.currentPopulation,
+    initialPopulation: initialPopulation > 0 ? initialPopulation : null,
+    currentMbwG: metrics.latestMbw,
+    currentSurvivalRatePercent: metrics.adjustedSR,
+    adgGPerDay: metrics.adg,
+    historicalFcr: historicalFcr > 0 ? historicalFcr : null,
+    dailyMortalityRatePercent: recordedMortality.recordedDays > 0 ? recordedMortality.dailyRatePercent : null,
+    fallbackDailyMortalityRatePercent: metrics.biomassEstimate.expectedDailyMortalityRatePercent,
+    recentDailyFeedTotals,
+    feedUnitCostPerKg: costSnapshot.feedUnitCostPerKg,
+    priceLadder: options.priceLadder || [],
+    costsToDate: costSnapshot.costsToDate,
+    projectedDailyAdditiveCost: costSnapshot.projectedDailyAdditiveCost,
+    projectedDailyGeneralExpense: costSnapshot.projectedDailyGeneralExpense,
+    maxProjectionDays: options.maxProjectionDays,
+    timeZone,
+    now,
+  });
+
+  return {
+    result,
+    metrics,
+    costSnapshot,
+    recordedMortality,
+    recentDailyFeedTotals,
   };
 };
