@@ -186,3 +186,22 @@ test("multi-turn pond selection inherits previous parameter and topic without re
   assert.match(serverInstructions, /Prioritize natural conversation continuity/);
 });
 
+test("server instructions prohibit treating missing inventory as adequate stock and scenarios as guaranteed outcomes", () => {
+  const instructions = __test.buildServerOrsonSystemInstruction('standard', 'chat', 'farm_analysis');
+
+  // Missing data is never adequate stock
+  assert.match(instructions, /Never call missing, unrecorded, or partial inventory data adequate stock/);
+  assert.match(instructions, /missing data is unknown, never adequate stock/);
+
+  // Scenarios are never guaranteed outcomes
+  assert.match(instructions, /Never present decision scenarios, growth projections, harvest schedules, feed replenishment forecasts, or financial returns as guaranteed outcomes/);
+  assert.match(instructions, /all scenarios are advisory estimates/);
+  assert.match(instructions, /do not present forecasts as guarantees/);
+
+  // Decision tools are referenced for analytical evaluation
+  assert.match(instructions, /summarize_period_feed_and_cost/);
+  assert.match(instructions, /compare_pond_cycles/);
+  assert.match(instructions, /evaluate_inventory_replenishment/);
+  assert.match(instructions, /evaluate_harvest_scenario/);
+});
+

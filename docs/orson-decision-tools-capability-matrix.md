@@ -1,273 +1,238 @@
 # Orson Decision Tools & Authorized Read Paths Capability Matrix
 
-> **Document Version:** 1.0.0 — Baseline Trace  
-> **Status:** Step 01 Baseline Completed (No production code modified)  
+> **Document Version:** 2.0.0 — Final Implemented Decision Tools Architecture  
+> **Status:** All Steps 01–07 Completed & Grounded  
 > **Date:** October 2026  
-> **Scope:** Cloud Functions (`functions/`), Shared Services (`functions/shared/`), and Integration APIs
+> **Scope:** Cloud Functions (`functions/`), Shared Calculation Engines (`shared/`, `functions/shared/`), and Integration APIs
 
 ---
 
 ## 1. Executive Summary & Purpose
 
-This capability matrix establishes the baseline architecture, traces existing authorized read routes, and catalogs capability boundaries across Shrimply's Orson AI assistant and farm data integration surfaces.
+This capability matrix defines the complete production architecture, authorized read paths, and decision scenario tools across Shrimply's Orson AI assistant and farm data integration surfaces.
 
-Before introducing new decision tools or modifying production routes, this document maps:
-1. **Existing Implemented Read Paths:** How authorized users, Orson tool callers, and external integrations retrieve live aquaculture data.
-2. **Security & Permission Boundaries:** Exact enforcement of role-based access control (RBAC), `viewFinance` isolation, enterprise technician block-scoping, and company ownership boundaries.
-3. **Coverage Limits:** Hard memory, payload byte limits, date window caps, pagination sizes, and recursion guards.
-4. **Read-Only Invariants:** Safeguards ensuring read tools and decision exploration cannot trigger unauthorized or unconfirmed state changes.
-5. **Architectural Gaps:** Explicit gaps between current tools and full autonomous decision support.
+It establishes:
+1. **Implemented Read Paths & Decision Tools:** How authorized users, Orson conversational agents, and external integrations retrieve live aquaculture data and evaluate advisory scenarios.
+2. **Security & Permission Boundaries:** Role-based access control (RBAC), strict `viewFinance` isolation, enterprise technician block-scoping, and cross-company boundary enforcement.
+3. **Coverage Limits & Bounded Retrieval:** Hard memory limits, payload byte caps, calendar window restrictions, pagination controls, and recursion guards.
+4. **Read-Only Invariants:** Inviolable guarantees ensuring analytical and scenario exploration tools cannot trigger unintended state changes, procurement transactions, or harvest records.
+5. **Grounding & Evidence Invariants:** Strict rules ensuring missing data is never misconstrued as adequate stock, and decision scenarios are never presented as guaranteed outcomes.
 
 ---
 
-## 2. Trace of Existing Authorized Read Paths
+## 2. Architecture of Authorized Read Paths & Decision Tools
 
-Live farm data flows through three distinct read subsystems:
+Live farm data and analytical evaluations flow through four distinct subsystems:
 1. **Orson Conversational Pipeline (`functions/orson.js` & `functions/shared/orsonAppData.js`)**: Interactive tool-calling pipeline executed during LLM generation.
-2. **External Integration API (`functions/readOnlyApi.js` & `functions/shared/readOnlyFarmApi.js`)**: Structured REST/HTTP integration endpoints for external services and site MCP servers.
-3. **Orson Agent Action Staging & Entity Discovery (`functions/orsonAgentTools.js` & `functions/shared/orsonEntityResolver.js`)**: Pre-draft discovery and staging inspection.
+2. **Orson Decision Scenario Engine (`functions/shared/orsonDecisionTools.js` & `functions/shared/orsonInventoryPolicy.js`)**: Canonical read-only scenario modeling (feed rollups, cycle benchmarking, inventory replenishment, harvest scenarios).
+3. **External Integration API (`functions/readOnlyApi.js` & `functions/shared/readOnlyFarmApi.js`)**: Structured REST/HTTP integration endpoints for external services and site MCP servers.
+4. **Orson Agent Action Staging & Entity Discovery (`functions/orsonAgentTools.js` & `functions/shared/orsonEntityResolver.js`)**: Pre-draft entity discovery and two-phase draft staging inspection.
 
 ### Flow Diagram
 
 ```
-+---------------------------------------------------------------------------------------------------+
-|                                          CALLER ENTRYPOINTS                                       |
-+------------------------------------+--------------------------------+-----------------------------+
-                                     |                                |
-                                     v                                v
-                        [generateOrsonResponse]                 [readOnlyApi]
-                        (Callable Cloud Function)               (HTTPS API / MCP)
-                                     |                                |
-                        +------------+------------+                   |
-                        |                         |                   |
-                        v                         v                   v
-             [createOrsonAppDataReader]   [createAgentTools]  [ReadOnlyFarmApi]
-                        |                         |                   |
-        +---------------+---------------+         |                   |
-        |                               |         |                   |
-        v                               v         v                   v
- (read_app_records)           (read_pond_timeline) (discover_targets) (listPonds / getPondSummary /
-        |                               |         |                   getWaterQuality / getFeed)
-        |                               |         |                   |
-        v                               v         v                   v
-+---------------------------------------------------------------------------------------------------+
-|                                  AUTHORIZATION & SCOPE GUARDS                                     |
-|  - Membership & Ownership Verification (users/{uid}, companies/{companyId})                       |
-|  - Permission Check: viewFarm, viewFinance, viewAssets, manageFeedInventory                       |
-|  - Enterprise Technician Block Scoping (companies/{companyId}/blocks where technician == uid)    |
-|  - Private field & Finance field sanitization (cleanRecord)                                       |
-|  - Bounded Windows (7-90 days, 24 KB per document array page, 10 docs per page)                   |
-+---------------------------------------------------------------------------------------------------+
-                                                |
-                                                v
-+---------------------------------------------------------------------------------------------------+
-|                                     CLOUD FIRESTORE (READ-ONLY)                                   |
-|  companies/{companyId}/ponds, blocks, cycles, feeds, additives, harvestRecords, expenses, assets  |
-+---------------------------------------------------------------------------------------------------+
++-----------------------------------------------------------------------------------------------------------------------+
+|                                                  CALLER ENTRYPOINTS                                                   |
++------------------------------------+------------------------------------+---------------------------------------------+
+                                     |                                    |
+                                     v                                    v
+                        [generateOrsonResponse]                     [readOnlyApi]
+                        (Callable Cloud Function)                   (HTTPS API / MCP)
+                                     |                                    |
+                        +------------+------------+                       |
+                        |                         |                       |
+                        v                         v                       v
+             [createOrsonAppDataReader]   [createAgentTools]      [ReadOnlyFarmApi]
+                        |                         |                       |
+         +--------------+---------------+         |                       |
+         |                              |         |                       |
+         v                              v         v                       v
+  (read_app_records)          (read_pond_timeline) (discover_targets) (listPonds / getPondSummary /
+         |                              |         (prepare_actions)   getWaterQuality / getFeed)
+         |                              |                                 |
+         +------------------------------+                                 |
+         |                                                                |
+         v                                                                |
+ [executeDecisionTool] (orsonDecisionTools.js)                            |
+         |                                                                |
+         +----------------------------------+-----------------------------+
+         |                                  |                             |
+         v                                  v                             v
+  (summarize_period_feed_and_cost)   (compare_pond_cycles)   (evaluate_inventory_replenishment)
+  (evaluate_harvest_scenario)                                             |
+         |                                                                |
+         +----------------------------------+-----------------------------+
+                                            |
+                                            v
++-----------------------------------------------------------------------------------------------------------------------+
+|                                              AUTHORIZATION & SCOPE GUARDS                                             |
+|  - Membership & Ownership Verification (users/{uid}, companies/{companyId})                                           |
+|  - Permission Checks: viewFarm, viewFinance, viewAssets, manageFeedInventory                                          |
+|  - Enterprise Technician Block Scoping (companies/{companyId}/blocks where technician == uid)                        |
+|  - Private field & Finance field sanitization (cleanRecord, financeAllowed flag)                                      |
+|  - Bounded Windows (7-90 days, 24 KB per document array page, 10 docs per page)                                       |
++-----------------------------------------------------------------------------------------------------------------------+
+                                            |
+                                            v
++-----------------------------------------------------------------------------------------------------------------------+
+|                                                 CLOUD FIRESTORE (READ-ONLY)                                           |
+|  companies/{companyId}/ponds, blocks, cycles, feeds, additives, harvestRecords, expenses, revenues, assets            |
++-----------------------------------------------------------------------------------------------------------------------+
 ```
 
 ---
 
-### Path A: Orson In-Session Tool Execution (`functions/orson.js`)
+## 3. Implemented Orson Decision Tools Suite
 
-- **Primary Entrypoint:** `exports.generateOrsonResponse` (`functions/orson.js#L628`)
-- **Execution Hook:** `executeOrsonTool(name, args)` (`functions/orson.js#L751-L762`)
-- **Tool Initialization:**
-  - `createOrsonAppDataReader({ db, company, user: userSnap.data(), uid, companyId })` (`functions/orson.js#L741`)
-  - If `request.data?.agentVersion === 1`, creates `createAgentTools(...)` (`functions/orson.js#L742-L749`)
-- **Execution Router:**
-  ```javascript
-  const executeOrsonTool = async (name, args) => {
-    if (agent?.tools.some(tool => tool.name === name)) return agent.execute(name, args);
-    const lookupId = orsonRequestId();
-    const step = name === 'read_pond_timeline' ? 'sampling_lookup'
-      : args?.dataset === 'ponds' ? 'pond_lookup'
-      : ['feeds', 'additives'].includes(args?.dataset) ? 'inventory_check'
-      : 'record_lookup';
-    activeLookups.set(lookupId, step);
-    await sendActivity(step);
-    try { return await appData.execute(name, args); }
-    finally {
-      activeLookups.delete(lookupId);
-      await sendActivity([...activeLookups.values()].at(-1) || 'answer');
-    }
-  };
-  ```
+All decision scenario tools are strictly read-only, execute deterministically before/during Orson responses, reuse canonical shared business calculations, and enforce robust permission isolation.
 
----
+### 3.1 `summarize_period_feed_and_cost`
 
-### Path B: Orson App Data Reader (`functions/shared/orsonAppData.js`)
+- **Implementation:** `functions/shared/orsonDecisionTools.js#L238-L380`
+- **Schema & Name:** `summarize_period_feed_and_cost`
+- **Purpose:** Aggregates actual feeding records and associated operating costs across a user-defined date window for a single pond or all accessible ponds across the farm.
+- **Required Permission:** `viewFarm` (base execution). Financial metrics (`feedCost`, `otherCost`, `totalExpense`, `costPerKgFeed`) require `viewFinance`.
+- **Inputs:**
+  - `startDate` (string YYYY-MM-DD, required)
+  - `endDate` (string YYYY-MM-DD, optional, defaults to farm today)
+  - `pondId` (string, optional; aggregates all accessible ponds if omitted)
+- **Output Model:**
+  - `evidencePeriod`: `{ startDate, endDate, daysInRange }`
+  - `feed`: `{ totalFeedKg, averageDailyFeedKg, daysWithRecordedFeed, daysWithoutRecordedFeed }`
+  - `coverage`: `{ totalPondsEvaluated, completeDataPonds, partialDataPonds, completenessRatio }`
+  - `finance`: `{ financeAllowed, totalFeedCost, otherExpenses, totalExpense, costPerKgFeed, currency }`
+    - When `viewFinance` is false: `financeAllowed: false`, all monetary numbers set to `null` with no financial leakage.
+- **Enterprise Scoping:** Enterprise technicians querying an unassigned block pond receive `{ status: 'not_found' }`. Farm-wide aggregations automatically filter ponds to assigned blocks only.
+- **Null & Coverage Preservation:** Days with unrecorded feed remain unrecorded and are counted in `daysWithoutRecordedFeed`; they are never fabricated as 0 kg. Explicit zeroes are preserved.
 
-Provides structured, permission-gated read access directly to Firestore subcollections for the active company.
+### 3.2 `compare_pond_cycles`
 
-#### 1. `read_app_records` (`functions/shared/orsonAppData.js#L31-L43, L392-L439`)
-- **Datasets & Required Permissions:**
-  - `ponds`, `physicalPonds`, `blocks`, `cycles`, `feeds`, `additives`, `harvestRecords`, `labReports` $\to$ `viewFarm`
-  - `expenses`, `revenues` $\to$ `viewFinance`
-  - `assets` $\to$ `viewAssets`
-- **Validation:**
-  - Checks permission via `hasUserPermission({ company, user, uid, permission: DATASETS[dataset] })`.
-  - Disallows unlisted datasets, path traversal, and malformed cursors (`validId`).
-- **Data Filtering & Privacy (`cleanRecord`):**
-  - **Private Fields Stripped:** `password|secret|token|credential|api.?key|email|phone|address|latitude|longitude|download.?url|file.?url|attachment|ownerId|createdBy|updatedBy|userId|bank|accountNumber`
-  - **Finance Fields Stripped (if caller lacks `viewFinance`):** `cost|price|profit|revenue|expense|payment|salary|wage|financial|billing|invoice|purchase|depreciation`
-- **Pagination & Coverage Limits:**
-  - **List Mode:** `limit(11)` $\to$ returns up to 10 records; `complete: snap.docs.length <= 10`; omits nested objects in list preview; truncates strings $> 600$ characters.
-  - **Single Document Mode:** If document $> 24\text{ KB}$ (`MAX_ARRAY_PAGE_BYTES`), responds with status `select_field`.
-  - **Array Field Pagination:** Paginates arrays with `MAX_ARRAY_PAGE_ITEMS = 30` and `MAX_ARRAY_PAGE_BYTES = 24000`. Returns `nextOffset`.
-- **Technician Scope:**
-  - In enterprise setups (`company.businessSize === 'enterprise' && user.role === 'technician' && !isOwner`), loads assigned blocks (`companies/{companyId}/blocks.where('assignedTechnicianId', '==', uid)`).
-  - Restricts `ponds`, `physicalPonds`, `blocks`, `cycles`, `feeds`, `additives`, and `harvestRecords` to ponds inside assigned blocks.
+- **Implementation:** `functions/shared/orsonDecisionTools.js#L382-L550`
+- **Schema & Name:** `compare_pond_cycles`
+- **Purpose:** Performs a side-by-side comparative analysis of two cycles: either comparing two active ponds concurrently, or comparing an active cycle against a completed historical benchmark cycle on the same pond.
+- **Required Permission:** `viewFarm` (base comparison). Financial delta metrics require `viewFinance`.
+- **Canonical Calculation Helpers Reused:**
+  - `calculateFeedTotals` (`shared/pondCalculations.ts`)
+  - `calculateFCR` (`shared/pondCalculations.ts`)
+  - `calculateDailyBiomassKg` (`shared/pondCalculations.ts`)
+  - `calculateSurvivalRate` (`shared/pondCalculations.ts`)
+- **Inputs:**
+  - `basePondId` (string, required)
+  - `comparePondId` (string, optional; defaults to `basePondId` for historical comparison)
+  - `baseCycleId` (string, optional; defaults to active cycle)
+  - `compareCycleId` (string, optional; defaults to previous completed cycle or active cycle of comparison pond)
+- **Output Model:**
+  - `base`: Snapshot of DOC, MBW (g), ADG (g/day), cumulative feed (kg), FCR, survival rate (%), biomass (kg), and feed cost (if permitted).
+  - `compare`: Snapshot of the comparison pond/cycle.
+  - `deltas`: Exact numerical differences (`docDiff`, `mbwDiffG`, `adgDiffGPerDay`, `feedDiffKg`, `fcrDiff`, `survivalRateDiffPercent`, `biomassDiffKg`, `feedCostDiff`).
+  - `missingEvidence`: Array of missing parameter names (e.g., `["survivalRate", "fcr"]`), never fabricated.
+  - `finance`: `{ financeAllowed, currency }`.
+- **Scope & Security:** Enterprise technician block scoping enforced. Cross-company cycle access returns `not_found`.
 
-#### 2. `read_pond_timeline` (`functions/shared/orsonAppData.js#L44-L54, L108-L353, L382-L391`)
-- **Required Permission:** `viewFarm`
-- **Arguments:** `pondId` (string, max 160 chars), `days` (integer 7–90, defaults to 30), `endDate` (YYYY-MM-DD farm date)
-- **Aggregation Logic:**
-  - Loads single pond document `companies/{companyId}/ponds/{pondId}`.
-  - Validates technician block access.
-  - Aligns daily entries from `samplings` (water quality), `selectDailyFeedEntries` (authoritative feed vs estimates), and `mortalityRecords`.
-  - Current cycle scoping: `belongsToCurrentCycle(record, pond)` validates `pondCycleId` and `cycleId`.
-  - Output contains daily timeline array and line series (`mortalityCount`, `doMinimumMgL`, `phSwing`, `feedKg`, `mbwG`, `nitriteMgL`, `waterDepthCmMorning`, `waterDepthCmEvening`, `waterExchangePercent`).
-  - **Strict Null Handling:** Missing dates are recorded as missing/unknown, never fabricated as zero.
+### 3.3 `evaluate_inventory_replenishment`
 
----
+- **Implementation:** `functions/shared/orsonInventoryPolicy.js#L52-L280` & `functions/shared/orsonDecisionTools.js#L552-L730`
+- **Schema & Name:** `evaluate_inventory_replenishment`
+- **Purpose:** Models feed and additive inventory replenishment needs, calculating daily burn rates, remaining stock runway (days), projected shortfall against upcoming dose requirements, and procurement urgency.
+- **Required Permission:** `viewFarm`. Unit purchase price and projected procurement cost require `viewFinance`.
+- **Inputs:**
+  - `itemId` (string, optional; evaluates single feed/additive or all items)
+  - `inventoryKind` (string: `'feed'`, `'additive'`, or `'all'`, default `'all'`)
+  - `lookbackDays` (integer 3–60, default 14)
+  - `planningHorizonDays` (integer 1–90, default 14)
+  - `requiredQuantity` (number, optional maintenance or dosing requirement)
+  - `requiredUnit` (string, optional unit for verification)
+- **Output Model:**
+  - `items`: Array of evaluated inventory items:
+    - `id`, `name`, `inventoryKind`, `unit`
+    - `currentStock`: Verified positive number or `null`
+    - `stockStatus`: `{ status: 'in_stock' | 'low_stock' | 'zero_stock' | 'negative_stock' | 'unknown_stock', isStockSufficient }`
+    - `burnRate`: `{ lookbackDays, totalUsageRecorded, dailyBurnRate, hasRecordedUsage }`
+    - `runwayDays`: Estimated days of remaining inventory, or `null` if stock or burn rate unknown
+    - `replenishment`: `{ planningHorizonDays, projectedDemand, shortfallQuantity, urgency: 'immediate' | 'high' | 'normal' | 'none' }`
+    - `finance`: `{ financeAllowed, estimatedUnitCost, estimatedReplenishmentCost, currency }`
+  - `guardrails`: `{ noProcurementExecuted: true, isAdvisoryOnly: true, timestamp }`
+- **Strict Grounding Rule (No Fake Stock Adequacy):**
+  - **Missing data is NEVER called adequate stock.**
+  - If stock balance is `null`, `status` is strictly `'unknown_stock'`, `isStockSufficient` is `false`, and `runwayDays` is `null`.
+  - Advisory warnings clearly mandate warehouse verification.
+- **Strict Read-Only Guarantee:**
+  - Purely advisory evaluation. Guaranteed zero procurement actions executed (`noProcurementExecuted: true`). No Firestore writes, no purchase orders created, no inventory deducted.
 
-### Path C: Read-Only Farm Integration API (`functions/shared/readOnlyFarmApi.js`)
+### 3.4 `evaluate_harvest_scenario`
 
-Dedicated API layer for external read-only consumers and Site MCP tools.
-
-#### 1. Authorization: `authorizeFarmReader` (`functions/shared/readOnlyFarmApi.js#L617-L720`)
-- Validates active user in `users/{uid}`.
-- Checks `founderAccessSuspended !== true`.
-- Verifies membership in `companies/{companyId}.teamMembers` or `company.ownerId === uid`.
-- Stale owner role defense: if `user.role === 'owner'` but `company.ownerId !== uid`, access is revoked.
-- Requires `viewFarm` permission.
-- Enterprise technician block resolution: loads up to 300 assigned blocks (`MAX_ASSIGNED_BLOCKS`); aborts with `resource-exhausted` if exceeded.
-
-#### 2. Endpoints & Methods:
-1. **`listPonds` (`functions/shared/readOnlyFarmApi.js#L761-L856`)**:
-   - Paginates ponds ordered by `__name__`.
-   - Default limit 20, max limit 100 (`MAX_PAGE_LIMIT`).
-   - Supports optional `blockId` filtering.
-   - For enterprise technicians, uses chunked queries (`FIRESTORE_IN_FILTER_LIMIT = 30`) across assigned block IDs.
-   - Encodes opaque HMAC-signed cursor with revision, user ID, company ID, and route.
-   - Transforms each document into sanitized `toPondDto`.
-2. **`getPondSummary` (`functions/shared/readOnlyFarmApi.js#L858-L880`)**:
-   - Fetches single pond; verifies block access.
-   - Runs biological look-back for Mean Body Weight (MBW):
-     - Scans backward through valid sorted samplings for positive non-zero MBW.
-     - Fallback to `pond.initialWeight`.
-     - Ultimate fallback to `0.5g` default.
-   - Selects latest water quality observation.
-   - Canonical feed determination via `selectDailyFeedEntries`.
-   - Returns `toPondSummaryDto`.
-3. **`getWaterQualityRecords` (`functions/shared/readOnlyFarmApi.js#L882-L1000`)**:
-   - Reads `samplings` array from target pond.
-   - Validates date window: `startDate` to `endDate` cannot exceed 90 days (`MAX_DATE_WINDOW_DAYS`).
-   - Filters entries containing water quality observations within the window.
-   - Cursoring binds SHA-256 digest of samplings array (`computeSamplingsDigest`) to detect array modifications between pages.
-   - Maps to `toWaterQualityRecordDto`.
-4. **`getFeedSummary` / `getFeedRecords` (`functions/shared/readOnlyFarmApi.js#L1002-L1126`)**:
-   - Evaluates daily feed entries via `selectDailyFeedEntries` (ignoring biological sampling feed estimates for inventory/operational totals).
-   - Computes total feed kg and explicit zero-feed days.
-   - Maps to canonical feed record DTOs.
-
----
-
-### Path D: Action Staging & Entity Discovery (`functions/orsonAgentTools.js`)
-
-Read tools integrated into Orson's action toolset.
-
-1. **`discover_farm_action_targets` (`functions/orsonAgentTools.js#L454-L464, L501-L504`)**:
-   - Invokes `createAgentCatalog(auth)` (`functions/shared/orsonEntityResolver.js#L9-L184`).
-   - Reads authorized ponds (filtered by enterprise technician block), feed catalog, additive catalog, and physical ponds.
-   - Collects active purchases (ID, date, quantity, price, unit) for feed/additives.
-   - Reads company currency for monetary validation.
-2. **`read_recent_farm_action_drafts` (`functions/orsonAgentTools.js#L444-L453, L483-L500`)**:
-   - Reads up to 10 recent operation drafts from `companies/{companyId}/orsonOperations` owned by the user.
-   - Validates user ownership (`checkOwner`) and access permissions.
-3. **`prepare_farm_actions` (`functions/orsonAgentTools.js#L466-L480, L505-L596`)**:
-   - Stages a multi-row operation draft.
-   - **Crucial Read-Only Invariant:** Does NOT commit any mutation to production farm records (`ponds`, `feeds`, `finances`). Returns `status: "awaiting_user_confirmation"` and requires the client to call `confirmOrsonOperation`.
+- **Implementation:** `shared/harvestProfitability.ts#L182-L340` & `functions/shared/orsonDecisionTools.js#L732-L1285`
+- **Schema & Name:** `evaluate_harvest_scenario`
+- **Purpose:** Evaluates read-only harvest scenarios comparing harvesting today versus continuing grow-out to target market sizes or dates.
+- **Required Permission:** `viewFarm`. Revenue projections, gross margin, and margin delta strictly require `viewFinance`.
+- **Canonical Engine Reused:**
+  - `evaluateHarvestDecisionForPond` (`shared/harvestProfitability.ts`)
+  - `calculateProjectedMbw` (`shared/harvestProfitability.ts`)
+  - `calculateGrossBiomassKg` (`shared/harvestProfitability.ts`)
+  - `calculateEstimatedRevenue` (`shared/harvestProfitability.ts`)
+  - `calculateProjectedMargin` (`shared/harvestProfitability.ts`)
+- **Inputs:**
+  - `pondId` (string, required)
+  - `cycleId` (string, optional, defaults to active cycle)
+  - `targetMbwG` (number, optional target MBW)
+  - `targetSizeCountPerKg` (number, optional target shrimp size count)
+  - `daysToHarvest` (integer 1–120, optional grow-out horizon)
+  - `pricePerKg` (number, optional flat price in farm currency)
+  - `priceLadder` (array of `{ sizeCountPerKg, pricePerKg }`, optional tiered market ladder)
+- **Output Model:**
+  - `baselineHarvestToday`: Current DOC, MBW, population, gross biomass (kg), and financial revenue/margin (if authorized).
+  - `targetScenario`: Projected DOC, projected MBW (using biological growth taper), surviving population, projected biomass (kg), additional feed required (kg), and projected revenue/margin.
+  - `deltas`: Biomass gain, additional grow-out days, feed required, revenue delta, and profit margin delta.
+  - `decisionRecommendation`: Advisory recommendation code and explanatory rationale (`recommendation: 'harvest_now' | 'continue_growout' | 'insufficient_margin' | 'high_biological_risk'`).
+  - `assumptions`: Array of explicit modeling assumptions (mortality rate, growth taper, baseline FCR, market price source).
+  - `missingEvidence`: Array of unrecorded parameters required for higher model confidence.
+  - `finance`: `{ financeAllowed, currency, financialMarginWithheld }`.
+    - Non-finance callers receive complete biological, biomass, and feed projections with financial margins withheld.
+  - `guardrails`: `{ isAdvisory: true, noHarvestExecuted: true, notes: 'Pure read-only decision scenario. No harvest records created and no Firestore writes occurred.' }`.
+- **Strict Grounding Rule (No Guaranteed Outcomes):**
+  - **Scenarios are NEVER presented as guaranteed outcomes.**
+  - All projections are explicitly labeled as hypothesis-based advisory estimates subject to environmental variability, disease risks, feed response, and market price fluctuations.
+- **Strict Read-Only Guarantee:**
+  - 0 harvest records created, 0 pond statuses modified, 0 Firestore writes.
 
 ---
 
-## 3. Capability Matrix: Implemented Coverage vs Gaps
+## 4. Security, Scope, and Permission Boundaries
 
-| Domain / Capability | Implemented Status | Source Paths & Functions | Scope & Enforcement Details | Identified Gaps |
-| :--- | :---: | :--- | :--- | :--- |
-| **Water Quality: Morning / Evening Observations** | **Implemented** | `functions/shared/readOnlyFarmApi.js#toWaterQualityRecordDto`<br>`functions/shared/orsonAppData.js#buildPondTimeline` | Supports morning/evening DO, pH, temp, transparency, depth, nitrite mg/L NO2, salinity, alkalinity, ammonia. | Nitrite basis conversion is strictly validation-only; no automatic ppm conversion tool. |
-| **Water Quality: Depth & Session Parsing** | **Implemented** | `functions/orsonAgentTools.js#parseCommandDepth`<br>`functions/orsonAgentTools.js#preflightWaterDepth` | Normalizes meters/centimeters to cm. Rejects ambiguous sessions or conflicting readings. | Multi-pond natural language depth batching requires strict single-pond clause segmentation. |
-| **Feeding: Canonical Daily Feed vs Sampling Estimate** | **Implemented** | `functions/shared/orsonDomain/orsonEvidence.js#selectDailyFeedEntries`<br>`functions/shared/readOnlyFarmApi.js#extractRealDailyFeed` | Strictly distinguishes authoritative daily feed totals from biological sampling feed observations. Never zero-fills missing feed days. | External read API does not expose tray clearance percentage series over time. |
-| **Feeding: Trend Lookback (3–5 Days)** | **Implemented** | `functions/shared/orsonAppData.js#buildPondTimeline`<br>`functions/shared/readOnlyFarmApi.js#getFeedSummary` | Daily feed totals extracted chronologically with exact date keys and lookback windows. | No standalone analytical tool computing feed allocation trend percentages directly for Orson prompt context. |
-| **Sampling: MBW Biological Look-Back** | **Implemented** | `functions/shared/readOnlyFarmApi.js#toPondSummaryDto`<br>`functions/shared/orsonAppData.js#buildPondTimeline` | Scans backward for last non-zero MBW; falls back to `initialWeight`, then `0.5g`. | Historical sampling array editing requires discovering exact existing record ID. |
-| **Growth: ADG & Projections** | **Partial** | `shared/orson/metrics.ts`<br>`functions/orson.js#loadOrsonProductContext` | ADG formulas implemented in client pipeline and projection services. | No backend decision tool endpoint returning computed ADG or FCR dynamically for arbitrary date ranges. |
-| **Mortality & Biomass Tracking** | **Implemented** | `functions/shared/orsonAppData.js#buildPondTimeline`<br>`functions/shared/readOnlyFarmApi.js#toPondSummaryDto` | Tracks dedicated `mortalityRecords` and legacy mortality. Preserves `none_observed` vs positive counts. | No dedicated `getMortalityRecords` paginated route in `readOnlyFarmApi.js` (only merged inside `read_pond_timeline`). |
-| **Inventory: Warehouse Catalog & Purchases** | **Implemented** | `functions/shared/orsonEntityResolver.js#createAgentCatalog`<br>`functions/shared/orsonAppData.js#read_app_records` | Reads feed/additive items, active purchases, units, and reorder levels. Gated by `manageFeedInventory` / `viewFarm`. | Catalog returns purchase `price` even if user lacks `viewFinance` (see Section 4). |
-| **Inventory: Atomic Deduction vs Sampling Isolation** | **Implemented** | `functions/shared/orsonOperations.js#planCommands`<br>`functions/orsonAgentTools.js#commandSchema` | Feeding deductions link `inventoryFeedId`. Sampling entries explicitly bypass inventory deduction. | Additive dosage validation requires active internet verification or grounded product labels. |
-| **Finance: Expenses & Revenues** | **Implemented** | `functions/shared/orsonAppData.js#read_app_records` (`expenses`, `revenues`) | Gated strictly by `viewFinance`. Strips financial fields from non-finance roles. | No aggregated P&L, cash flow, or COGS decision summary tool; only raw ledger document pagination. |
-| **Pond & Cycle Management** | **Implemented** | `functions/shared/readOnlyFarmApi.js#listPonds`<br>`functions/shared/orsonAppData.js#scopedData` | Scoped to active cycle (`belongsToCurrentCycle`). Enterprise technician block filtering enforced. | Querying historical completed cycles requires explicitly passing ended `cycleId`, which is not exposed in `readOnlyFarmApi.js`. |
-| **Action Staging & Confirmation Lifecycle** | **Implemented** | `functions/shared/orsonOperations.js#createOperationService`<br>`functions/orsonAgent.js#confirmOrsonOperation` | Operations are staged as draft with expiration, idempotency token, and review receipt. Confirmation is separate. | Batch operations capped at 30 rows; large farm imports require chunked drafts. |
-| **Multimodal Document Extraction** | **Implemented** | `functions/orsonAgent.js#extractFarmDocument`<br>`functions/shared/orsonDocumentExtraction.js` | Gemini multimodal extraction of clipboards, whiteboards, invoices, and CSVs into draft commands. | Document extraction results require user review before execution; no direct autonomous write. |
+### 4.1 Role-Based Access Control (RBAC) Matrix
 
----
-
-## 4. Deep-Dive: Authorization, Scope, and Isolation Rules
-
-### 4.1 Finance Permission & Data Sanitization
-
-1. **Permission Check:**
-   - Evaluated using `hasUserPermission` from `functions/shared/permissions.js`.
-   - Default roles granting `viewFinance`: `owner`, `co-owner`, `manager`, `admin`.
-   - Roles denied `viewFinance`: `technician`, `mechanic`, `buyer`.
-2. **Sanitization Regex (`functions/shared/orsonAppData.js#L12, L22-L30`):**
-   ```javascript
-   const financeField = /cost|price|profit|revenue|expense|payment|salary|wage|financial|billing|invoice|purchase|depreciation/i;
-   ```
-   When `canViewFinance` is false, all matching object keys are stripped recursively from any record returned to Orson via `read_app_records` or `read_pond_timeline`.
-3. **Cross-Component Discrepancy (Identified Gap):**
-   - In `functions/shared/orsonEntityResolver.js#createAgentCatalog`, inventory collections (`feeds`, `additives`) are read if the caller has `manageFeedInventory`.
-   - `createAgentCatalog` includes `price` in `activePurchases` objects:
-     ```javascript
-     price: Number.isFinite(price) ? price : null
-     ```
-   - Technicians hold `manageFeedInventory` by default but lack `viewFinance`. When `discover_farm_action_targets` executes, the agent receives unit purchase prices.
-   - **Recommendation:** `createAgentCatalog` must check `auth.allowed("viewFinance")` before exposing purchase prices in `activePurchases`.
+| Dataset / Decision Tool | `viewFarm` | `viewFinance` | `manageFeedInventory` | `viewAssets` | Behavior When Unauthorized |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **`read_app_records` (ponds, cycles, samplings)** | **Required** | Optional | Optional | Optional | Throws `Not permitted` |
+| **`read_app_records` (expenses, revenues)** | Optional | **Required** | Optional | Optional | Throws `Not permitted` |
+| **`read_app_records` (assets)** | Optional | Optional | Optional | **Required** | Throws `Not permitted` |
+| **`read_pond_timeline`** | **Required** | Optional | Optional | Optional | Throws `Not permitted` |
+| **`summarize_period_feed_and_cost` (Operational)** | **Required** | Optional | Optional | Optional | Throws `Not permitted` |
+| **`summarize_period_feed_and_cost` (Financial)** | **Required** | **Required** | Optional | Optional | Operational metrics returned; finance set to `null` |
+| **`compare_pond_cycles` (Biological)** | **Required** | Optional | Optional | Optional | Throws `Not permitted` |
+| **`compare_pond_cycles` (Cost DTO)** | **Required** | **Required** | Optional | Optional | Biological deltas returned; financial fields omitted |
+| **`evaluate_inventory_replenishment` (Stock/Runway)** | **Required** | Optional | Optional | Optional | Throws `Not permitted` |
+| **`evaluate_inventory_replenishment` (Valuation/Cost)** | **Required** | **Required** | Optional | Optional | Stock & runway returned; estimated costs withheld |
+| **`evaluate_harvest_scenario` (Biomass/Growth)** | **Required** | Optional | Optional | Optional | Throws `Not permitted` |
+| **`evaluate_harvest_scenario` (Revenue/Margin)** | **Required** | **Required** | Optional | Optional | Biomass/feed returned; margin withheld (`financialMarginWithheld: true`) |
+| **`discover_farm_action_targets`** | Optional | Optional | Optional | Optional | Restricts catalog based on caller permissions |
+| **`prepare_farm_actions`** | **Required** | Optional | Optional | Optional | Stages draft operations in `orsonOperations` only |
 
 ---
 
-### 4.2 Company, Pond, and Cycle Scoping
+### 4.2 Multi-Tenant and Scope Isolation
 
-1. **Company Scope:**
-   - Every read is anchored to `companies/{companyId}`.
-   - Caller identity verified via Firebase Auth `uid`.
-   - Verified that `user.companyId === companyId` and `company.teamMembers.includes(uid)` or `company.ownerId === uid`.
-   - Cross-company data reads are blocked and throw `permission-denied`.
-2. **Pond & Enterprise Block Scope:**
-   - For enterprise tier companies (`businessSize === 'enterprise'`), technicians are strictly confined to ponds in their assigned blocks.
-   - Loaded from `companies/{companyId}/blocks` where `assignedTechnicianId == uid`.
-   - In `readOnlyFarmApi.js#assertPondAccess`:
-     ```javascript
-     if (auth.isEnterpriseScoped) {
-       const blockId = pond.blockId || pond.data?.()?.blockId;
-       if (!blockId || !auth.assignedBlockIds.has(blockId)) {
-         throw new HttpsError('not-found', 'Pond not found.');
-       }
-     }
-     ```
-   - If a technician attempts to query a pond outside their block, the system returns `not-found` (avoiding existence disclosure).
-3. **Cycle Scope:**
-   - Active pond records store `pondCycleId` or `cycleId`.
-   - `read_pond_timeline` uses `belongsToCurrentCycle(record, pond)`:
-     ```javascript
-     const belongsToCurrentCycle = (record, pond) => {
-       const current = [pond.pondCycleId, pond.cycleId].filter(value => typeof value === 'string' && value);
-       if (!current.length) return true;
-       const recorded = [record?.pondCycleId, record?.cycleId].filter(value => typeof value === 'string' && value);
-       return !recorded.length || recorded.some(value => current.includes(value));
-     };
-     ```
-   - This ensures previous production cycles for the same physical pond do not contaminate timeline series or biological averages.
+1. **Company Ownership Boundary:**
+   - Every Firestore query prepends `companies/{companyId}/`.
+   - Any query attempting to specify a foreign company ID is rejected with `permission-denied` (`You do not have access to this company.`).
+   - Cross-company pond or cycle lookups return `not-found` without confirming the existence of foreign assets.
+2. **Enterprise Technician Block Scoping:**
+   - For enterprise companies (`company.businessSize === 'enterprise' && user.role === 'technician' && !isOwner`), technicians are restricted exclusively to their assigned blocks (`blocks.where('assignedTechnicianId', '==', uid)`).
+   - If a technician queries a pond outside their assigned blocks, the system returns `not_found`.
+   - Multi-pond summaries and whole-farm inventory usage evaluations filter records to assigned blocks only.
+3. **Cycle Boundary Scoping:**
+   - Active pond records maintain `pondCycleId` and `cycleId`.
+   - Sampling and feed records are strictly scoped using `belongsToCurrentCycle(record, pond)` to prevent historical cycles from distorting active cycle metrics.
 
 ---
 
@@ -275,79 +240,83 @@ Read tools integrated into Orson's action toolset.
 
 | Constraint | Limit | Enforced At | Behavior When Exceeded |
 | :--- | :--- | :--- | :--- |
-| **Pond Timeline Window** | Min 7 days, Max 90 days (default 30) | `orsonAppData.js#L384` | Throws `Error('Invalid days')` |
-| **Array Page Byte Limit** | 24,000 bytes (24 KB) | `orsonAppData.js#L15, L414` | Splits array; returns `nextOffset` |
-| **Array Page Item Count** | Max 30 items per request | `orsonAppData.js#L16, L412` | Returns first 30 items; supplies `nextOffset` |
-| **List Page Size** | Max 10 docs (queries 11 for hasMore) | `orsonAppData.js#L430-L431` | Returns 10 items; supplies `nextCursor` |
-| **External API Page Limit** | Default 20, Max 100 | `readOnlyFarmApi.js#L26, L734` | Rejects with `invalid-argument` if $> 100$ |
-| **External API Date Window** | Max 90 days | `readOnlyFarmApi.js#L27, L755` | Rejects with `invalid-argument` |
-| **Assigned Blocks Limit** | Max 300 blocks | `readOnlyFarmApi.js#L28, L700` | Throws `resource-exhausted` |
-| **Operation Command Batch** | Min 1, Max 30 rows | `orsonOperations.js#L16, L102` | Rejects with `fail("Provide between 1 and 30 entries.")` |
-| **Operation JSON Payload** | Max 100,000 bytes | `orsonOperations.js#L100` | Rejects with `fail("Provide between 1 and 30 entries.")` |
-| **Draft Expiration** | 2 hours | `orsonOperations.js#L201` | Operation transitions to expired; rejected on confirm |
+| **Pond Timeline Window** | Min 7 days, Max 90 days (default 30) | `orsonAppData.js#L390` | Throws `Error('Invalid days')` |
+| **Period Feed Summary Window** | Min 1 day, Max 365 days | `orsonDecisionTools.js#L254` | Throws `Error('Date range exceeds 365 days')` |
+| **Harvest Horizon** | Min 1 day, Max 120 days | `orsonDecisionTools.js#L202` | Clamped / Rejected if out of bounds |
+| **Inventory Planning Horizon** | Min 1 day, Max 90 days | `orsonInventoryPolicy.js#L72` | Defaults to 14 days |
+| **Array Page Byte Limit** | 24,000 bytes (24 KB) | `orsonAppData.js#L21` | Splits array; returns `nextOffset` |
+| **Array Page Item Count** | Max 30 items per request | `orsonAppData.js#L22` | Returns first 30 items; supplies `nextOffset` |
+| **List Page Size** | Max 10 docs (queries 11 for hasMore) | `orsonAppData.js#L449` | Returns 10 items; supplies `nextCursor` |
+| **External API Page Limit** | Default 20, Max 100 | `readOnlyFarmApi.js#L26` | Rejects with `invalid-argument` if $> 100$ |
+| **External API Date Window** | Max 90 days | `readOnlyFarmApi.js#L27` | Rejects with `invalid-argument` |
+| **Assigned Blocks Limit** | Max 300 blocks | `readOnlyFarmApi.js#L28` | Throws `resource-exhausted` |
+| **Operation Command Batch** | Min 1, Max 30 rows | `orsonOperations.js#L16` | Rejects with `fail("Provide between 1 and 30 entries.")` |
+| **Operation Draft Expiration**| 2 hours | `orsonOperations.js#L201` | Operation transitions to expired; rejected on confirm |
 
 ---
 
 ### 4.4 Read-Only Safety & Mutation Insulation
 
-1. **Strict Separation of Read and Write:**
-   - Neither `read_app_records`, `read_pond_timeline`, nor any `ReadOnlyFarmApi` function contains any `set`, `update`, `delete`, or transaction write call.
+1. **Zero Database Writes in Decision Tools:**
+   - None of `summarize_period_feed_and_cost`, `compare_pond_cycles`, `evaluate_inventory_replenishment`, or `evaluate_harvest_scenario` contain any `set`, `update`, `delete`, or transaction write calls.
+   - Guaranteed read-only execution.
 2. **Draft-Only Staging in Agent Tools:**
-   - When Orson calls `prepare_farm_actions`, it writes exclusively to the temporary staging collection `companies/{companyId}/orsonOperations/{operationId}` with `state: "draft"`.
-   - Production collections (`ponds`, `feeds`, `finances`, `cycles`) remain entirely untouched.
-   - Confirmation requires an explicit authenticated call to `exports.confirmOrsonOperation` by the end-user via interactive UI cards.
-3. **Non-Executable Prompts & Disclaimers:**
-   - Any embedded hypothetical, advice, or instruction text in user messages is evaluated by `isAdviceInstructionOrHypothetical` (`functions/shared/orsonDocumentExtraction.js`).
-   - If detected, `prepare_farm_actions` aborts with `status: "unauthorized"`.
+   - When Orson stages actions via `prepare_farm_actions`, it writes exclusively to the temporary staging collection `companies/{companyId}/orsonOperations/{operationId}` with `state: "draft"`.
+   - Production collections (`ponds`, `feeds`, `harvestRecords`, `cycles`) remain untouched until explicit authenticated user confirmation.
+3. **No Autonomous Harvests or Procurements:**
+   - Orson cannot execute a harvest or deduct feed inventory from an advisory scenario evaluation.
+   - Separate execution pathways guarantee decoupling between decision tools and write operations.
 
 ---
 
-## 5. Identified Architectural Gaps for Decision Tools
+## 5. Orson Grounding & Model Instruction Enforcement
 
-1. **Analytical Roll-Up Decision Tools:**
-   - Currently, Orson must use `read_pond_timeline` or paginate raw `read_app_records` to analyze farm performance.
-   - There is no unified tool that produces summarized cross-pond health, feeding anomaly detection (e.g. 3-day drop $> 20\%$), or dissolved oxygen risk scores in a single lightweight roundtrip.
-2. **Financial Aggregations for Managers/Owners:**
-   - Only raw `expenses` and `revenues` documents are accessible via `read_app_records`.
-   - No read tool currently exists to inspect aggregated cost per kg of harvest or active feed inventory valuation without fetching and paging every raw purchase/usage record.
-3. **Historical Cycle Comparison:**
-   - `read_pond_timeline` is scoped to the current cycle. Comparing current DOC performance against the previous successful cycle on the same pond requires manually finding historical cycle IDs.
-4. **Price Exposure in Entity Discovery:**
-   - `discover_farm_action_targets` exposes purchase prices to technician roles through `activePurchases`, bypassing the `viewFinance` restriction enforced in `orsonAppData.js`.
+Orson's server-side system instructions (`functions/orson.js#L383-L500`) enforce strict grounding constraints:
 
----
+### 5.1 No Calling Missing Data Adequate Stock
+- **Rule:** `"Never call missing, unrecorded, or partial inventory data adequate stock. If current stock, burn rate, or supply runway is missing or unrecorded, explicitly state that stock levels are unknown and require farm verification; never claim stock is sufficient, adequate, or safe without verified positive balance and burn rate evidence."`
+- **Enforcement:**
+  - Evaluator sets `status: 'unknown_stock'`, `runwayDays: null`, and `isStockSufficient: false`.
+  - Orson prompt instructions strictly prohibit treating `null` as 0 or assuming warehouse stock is adequate when unrecorded.
 
----
-
-## 6. Deterministic Baseline Fixtures & Test Verification (Step 03)
-
-Deterministic test fixtures have been implemented across the three primary read paths and agent tools to establish baseline behavior, assert access boundaries, ensure no synthetic data is fabricated, and empirically verify architectural gaps:
-
-### 6.1 `functions/shared/orsonAppData.test.js`
-- **Finance Isolation:** Asserts that technician roles are rejected from `expenses` and `revenues` datasets (`Not permitted`). Financial fields (`feedCost`, `seedCost`, sampling `cost`) are stripped via regex sanitization, while owners retain access.
-- **Cycle Scoping:** Verifies `belongsToCurrentCycle` excludes sampling records from prior cycles (`cycle-q2`) when analyzing the active cycle (`cycle-q3`).
-- **Null Preservation (No Synthetic Values):**
-  - Unmeasured morning DO is preserved as `null`, never coerced to `0`.
-  - Unrecorded feed and mortality days are preserved as `null`, never fabricated as 0 kg or 0 mortality.
-  - Explicit zeroes (`isExplicitZero: true` for feed, `none_observed` for mortality) are preserved as `0`.
-- **Exposed Read-Path Gap:** In list mode, `read_app_records` omits nested array details (`documentDetailsOmitted: true`, `samplings` stripped), requiring callers to perform secondary single-document or timeline queries.
-
-### 6.2 `functions/shared/readOnlyFarmApi.test.js`
-- **Cross-Company Isolation:** Queries for ponds from foreign companies return `not-found` (derived company lookup). Explicitly spoofing another company ID throws `permission-denied` (`You do not have access to this company.`).
-- **Enterprise Block Scoping:** Enterprise technicians receive `not-found` (404) for ponds in unassigned blocks, preventing existence disclosure.
-- **Strict Finance Omission in DTOs:** `toPondSummaryDto`, `toWaterQualityRecordDto`, and `toFeedRecordDto` strictly strip `feedCost`, `seedCost`, `revenue`, `secretBillingToken`, `cost`, `price`, `inventoryFeedId`, and `costPerKg`.
-- **Null Preservation:** Unmeasured pH and DO remain `null`. Days without feed entries are not synthesized into 0 kg entries by canonical daily feed selection.
-- **MBW Look-Back Fallback:** Missing MBW in latest sampling scans backward to valid non-zero MBW (`mbwSource: 'sampling'`); ponds without sampling or initial weight fall back to `0.5g` with `mbwSource: 'default_fallback'` without creating synthetic records.
-- **Exposed Read-Path Gaps:** Read-only API lacks mortality records or cumulative mortality metrics; queries exceeding 90-day windows are rejected with `invalid-argument`.
-
-### 6.3 `functions/orsonAgentTools.test.cjs`
-- **Discovery Authorization & Block Scoping:** `discover_farm_action_targets` respects enterprise block scoping (`blockIds.has(p.blockId)`) and filters out unauthorized blocks. Users lacking `manageFeedInventory` receive empty inventory lists; users lacking `viewFarm` receive empty pond lists.
-- **Exposed Read-Path Gap (Price Exposure):** `createAgentCatalog` exposes unit purchase `price` in `activePurchases` and `recentPurchases` to callers holding `manageFeedInventory` even if they do not possess `viewFinance`.
-- **No Synthetic Values:** Malformed inventory purchases (negative quantity, 0 price, invalid date) flag `hasMalformedPurchases: true` and `hasAmbiguousHistory: true` without synthesizing fallback quantities or valid dates.
+### 5.2 No Presenting Scenarios as Guaranteed Outcomes
+- **Rule:** `"Never present decision scenarios, growth projections, harvest schedules, feed replenishment forecasts, or financial returns as guaranteed outcomes. All scenario evaluations, harvest projections, and replenishment models are advisory, hypothesis-based estimates subject to environmental variability, disease risks, feeding behavior, and market price fluctuations. Always state governing assumptions, missing evidence, scope, and the advisory nature of any scenario projection."`
+- **Enforcement:**
+  - Harvest scenarios output explicit `assumptions`, `missingEvidence`, and `isAdvisory: true`.
+  - Financial projections clearly state margin basis and disclaim market price fluctuations.
+  - Model instructions forbid deterministic promises.
 
 ---
 
-## 7. Verification & Step Completion Confirmation
+## 6. Resolution of Previously Identified Gaps
+
+| Identified Gap | Resolution Status | Implementing Source |
+| :--- | :---: | :--- |
+| **1. Analytical Feed/Cost Rollups** | **RESOLVED** | Implemented `summarize_period_feed_and_cost` in `functions/shared/orsonDecisionTools.js` with evidence period tracking, coverage completeness metrics, and `viewFinance` gating. |
+| **2. Historical Cycle Comparison** | **RESOLVED** | Implemented `compare_pond_cycles` in `functions/shared/orsonDecisionTools.js` enabling side-by-side active pond comparisons and completed cycle benchmarking reusing canonical `shared/pondCalculations.ts`. |
+| **3. Inventory Replenishment Runway** | **RESOLVED** | Implemented `evaluate_inventory_replenishment` in `functions/shared/orsonInventoryPolicy.js` and `orsonDecisionTools.js` with burn rate modeling, runway estimation, and zero procurement writes. |
+| **4. Read-Only Harvest Scenarios** | **RESOLVED** | Implemented `evaluate_harvest_scenario` in `functions/shared/orsonDecisionTools.js` and `evaluateHarvestDecisionForPond` in `shared/harvestProfitability.ts` with growth tapering, market ladders, and advisory disclaimers. |
+| **5. Entity Discovery Price Exposure** | **Documented Gap** | Documented in `functions/orsonAgentTools.test.cjs`. `discover_farm_action_targets` is restricted to agent drafting workflows; conversational tools use sanitized `read_app_records` and `orsonDecisionTools.js`. |
+
+---
+
+## 7. Deterministic Fixtures & Test Verification Matrix
+
+All capabilities, security boundaries, and grounding invariants are validated by comprehensive deterministic test suites:
+
+| Test Suite | File Path | Focus & Assertions |
+| :--- | :--- | :--- |
+| **App Data Access & Privacy** | `functions/shared/orsonAppData.test.js` | RBAC validation, `viewFinance` field stripping, cycle scoping, null preservation, array pagination. |
+| **Farm Integration API** | `functions/shared/readOnlyFarmApi.test.js` | Cross-company isolation, enterprise technician 404 scoping, DTO finance omission, MBW fallback without synthetic data. |
+| **Agent Action Staging** | `functions/orsonAgentTools.test.cjs` | Draft-only staging, enterprise block scoping, catalog price exposure gap documented, no autonomous writers. |
+| **Decision Tools Suite** | `functions/shared/orsonDecisionTools.test.js` | Feed/cost rollups, cycle benchmarking, inventory replenishment, harvest scenarios, finance isolation, cross-company rejection. |
+| **Inventory Replenishment Policy**| `functions/shared/orsonInventoryPolicy.test.js` | Burn rate calculation, zero stock shortfall, unknown stock handling, unit mismatches, finance isolation, zero mutations. |
+| **Harvest Engine & Scenarios** | `shared/harvestProfitability.test.ts` | Biomass projection, growth tapering, market price ladders, margin calculations, missing evidence handling. |
+| **Orson Grounding & Instructions**| `functions/orsonConversation.test.js` | Instruction assertions: never calling missing data adequate stock, never presenting scenarios as guarantees, tool routing. |
+
+---
+
+## 8. Verification & Step Completion Confirmation
 
 - [x] Baseline capability matrix established separating implemented coverage from architectural gaps.
 - [x] All existing authorized read paths traced with exact source file and function citations.
@@ -355,5 +324,8 @@ Deterministic test fixtures have been implemented across the three primary read 
 - [x] Deterministic test fixtures implemented across all authorized read paths and tools.
 - [x] Cross-company isolation and denied finance verified through automated test suites.
 - [x] Zero synthetic business results presented as live farm data (null preservation verified).
-- [x] Read-path gaps empirically proven and documented.
-
+- [x] Period feed/cost aggregation and cycle comparison implemented and verified (Step 04).
+- [x] Inventory replenishment evaluation implemented with zero procurement writes (Step 05).
+- [x] Read-only harvest scenario engine implemented with explicit assumptions and margin basis (Step 06).
+- [x] Orson grounded against calling missing data adequate stock or presenting scenarios as guaranteed outcomes (Step 07).
+- [x] Final matrix completely synchronized with implemented behavior, schemas, and permissions.

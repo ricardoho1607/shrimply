@@ -629,3 +629,32 @@ test("decision input baseline fixtures: discover_farm_action_targets authorizati
   const noFarmCatalog = await noFarmAgent.execute("discover_farm_action_targets");
   assert.equal(noFarmCatalog.ponds.length, 0, "Users without viewFarm receive empty ponds list");
 });
+
+test("agent action staging enforces draft-only lifecycle without autonomous execution", async () => {
+  let createdOperations = [];
+  const agent = createAgentTools({
+    db: {},
+    auth: {
+      company: { currency: "USD" },
+      uid: "user-decision-safety",
+      companyId: "farm-1",
+      allowed: () => true,
+      base: {
+        collection: () => ({
+          get: async () => ({ docs: [] }),
+        }),
+      },
+    },
+    userMessage: "Stage harvest action",
+    onActivity: async () => {},
+    onOperation: async (op) => { createdOperations.push(op); },
+  });
+
+  // Verify available agent tools do not include direct autonomous writers
+  const toolNames = agent.tools.map((t) => t.name);
+  assert.ok(toolNames.includes("prepare_farm_actions"));
+  assert.ok(toolNames.includes("discover_farm_action_targets"));
+  assert.equal(toolNames.includes("execute_harvest"), false);
+  assert.equal(toolNames.includes("record_replenishment"), false);
+});
+
