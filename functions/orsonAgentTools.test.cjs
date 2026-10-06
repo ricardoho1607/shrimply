@@ -510,3 +510,122 @@ test("depth does not block a measured pond because another pond's same session w
   assert.equal(result.status, "awaiting_user_confirmation");
   assert.equal(prepared[0].values.waterDepthCmMorning, 120);
 });
+
+test("decision input baseline fixtures: discover_farm_action_targets authorization, scoping, and price exposure gap", async () => {
+  let activityLogged = false;
+  const buildAuth = ({
+    permissions = { viewFarm: true, manageFeedInventory: true },
+    scoped = false,
+    blockIds = new Set(),
+    ponds = [],
+    feeds = [],
+    additives = [],
+  } = {}) => ({
+    company: { currency: "USD" },
+    uid: "user-target-test",
+    companyId: "farm-1",
+    scoped,
+    blockIds,
+    allowed: (perm) => Boolean(permissions[perm]),
+    base: {
+      collection: (name) => ({
+        get: async () => {
+          let docs = [];
+          if (name === "ponds") docs = ponds;
+          else if (name === "feeds") docs = feeds;
+          else if (name === "additives") docs = additives;
+          else if (name === "physicalPonds") docs = [];
+          return { docs: docs.map((d) => ({ id: d.id, data: () => d })) };
+        },
+      }),
+    },
+  });
+
+  const testPonds = [
+    { id: "pond-allowed", pondName: "Pond Allowed", blockId: "block-1", cycleStatus: "active" },
+    { id: "pond-restricted", pondName: "Pond Restricted", blockId: "block-2", cycleStatus: "active" },
+  ];
+  const testFeeds = [
+    makeInventoryItem({
+      id: "feed-pro",
+      feedName: "Protein 38%",
+      stockInHistory: [
+        { id: "pur-1", date: "2026-09-15", quantity: 100, price: 25.5, voided: false },
+        { id: "pur-malformed", date: "invalid-date", quantity: -10, price: 0, voided: false },
+      ],
+      usageHistory: [],
+    }),
+  ];
+
+  // 1. Full permissions but enterprise block-scoped
+  const scopedAgent = createAgentTools({
+    db: {},
+    auth: buildAuth({
+      permissions: { viewFarm: true, manageFeedInventory: true },
+      scoped: true,
+      blockIds: new Set(["block-1"]),
+      ponds: testPonds,
+      feeds: testFeeds,
+    }),
+    userMessage: "What targets do we have?",
+    onActivity: async (act) => { if (act === "entity_lookup") activityLogged = true; },
+    onOperation: async () => {},
+  });
+
+  const catalog = await scopedAgent.execute("discover_farm_action_targets");
+  assert.equal(activityLogged, true, "Must log entity_lookup activity");
+  assert.equal(catalog.currency, "USD");
+
+  // Scoping: block-2 pond is strictly excluded
+  assert.equal(catalog.ponds.length, 1);
+  assert.equal(catalog.ponds[0].id, "pond-allowed");
+  assert.equal(catalog.ponds.some((p) => p.id === "pond-restricted"), false, "Restricted block pond must not leak into catalog");
+
+  // Feeds catalog baseline
+  assert.equal(catalog.feeds.length, 1);
+  const feed = catalog.feeds[0];
+  assert.equal(feed.name, "Protein 38%");
+
+  // 2. Real read-path gap exposed:
+  // manageFeedInventory alone exposes purchase price even without viewFinance
+  assert.equal(feed.activePurchases[0].price, 25.5, "Exposes read-path gap: purchase price is exposed in activePurchases");
+  assert.equal(feed.recentPurchases[0].price, 0, "Exposes recent purchases with raw price");
+
+  // 3. No synthetic values: malformed purchase is flagged, not fabricated
+  assert.equal(feed.hasMalformedPurchases, true, "Malformed purchase (negative qty, invalid date, 0 price) is flagged");
+  assert.equal(feed.hasAmbiguousHistory, true, "Ambiguous history flagged without inventing clean data");
+  const malformedActive = feed.activePurchases.find((p) => p.id === "pur-malformed");
+  assert.ok(malformedActive);
+  assert.equal(malformedActive.quantity, -10);
+  assert.equal(malformedActive.price, 0);
+
+  // 4. Denied permissions isolate datasets
+  const noInventoryAgent = createAgentTools({
+    db: {},
+    auth: buildAuth({
+      permissions: { viewFarm: true, manageFeedInventory: false },
+      ponds: testPonds,
+      feeds: testFeeds,
+    }),
+    userMessage: "Show feeds",
+    onActivity: async () => {},
+    onOperation: async () => {},
+  });
+  const noInvCatalog = await noInventoryAgent.execute("discover_farm_action_targets");
+  assert.equal(noInvCatalog.feeds.length, 0, "Users without manageFeedInventory receive empty feeds list");
+  assert.equal(noInvCatalog.additives.length, 0, "Users without manageFeedInventory receive empty additives list");
+
+  const noFarmAgent = createAgentTools({
+    db: {},
+    auth: buildAuth({
+      permissions: { viewFarm: false, manageFeedInventory: true },
+      ponds: testPonds,
+      feeds: testFeeds,
+    }),
+    userMessage: "Show ponds",
+    onActivity: async () => {},
+    onOperation: async () => {},
+  });
+  const noFarmCatalog = await noFarmAgent.execute("discover_farm_action_targets");
+  assert.equal(noFarmCatalog.ponds.length, 0, "Users without viewFarm receive empty ponds list");
+});

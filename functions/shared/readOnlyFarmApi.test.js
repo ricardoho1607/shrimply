@@ -843,3 +843,197 @@ test('service instantiation: supports createReadOnlyFarmApi factory, ReadOnlyFar
   assert.throws(() => createReadOnlyFarmApi(), /requires a Firestore db instance/);
   assert.throws(() => new ReadOnlyFarmApi(), /requires a Firestore db instance/);
 });
+
+test('decision input baseline fixtures: cross-company isolation, strict finance omission, null preservation for unmeasured water/feed, and read-path gaps', async () => {
+  const farmWithFinanceAndMissingData = {
+    companies: {
+      'company-a': {
+        name: 'Company A Farm',
+        ownerId: 'owner-a',
+        teamMembers: ['owner-a', 'tech-a'],
+        businessSize: 'enterprise',
+        timeZone: 'UTC',
+      },
+      'company-b': {
+        name: 'Company B Farm',
+        ownerId: 'owner-b',
+        teamMembers: ['owner-b'],
+        businessSize: 'standard',
+        timeZone: 'UTC',
+      },
+    },
+    users: {
+      'owner-a': { role: 'owner', companyId: 'company-a' },
+      'tech-a': { role: 'technician', companyId: 'company-a' },
+      'owner-b': { role: 'owner', companyId: 'company-b' },
+    },
+    blocks: {
+      'company-a': {
+        'blk-1': { name: 'Block 1', assignedTechnicianId: 'tech-a' },
+        'blk-2': { name: 'Block 2', assignedTechnicianId: 'other-tech' },
+      },
+    },
+    ponds: {
+      'company-a': {
+        'pond-1': {
+          pondName: 'Pond 1',
+          blockId: 'blk-1',
+          pondArea: 1000,
+          cycleStatus: 'active',
+          initialWeight: 1.2,
+          feedCost: 55000,
+          seedCost: 8000,
+          revenue: 120000,
+          secretBillingToken: 'leak-test-123',
+          samplings: [
+            {
+              id: 'samp-1',
+              date: '2026-09-01',
+              measuredAt: '2026-09-01T08:00:00Z',
+              mbw: 4.5,
+              phMorning: 7.8,
+              phEvening: null,
+              doMorning: null,
+              doEvening: 6.2,
+              salinity: 25,
+              cost: 150,
+              price: 20,
+              feedData: {
+                totalDailyFeed: 50,
+                feedingResponse: 'good',
+                inventoryFeedId: 'inv-feed-abc',
+                costPerKg: 1.5,
+              },
+            },
+            {
+              id: 'samp-2',
+              date: '2026-09-02',
+              measuredAt: '2026-09-02T08:00:00Z',
+              mbw: null,
+              phMorning: 8.0,
+              doMorning: 5.5,
+              feedData: {
+                totalDailyFeed: 0,
+                isExplicitZero: true,
+              },
+            },
+            {
+              id: 'samp-3',
+              date: '2026-09-03',
+              measuredAt: '2026-09-03T08:00:00Z',
+              phMorning: 8.1,
+              doMorning: 5.4,
+            },
+          ],
+        },
+        'pond-2': {
+          pondName: 'Pond 2 (Unassigned Block)',
+          blockId: 'blk-2',
+          cycleStatus: 'active',
+        },
+        'pond-fallback': {
+          pondName: 'Pond Fallback',
+          blockId: 'blk-1',
+          cycleStatus: 'active',
+          samplings: [],
+        },
+      },
+      'company-b': {
+        'pond-b1': {
+          pondName: 'Company B Pond',
+          blockId: 'blk-b',
+          cycleStatus: 'active',
+        },
+      },
+    },
+  };
+
+  const db = buildMockDb(farmWithFinanceAndMissingData);
+  const api = createReadOnlyFarmApi({ db });
+
+  // 1. Cross-company isolation
+  await assert.rejects(
+    api.getPondSummary({ uid: 'owner-b', pondId: 'pond-1' }),
+    (err) => err.code === 'not-found',
+    'Cannot access pond across companies (derived company lookup finds nothing)',
+  );
+  await assert.rejects(
+    api.getPondSummary({ uid: 'owner-b', companyId: 'company-a', pondId: 'pond-1' }),
+    (err) => err.code === 'permission-denied' && err.message.includes('You do not have access to this company.'),
+    'Cannot spoof foreign companyId',
+  );
+
+  // Enterprise block scoping isolation: tech-a cannot access pond-2 in unassigned blk-2
+  await assert.rejects(
+    api.getPondSummary({ uid: 'tech-a', pondId: 'pond-2' }),
+    (err) => err.code === 'not-found',
+    'Enterprise technician receives 404 for unassigned block pond (no existence leakage)',
+  );
+
+  // 2. Finance data isolation & omission
+  const summary = await api.getPondSummary({ uid: 'owner-a', pondId: 'pond-1' });
+  assert.equal(summary.feedCost, undefined, 'feedCost must never exist in PondSummaryDto');
+  assert.equal(summary.seedCost, undefined, 'seedCost must never exist in PondSummaryDto');
+  assert.equal(summary.revenue, undefined, 'revenue must never exist in PondSummaryDto');
+  assert.equal(summary.secretBillingToken, undefined, 'private tokens must never exist in PondSummaryDto');
+
+  const wqResult = await api.getWaterQualityRecords({
+    uid: 'owner-a',
+    pondId: 'pond-1',
+    startDate: '2026-09-01',
+    endDate: '2026-09-03',
+  });
+  assert.equal(wqResult.items.length, 3);
+  for (const item of wqResult.items) {
+    assert.equal(item.cost, undefined, 'Water quality DTO must omit cost');
+    assert.equal(item.price, undefined, 'Water quality DTO must omit price');
+  }
+
+  const feedResult = await api.getFeedSummary({
+    uid: 'owner-a',
+    pondId: 'pond-1',
+    startDate: '2026-09-01',
+    endDate: '2026-09-03',
+  });
+  for (const item of feedResult.items) {
+    assert.equal(item.inventoryFeedId, undefined, 'Feed DTO must omit inventoryFeedId');
+    assert.equal(item.costPerKg, undefined, 'Feed DTO must omit costPerKg');
+  }
+
+  // 3. Null preservation (no synthetic business results)
+  const samp1Wq = wqResult.items.find((it) => it.date === '2026-09-01');
+  assert.equal(samp1Wq.phEvening, null, 'Unmeasured phEvening must remain null');
+  assert.equal(samp1Wq.doMorning, null, 'Unmeasured doMorning must remain null');
+  assert.equal(samp1Wq.doEvening, 6.2, 'Measured doEvening is preserved');
+
+  const samp2Feed = feedResult.items.find((it) => it.date === '2026-09-02');
+  assert.equal(samp2Feed.feedKg, 0, 'Explicit zero feed is preserved as 0');
+  assert.equal(samp2Feed.isExplicitZero, true);
+
+  const samp3Feed = feedResult.items.find((it) => it.date === '2026-09-03');
+  assert.equal(samp3Feed, undefined, 'Day without feedData must not generate a synthetic 0kg feed entry');
+
+  // MBW look-back fallback hierarchy
+  assert.equal(summary.currentMbw, 4.5, 'Look-back finds valid non-zero MBW from previous sampling');
+  assert.equal(summary.mbwSource, 'sampling');
+
+  const fallbackSummary = await api.getPondSummary({ uid: 'owner-a', pondId: 'pond-fallback' });
+  assert.equal(fallbackSummary.currentMbw, 0.5, 'Fallback MBW is exactly 0.5g');
+  assert.equal(fallbackSummary.mbwSource, 'default_fallback');
+  assert.equal(fallbackSummary.totalSamplings, 0, 'No synthetic sampling record was created');
+
+  // 4. Exposed read-path gaps
+  assert.equal(summary.mortalityCount, undefined, 'Read-only API does not provide mortality records');
+  assert.equal(summary.cumulativeMortality, undefined, 'Read-only API does not calculate cumulative mortality');
+
+  await assert.rejects(
+    api.getWaterQualityRecords({
+      uid: 'owner-a',
+      pondId: 'pond-1',
+      startDate: '2026-01-01',
+      endDate: '2026-05-01',
+    }),
+    (err) => err.code === 'invalid-argument' && err.message.includes('90 days'),
+    'Exposes read-path limitation: max 90 day query window',
+  );
+});

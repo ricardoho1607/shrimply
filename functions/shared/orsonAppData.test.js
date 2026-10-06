@@ -416,3 +416,114 @@ test('readOnlyFarmApi DTOs preserve canonical values, units, basis, sessions and
   assert.equal(summary.latestWaterQuality?.surfaceScum, false, 'freshest surfaceScum wins');
   assert.equal(summary.latestWaterQuality?.nitriteBasis, 'NO2');
 });
+
+test('decision input baseline fixtures: data isolation, no synthetic values, and read-path gaps', async () => {
+  const deterministicPond = {
+    pondName: 'Decision Pond 1',
+    pondCycleId: 'cycle-q3',
+    cycleId: 'cycle-q3',
+    initialStock: 100000,
+    initialWeight: 0.5,
+    feedCost: 8500,
+    seedCost: 1500,
+    samplings: [
+      {
+        id: 'samp-1',
+        date: '2026-08-20',
+        pondCycleId: 'cycle-q3',
+        mbw: 3.2,
+        feed: 45,
+        doMorning: 5.8,
+        doEvening: 6.2,
+        phMorning: 7.8,
+        phEvening: 8.2,
+        salinity: 25,
+        feedData: { totalDailyFeed: 45, feedingResponse: 'normal' },
+        cost: 90,
+      },
+      {
+        id: 'samp-2',
+        date: '2026-08-25',
+        pondCycleId: 'cycle-q3',
+        mbw: 4.8,
+        feed: 50,
+        doMorning: 5.5,
+        doEvening: 6.0,
+        phMorning: 7.7,
+        phEvening: 8.1,
+        salinity: 25,
+        feedData: { totalDailyFeed: 50, feedingResponse: 'normal' },
+        cost: 100,
+      },
+      {
+        id: 'samp-3',
+        date: '2026-08-30',
+        pondCycleId: 'cycle-q3',
+        mbw: 6.5,
+        doMorning: null,
+        doEvening: 5.9,
+        feedData: { totalDailyFeed: 0, isExplicitZero: true },
+      },
+      {
+        id: 'samp-old',
+        date: '2026-08-22',
+        pondCycleId: 'cycle-q2',
+        mbw: 18.0,
+        feed: 120,
+      },
+    ],
+    mortalityRecords: [
+      { date: '2026-08-25', pondCycleId: 'cycle-q3', observationType: 'estimated_total', count: 15 },
+      { date: '2026-08-29', pondCycleId: 'cycle-q3', observationType: 'none_observed', count: 0 },
+    ],
+  };
+
+  const techReader = fixture('technician', deterministicPond);
+  await assert.rejects(techReader.execute('read_app_records', { dataset: 'expenses' }), /Not permitted/);
+  await assert.rejects(techReader.execute('read_app_records', { dataset: 'revenues' }), /Not permitted/);
+
+  const techPondRead = await techReader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-1' });
+  assert.equal(techPondRead.status, 'ok');
+  assert.equal(techPondRead.data.feedCost, undefined, 'feedCost must be stripped from technician read');
+  assert.equal(techPondRead.data.seedCost, undefined, 'seedCost must be stripped from technician read');
+
+  const techSamplings = await techReader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-1', field: 'samplings' });
+  assert.equal(techSamplings.status, 'ok');
+  assert.equal(techSamplings.data[0].cost, undefined, 'sampling cost must be stripped from technician view');
+  assert.equal(techSamplings.data[0].mbw, 3.2, 'biological values remain accessible');
+
+  const ownerReader = fixture('owner', deterministicPond);
+  const ownerPondRead = await ownerReader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-1' });
+  assert.equal(ownerPondRead.data.feedCost, 8500, 'owner can view feedCost');
+  assert.equal(ownerPondRead.data.seedCost, 1500, 'owner can view seedCost');
+
+  const timeline = await techReader.execute('read_pond_timeline', {
+    pondId: 'pond-1',
+    days: 7,
+    endDate: '2026-08-31',
+  });
+  assert.equal(timeline.status, 'ok');
+
+  assert.equal(timeline.timeline.some(day => day.mbwG === 18.0), false, 'previous cycle mbw must not leak into current cycle');
+
+  const day30 = timeline.timeline.find(d => d.date === '2026-08-30');
+  assert.ok(day30, 'day 2026-08-30 exists');
+  assert.equal(day30.feedKg, 0, 'explicit zero feed is preserved as 0');
+  assert.equal(day30.doMorningMgL, null, 'missing morning DO must be null, never fabricated as 0');
+  assert.equal(day30.doEveningMgL, 5.9, 'measured evening DO is preserved');
+  assert.equal(day30.mortalityCount, null, 'missing mortality on 2026-08-30 must be null, never fabricated as 0');
+
+  const day31 = timeline.timeline.find(d => d.date === '2026-08-31');
+  assert.ok(day31, 'day 2026-08-31 exists in window');
+  assert.equal(day31.feedKg, null, 'unrecorded feed day must be null, never fabricated as 0');
+  assert.equal(day31.mortalityCount, null, 'unrecorded mortality day must be null, never fabricated as 0');
+
+  const day29 = timeline.timeline.find(d => d.date === '2026-08-29');
+  assert.ok(day29);
+  assert.equal(day29.mortalityCount, 0, 'explicit none_observed mortality is preserved as 0');
+
+  const pondList = await techReader.execute('read_app_records', { dataset: 'ponds' });
+  assert.equal(pondList.status, 'ok');
+  assert.equal(pondList.documentDetailsOmitted, true, 'read_app_records list mode omits nested array details');
+  assert.equal(pondList.records[0].data.samplings, undefined, 'samplings array omitted in list view');
+});

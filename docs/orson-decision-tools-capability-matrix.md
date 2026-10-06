@@ -317,9 +317,43 @@ Read tools integrated into Orson's action toolset.
 
 ---
 
-## 6. Verification & Step Completion Confirmation
+---
+
+## 6. Deterministic Baseline Fixtures & Test Verification (Step 03)
+
+Deterministic test fixtures have been implemented across the three primary read paths and agent tools to establish baseline behavior, assert access boundaries, ensure no synthetic data is fabricated, and empirically verify architectural gaps:
+
+### 6.1 `functions/shared/orsonAppData.test.js`
+- **Finance Isolation:** Asserts that technician roles are rejected from `expenses` and `revenues` datasets (`Not permitted`). Financial fields (`feedCost`, `seedCost`, sampling `cost`) are stripped via regex sanitization, while owners retain access.
+- **Cycle Scoping:** Verifies `belongsToCurrentCycle` excludes sampling records from prior cycles (`cycle-q2`) when analyzing the active cycle (`cycle-q3`).
+- **Null Preservation (No Synthetic Values):**
+  - Unmeasured morning DO is preserved as `null`, never coerced to `0`.
+  - Unrecorded feed and mortality days are preserved as `null`, never fabricated as 0 kg or 0 mortality.
+  - Explicit zeroes (`isExplicitZero: true` for feed, `none_observed` for mortality) are preserved as `0`.
+- **Exposed Read-Path Gap:** In list mode, `read_app_records` omits nested array details (`documentDetailsOmitted: true`, `samplings` stripped), requiring callers to perform secondary single-document or timeline queries.
+
+### 6.2 `functions/shared/readOnlyFarmApi.test.js`
+- **Cross-Company Isolation:** Queries for ponds from foreign companies return `not-found` (derived company lookup). Explicitly spoofing another company ID throws `permission-denied` (`You do not have access to this company.`).
+- **Enterprise Block Scoping:** Enterprise technicians receive `not-found` (404) for ponds in unassigned blocks, preventing existence disclosure.
+- **Strict Finance Omission in DTOs:** `toPondSummaryDto`, `toWaterQualityRecordDto`, and `toFeedRecordDto` strictly strip `feedCost`, `seedCost`, `revenue`, `secretBillingToken`, `cost`, `price`, `inventoryFeedId`, and `costPerKg`.
+- **Null Preservation:** Unmeasured pH and DO remain `null`. Days without feed entries are not synthesized into 0 kg entries by canonical daily feed selection.
+- **MBW Look-Back Fallback:** Missing MBW in latest sampling scans backward to valid non-zero MBW (`mbwSource: 'sampling'`); ponds without sampling or initial weight fall back to `0.5g` with `mbwSource: 'default_fallback'` without creating synthetic records.
+- **Exposed Read-Path Gaps:** Read-only API lacks mortality records or cumulative mortality metrics; queries exceeding 90-day windows are rejected with `invalid-argument`.
+
+### 6.3 `functions/orsonAgentTools.test.cjs`
+- **Discovery Authorization & Block Scoping:** `discover_farm_action_targets` respects enterprise block scoping (`blockIds.has(p.blockId)`) and filters out unauthorized blocks. Users lacking `manageFeedInventory` receive empty inventory lists; users lacking `viewFarm` receive empty pond lists.
+- **Exposed Read-Path Gap (Price Exposure):** `createAgentCatalog` exposes unit purchase `price` in `activePurchases` and `recentPurchases` to callers holding `manageFeedInventory` even if they do not possess `viewFinance`.
+- **No Synthetic Values:** Malformed inventory purchases (negative quantity, 0 price, invalid date) flag `hasMalformedPurchases: true` and `hasAmbiguousHistory: true` without synthesizing fallback quantities or valid dates.
+
+---
+
+## 7. Verification & Step Completion Confirmation
 
 - [x] Baseline capability matrix established separating implemented coverage from architectural gaps.
 - [x] All existing authorized read paths traced with exact source file and function citations.
 - [x] Finance permission, enterprise technician block scope, company/cycle boundaries, and coverage limits documented.
-- [x] Zero production code modified in this step.
+- [x] Deterministic test fixtures implemented across all authorized read paths and tools.
+- [x] Cross-company isolation and denied finance verified through automated test suites.
+- [x] Zero synthetic business results presented as live farm data (null preservation verified).
+- [x] Read-path gaps empirically proven and documented.
+
