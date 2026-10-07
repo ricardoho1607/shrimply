@@ -29,16 +29,19 @@ const buildMockDb = (data = {}) => {
     cycles: data.cycles || {},
   };
 
-  const makeQuery = (items, filters = [], limitCount = null) => ({
+  const makeQuery = (items, filters = [], limitCount = null, orderedByName = false, afterId = null) => ({
     where: (field, op, val) =>
-      makeQuery(items, [...filters, { field, op, val }], limitCount),
-    orderBy: () => makeQuery(items, filters, limitCount),
-    limit: (n) => makeQuery(items, filters, n),
+      makeQuery(items, [...filters, { field, op, val }], limitCount, orderedByName, afterId),
+    orderBy: () => makeQuery(items, filters, limitCount, true, afterId),
+    startAfter: (cursor) => makeQuery(items, filters, limitCount, orderedByName, cursor?.id || cursor),
+    limit: (n) => makeQuery(items, filters, n, orderedByName, afterId),
     get: async () => {
       let res = [...items];
       for (const f of filters) {
         if (f.op === '==') res = res.filter((it) => it.data[f.field] === f.val);
       }
+      if (orderedByName) res.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+      if (afterId !== null) res = res.filter((it) => String(it.id).localeCompare(String(afterId)) > 0);
       if (typeof limitCount === 'number') {
         res = res.slice(0, limitCount);
       }
@@ -89,14 +92,14 @@ const buildMockDb = (data = {}) => {
                 },
               }),
               where: (field, op, val) => makeQuery(subItems, [{ field, op, val }]),
-              orderBy: () => subQuery,
+              orderBy: (...args) => subQuery.orderBy(...args),
               limit: (n) => subQuery.limit(n),
               get: async () => subQuery.get(),
             };
           },
         }),
         where: (field, op, val) => makeQuery(items, [{ field, op, val }]),
-        orderBy: () => query,
+        orderBy: (...args) => query.orderBy(...args),
         limit: (n) => query.limit(n),
         get: async () => query.get(),
       };
@@ -170,14 +173,14 @@ const createTestFarmFixture = () => {
             },
             {
               id: 's-old',
-              date: '2026-08-01',
+              date: '2026-06-20',
               pondCycleId: 'cycle-old',
               mbw: 12.0,
               feedData: { totalDailyFeed: 100 },
             },
           ],
           mortalityRecords: [
-            { date: '2026-09-02', pondCycleId: 'cycle-101', count: 20 },
+            { date: '2026-10-06', pondCycleId: 'cycle-101', observationType: 'estimated_total', count: 20 },
           ],
         },
         'pond-b': {
@@ -266,6 +269,7 @@ const createTestFarmFixture = () => {
     cycles: {
       'farm-1': {
         'cycle-old': {
+          pondId: 'pond-a',
           cycleName: 'Cycle 2025 Old',
           cycleStartedAt: '2026-06-01',
           startDate: '2026-06-01',
@@ -284,8 +288,8 @@ const createTestFarmFixture = () => {
           unit: 'kg',
           costPerUnit: 2.5,
           usageHistory: [
-            { date: '2026-09-01', quantity: 10 },
-            { date: '2026-09-02', quantity: 10 },
+            { date: '2026-10-06', quantity: 10, totalCost: 25, pondId: 'pond-a', pondCycleId: 'cycle-101', cycleId: 'cycle-101' },
+            { date: '2026-10-07', quantity: 10, totalCost: 25, pondId: 'pond-a', pondCycleId: 'cycle-101', cycleId: 'cycle-101' },
           ],
         },
         'feed-depleted': {
@@ -295,7 +299,7 @@ const createTestFarmFixture = () => {
           unit: 'kg',
           costPerUnit: 2.2,
           usageHistory: [
-            { date: '2026-09-01', quantity: 20 },
+            { date: '2026-10-06', quantity: 20 },
           ],
         },
         'feed-zero-usage': {
@@ -329,7 +333,7 @@ const createTestFarmFixture = () => {
           unit: 'kg',
           costPerUnit: 1.8,
           usageHistory: [
-            { date: '2026-09-01', quantity: 5 },
+            { date: '2026-10-06', quantity: 5, totalCost: 9, pondId: 'pond-a', pondCycleId: 'cycle-101', cycleId: 'cycle-101' },
           ],
         },
       },
@@ -337,13 +341,42 @@ const createTestFarmFixture = () => {
   };
 };
 
+test('saved expense allocations retain unequal pond shares in Orson period costs', async () => {
+  const fixture = createTestFarmFixture();
+  fixture.ponds['farm-1']['pond-a'].cycleId = 'shared-cycle';
+  fixture.ponds['farm-1']['pond-b'].cycleId = 'shared-cycle';
+  fixture.expenses['farm-1'] = { bill: {
+    date: '2026-09-03', amount: 1000, category: 'Utilities', cycleId: 'shared-cycle', allocationMethod: 'active_pond_area',
+    pondAllocations: [{ pondId: 'pond-a', pondCycleId: 'cycle-101', cycleId: 'shared-cycle', amount: 800 }, { pondId: 'pond-b', pondCycleId: 'cycle-201', cycleId: 'shared-cycle', amount: 200 }],
+  } };
+  const result = await summarizePeriodFeedAndCost({ pondId: 'pond-a', startDate: '2026-09-01', endDate: '2026-09-05' }, {
+    db: buildMockDb(fixture), company: { timeZone: 'UTC' }, companyId: 'farm-1', allowed: permission => ['viewFarm', 'viewFinance'].includes(permission), enterpriseScoped: false, timeZone: 'UTC',
+  });
+  assert.equal(result.finance.recordedOperatingExpenseSubtotal, 800);
+  assert.equal(result.finance.unallocatedCompanyWideExpenseCount, 0);
+});
+
+test('a technician with finance access reads only assigned-block shares of a shared bill', async () => {
+  const fixture = createTestFarmFixture();
+  fixture.expenses['farm-1'] = { bill: {
+    date: '2026-09-03', amount: 1000, category: 'Utilities', notes: 'Private invoice note', reference: 'full-invoice', settlements: [{ id: 'paid', amount: 1000, date: '2026-09-03' }], allocationBasisTotal: 4000,
+    pondAllocations: [{ pondId: 'pond-a', pondCycleId: 'cycle-101', pondArea: 1000, amount: 250, share: 0.25 }, { pondId: 'pond-restricted', pondArea: 3000, amount: 750, share: 0.75 }],
+  } };
+  const reader = createOrsonAppDataReader({ db: buildMockDb(fixture), company: fixture.companies['farm-1'], user: { ...fixture.users['tech-1'], permissionOverrides: { viewFinance: true } }, uid: 'tech-1', companyId: 'farm-1' });
+  const result = await reader.execute('read_app_records', { dataset: 'expenses', documentId: 'bill' });
+  assert.equal(result.data.amount, 250); assert.equal(result.data.allocationBasisTotal, 1000);
+  assert.deepEqual(result.data.pondAllocations.map(row => row.pondId), ['pond-a']);
+  assert.equal(result.data.pondAllocations[0].share, undefined, 'full invoice value cannot be reconstructed from the company-wide share');
+  assert.equal(result.data.settlements, undefined); assert.equal(result.data.reference, undefined); assert.equal(result.data.notes, undefined);
+});
+
 test('decisionToolSchemas exposes valid tool definitions with parameters', () => {
   assert.equal(decisionToolSchemas.length, 4);
   assert.equal(periodFeedCostTool.name, 'summarize_period_feed_and_cost');
   assert.equal(comparePondCyclesTool.name, 'compare_pond_cycles');
   assert.equal(inventoryReplenishmentTool.name, 'evaluate_inventory_replenishment');
   assert.equal(harvestScenarioTool.name, 'evaluate_harvest_scenario');
-  assert.ok(periodFeedCostTool.parameters.required.includes('startDate'));
+  assert.deepEqual(periodFeedCostTool.parameters.required, []);
   assert.ok(comparePondCyclesTool.parameters.required.includes('pondId'));
 });
 
@@ -367,7 +400,7 @@ test('summarize_period_feed_and_cost: calculates single pond feed totals and cov
     context,
   );
 
-  assert.equal(result.status, 'ok');
+  assert.equal(result.status, 'partial');
   assert.equal(result.scope.pondId, 'pond-a');
   assert.equal(result.period.daysInPeriod, 5);
 
@@ -383,14 +416,30 @@ test('summarize_period_feed_and_cost: calculates single pond feed totals and cov
   assert.equal(result.feed.completeness, 'partial');
 
   // Unauthorized finance: technician receives no financial leakage
-  assert.equal(result.finance.financeAllowed, false);
-  assert.equal(result.finance.totalExpenses, null);
-  assert.equal(result.finance.expensesByCategory, null);
-  assert.match(result.finance.reason, /viewFinance/);
+  assert.equal(Object.hasOwn(result, 'finance'), false);
+  assert.equal(Object.hasOwn(result, 'farmTotal'), false);
+  assert.equal(Object.hasOwn(result.ponds[0], 'finance'), false);
+  assert.equal(Object.hasOwn(result.retrieval.recordsRead, 'expenses'), false);
+  assert.equal(Object.hasOwn(result.retrieval, 'expensesTruncated'), false);
+  assert.equal(result.ponds[0].retrieval.complete, true);
+  assert.equal(result.ponds[0].retrieval.recordsRead.feedDaysSelected, 3);
 });
 
-test('summarize_period_feed_and_cost: includes full expense breakdown and cost per kg for finance-authorized user', async () => {
-  const db = buildMockDb(createTestFarmFixture());
+test('summarize_period_feed_and_cost: separates operating expenses from consumed inventory costs', async () => {
+  const fixture = createTestFarmFixture();
+  fixture.feeds['farm-1']['feed-starter'].usageHistory.push({
+    date: '2026-09-02', quantity: 5, totalCost: 12.5,
+    pondId: 'pond-a', pondCycleId: 'cycle-101', cycleId: 'cycle-101',
+  });
+  fixture.feeds['farm-1']['feed-starter'].usageHistory.push({
+    date: '2026-09-02', quantity: 99, totalCost: 999,
+    pondId: 'pond-a', pondCycleId: 'cycle-101', cycleId: 'cycle-101', transfer: true,
+  });
+  fixture.additives['farm-1']['add-calcium'].usageHistory.push({
+    date: '2026-09-03', quantity: 2, totalCost: 3,
+    pondId: 'pond-a', pondCycleId: 'cycle-101', cycleId: 'cycle-101',
+  });
+  const db = buildMockDb(fixture);
   const context = {
     db,
     company: { timeZone: 'UTC' },
@@ -409,18 +458,26 @@ test('summarize_period_feed_and_cost: includes full expense breakdown and cost p
     context,
   );
 
-  assert.equal(result.status, 'ok');
+  assert.equal(result.status, 'partial');
   assert.equal(result.finance.financeAllowed, true);
 
   // exp-1 (feed: 500) and exp-2 (chemicals: 250) match pond-a. exp-voided (9999) excluded.
-  assert.equal(result.finance.totalExpenses, 750);
-  assert.equal(result.finance.expenseCount, 2);
-  assert.equal(result.finance.expensesByCategory.feed, 500);
-  assert.equal(result.finance.expensesByCategory.chemicals, 250);
-  assert.equal(result.finance.averageExpensePerDay, 150); // 750 / 5 days
+  assert.equal(result.finance.totalExpenses, null, 'Unallocated company-wide costs prevent a complete pond total');
+  assert.equal(result.finance.recordedOperatingExpenseSubtotal, 750);
+  assert.equal(result.finance.expenseCount, null, 'Incomplete company-wide expense evidence prevents a complete entry count');
+  assert.equal(result.ponds[0].finance.operatingExpenseEntryCount, 2);
+  assert.equal(result.finance.expensesByCategory, null);
+  assert.equal(result.finance.partialRecordedExpensesByCategory.feed, 500);
+  assert.equal(result.finance.partialRecordedExpensesByCategory.chemicals, 250);
+  assert.equal(result.finance.averageExpensePerDay, null, 'Partial expenses do not get a complete daily average');
 
-  // feedCostPerKg: 500 feed expense / 85 kg feed = 5.88
-  assert.equal(result.finance.feedCostPerKg, 5.88);
+  assert.equal(result.finance.consumedFeedCost, 12.5);
+  assert.equal(result.finance.consumedFeedCostCompleteness, 'complete');
+  assert.equal(result.finance.feedUsageRecordCount, 1);
+  assert.equal(result.finance.consumedAdditiveCost, 3);
+  assert.equal(result.finance.consumedAdditiveCostCompleteness, 'complete');
+  assert.equal(result.finance.additiveUsageRecords, 1);
+  assert.equal(result.finance.feedCostPerKg, undefined);
 });
 
 test('summarize_period_feed_and_cost: aggregates across all accessible ponds when pondId is omitted', async () => {
@@ -442,7 +499,7 @@ test('summarize_period_feed_and_cost: aggregates across all accessible ponds whe
     context,
   );
 
-  assert.equal(result.status, 'ok');
+  assert.equal(result.status, 'partial');
   assert.equal(result.scope.pondId, null);
   assert.ok(result.scope.pondsCount >= 2);
 
@@ -454,9 +511,256 @@ test('summarize_period_feed_and_cost: aggregates across all accessible ponds whe
   assert.equal(result.feed.coveragePercent, 33.3);
   assert.equal(result.retrieval.complete, true);
 
-  // Farm-wide expenses: exp-1 (500) + exp-2 (250) + exp-3 (800) = 1550 (exp-inv-feed 3000 excluded!)
-  assert.equal(result.finance.totalExpenses, 1550);
-  assert.equal(result.finance.expensesByCategory.energy, 800);
+  // Company-wide exp-3 cannot be attributed; stock-in purchases are excluded.
+  assert.equal(result.finance.totalExpenses, null);
+  assert.equal(result.finance.recordedOperatingExpenseSubtotal, 750);
+  assert.equal(result.finance.unallocatedCompanyWideExpenseCount, 1);
+  assert.equal(result.finance.expensesByCategory, null);
+  assert.equal(result.finance.partialRecordedExpensesByCategory.energy, undefined);
+  assert.equal(result.farmTotal.available, false);
+});
+
+test('summarize_period_feed_and_cost: cycle expense shares conserve totals and stale direct-cycle rows are excluded', async () => {
+  const fixture = createTestFarmFixture();
+  fixture.ponds['farm-1']['pond-a'].cycleId = 'shared-cycle';
+  fixture.ponds['farm-1']['pond-b'].cycleId = 'shared-cycle';
+  fixture.expenses['farm-1'] = {
+    'shared-cycle-expense': {
+      date: '2026-09-03', amount: 1000, category: 'energy', cycleId: 'shared-cycle',
+    },
+    'stale-direct-expense': {
+      date: '2026-09-03', amount: 900, category: 'chemicals', pondId: 'pond-a', cycleId: 'old-cycle',
+    },
+  };
+  const db = buildMockDb(fixture);
+  const context = {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => ['viewFarm', 'viewFinance'].includes(p),
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  };
+  const pondResult = await summarizePeriodFeedAndCost({
+    pondId: 'pond-a', startDate: '2026-09-01', endDate: '2026-09-05',
+  }, context);
+  const farmResult = await summarizePeriodFeedAndCost({
+    startDate: '2026-09-01', endDate: '2026-09-05',
+  }, context);
+
+  assert.equal(pondResult.finance.totalExpenses, null, 'An excluded stale row prevents a complete total claim');
+  assert.equal(pondResult.finance.recordedOperatingExpenseSubtotal, 500);
+  assert.equal(pondResult.ponds[0].finance.operatingExpenseReadStatus, 'partial');
+  assert.equal(pondResult.ponds[0].finance.staleCycleExpenseCount, 1);
+  assert.equal(pondResult.finance.expensesByCategory, null);
+  assert.equal(farmResult.finance.totalExpenses, null);
+  assert.equal(farmResult.finance.recordedOperatingExpenseSubtotal, 1000);
+});
+
+test('summarize_period_feed_and_cost: missing usage cost stays unavailable instead of looking complete', async () => {
+  const fixture = createTestFarmFixture();
+  fixture.feeds['farm-1']['feed-starter'].usageHistory.push({
+    date: '2026-09-02', quantity: 5,
+    pondId: 'pond-a', pondCycleId: 'cycle-101', cycleId: 'cycle-101',
+  });
+  const db = buildMockDb(fixture);
+  const result = await summarizePeriodFeedAndCost({
+    pondId: 'pond-a', startDate: '2026-09-01', endDate: '2026-09-05',
+  }, {
+    db,
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (p) => ['viewFarm', 'viewFinance'].includes(p),
+    enterpriseScoped: false,
+    timeZone: 'UTC',
+  });
+
+  assert.equal(result.finance.consumedFeedCost, null);
+  assert.equal(result.finance.consumedFeedCostCompleteness, 'partial');
+  assert.equal(result.finance.feedUsageRecordsMissingCost, 1);
+});
+
+test('summarize_period_feed_and_cost: defaults to 30 farm-local days and returns per-pond coverage', async () => {
+  const periodDays = Array.from({ length: 30 }, (_, index) =>
+    new Date(Date.parse('2026-09-08T00:00:00.000Z') + index * 24 * 60 * 60 * 1000)
+      .toISOString().slice(0, 10)
+  );
+  const fixture = {
+    companies: { 'farm-1': { timeZone: 'Australia/Melbourne' } },
+    ponds: { 'farm-1': {
+      'pond-a': {
+        pondName: 'Pond A', pondCycleId: 'cycle-a', cycleStatus: 'active',
+        samplings: periodDays.map((date, index) => ({
+          id: `a-${index}`, date, pondCycleId: 'cycle-a',
+          feedData: { totalDailyFeed: 10 },
+        })),
+      },
+      'pond-b': {
+        pondName: 'Pond B', pondCycleId: 'cycle-b', cycleStatus: 'active',
+        samplings: [
+          { id: 'b-zero', date: '2026-09-08', pondCycleId: 'cycle-b', feedData: { totalDailyFeed: 0, isExplicitZero: true } },
+          { id: 'b-last', date: '2026-10-07', pondCycleId: 'cycle-b', feedData: { totalDailyFeed: 5 } },
+        ],
+      },
+    } },
+  };
+  const result = await summarizePeriodFeedAndCost({ endDate: '2026-10-07' }, {
+    db: buildMockDb(fixture),
+    company: fixture.companies['farm-1'],
+    companyId: 'farm-1',
+    allowed: (permission) => ['viewFarm', 'viewFinance'].includes(permission),
+    enterpriseScoped: false,
+  });
+
+  assert.equal(result.period.startDate, '2026-09-08');
+  assert.equal(result.period.endDate, '2026-10-07');
+  assert.equal(result.period.daysInPeriod, 30);
+  assert.equal(result.period.timeZone, 'Australia/Melbourne');
+  assert.equal(result.period.asOfDate, '2026-10-07');
+  assert.equal(result.feed.totalFeedKg, 305);
+  assert.equal(result.feed.expectedPondDays, 60);
+  assert.equal(result.feed.recordedPondDays, 32);
+  assert.equal(result.feed.daysWithExplicitZero, 1);
+  assert.equal(result.feed.daysUnrecorded, 28);
+  assert.equal(result.ponds.length, 2);
+  assert.equal(result.ponds[0].feed.completeness, 'complete');
+  assert.equal(result.ponds[0].feed.totalKg, 300);
+  assert.equal(result.ponds[1].feed.completeness, 'partial');
+  assert.equal(result.ponds[1].feed.explicitZeroDays, 1);
+  assert.equal(result.ponds[1].feed.daysUnrecorded, 28);
+  assert.equal(result.ponds[0].finance.operatingExpenseEvidence, 'no_entries_found');
+  assert.equal(result.ponds[0].finance.recordedOperatingExpenseSubtotal, 0);
+  assert.equal(result.ponds[0].finance.actualSpendUnknown, true);
+  assert.equal(result.ponds[0].finance.averageExpensePerDay, null);
+  assert.match(result.ponds[0].finance.currencyDescription, /company currency is not configured/i);
+  assert.equal(result.writesPerformed, 0);
+  assert.equal(result.farmTotal.available, false);
+});
+
+test('summarize_period_feed_and_cost: preserves recorded zero costs and expenses separately from missing rows', async () => {
+  const fixture = {
+    companies: { 'farm-1': { timeZone: 'UTC', currency: 'AUD' } },
+    ponds: { 'farm-1': { 'pond-a': {
+      pondName: 'Pond A', pondCycleId: 'cycle-a', cycleStatus: 'active',
+      samplings: [{ id: 'zero-feed', date: '2026-10-07', pondCycleId: 'cycle-a', feedData: { totalDailyFeed: 0, isExplicitZero: true } }],
+    } } },
+    feeds: { 'farm-1': { 'feed-a': { costPerUnit: 9, usageHistory: [
+      { id: 'zero-usage-cost', date: '2026-10-07', quantity: 0, totalCost: 0, pondId: 'pond-a', pondCycleId: 'cycle-a', currency: 'AUD' },
+    ] } } },
+    expenses: { 'farm-1': { 'zero-expense': {
+      date: '2026-10-07', amount: 0, category: 'energy', pondId: 'pond-a', currency: 'AUD',
+    } } },
+  };
+  const result = await summarizePeriodFeedAndCost({ startDate: '2026-10-07', endDate: '2026-10-07' }, {
+    db: buildMockDb(fixture),
+    company: fixture.companies['farm-1'],
+    companyId: 'farm-1',
+    allowed: (permission) => ['viewFarm', 'viewFinance'].includes(permission),
+    enterpriseScoped: false,
+  });
+
+  assert.equal(result.status, 'complete');
+  assert.equal(result.feed.totalFeedKg, 0);
+  assert.equal(result.feed.daysWithExplicitZero, 1);
+  assert.equal(result.ponds[0].finance.consumedFeedCost, 0);
+  assert.equal(result.ponds[0].finance.feedUsageRecordCount, 1);
+  assert.equal(result.ponds[0].finance.recordedOperatingExpenseSubtotal, 0);
+  assert.equal(result.ponds[0].finance.operatingExpenseEntryCount, 1);
+  assert.equal(result.ponds[0].finance.actualSpendUnknown, false);
+  assert.equal(result.ponds[0].finance.averageExpensePerDay, 0);
+  assert.deepEqual(result.farmTotal, {
+    available: true,
+    currency: 'AUD',
+    currencyStatus: 'configured',
+    currencyDescription: 'Company currency is configured as AUD.',
+    consumedFeedCost: 0,
+    recordedOperatingExpenseSubtotal: 0,
+    operatingExpenseEntryCount: 1,
+    actualSpendUnknown: false,
+  });
+});
+
+test('summarize_period_feed_and_cost: does not combine mixed recorded currencies', async () => {
+  const fixture = {
+    companies: { 'farm-1': { timeZone: 'UTC' } },
+    ponds: { 'farm-1': { 'pond-a': {
+      pondName: 'Pond A', pondCycleId: 'cycle-a', cycleStatus: 'active',
+      samplings: [{ id: 'daily-feed', date: '2026-10-07', pondCycleId: 'cycle-a', feedData: { totalDailyFeed: 5 } }],
+    } } },
+    feeds: { 'farm-1': { 'feed-a': { usageHistory: [
+      { id: 'usd-cost', date: '2026-10-07', quantity: 1, totalCost: 5, pondId: 'pond-a', pondCycleId: 'cycle-a', currency: 'USD' },
+      { id: 'aud-cost', date: '2026-10-07', quantity: 1, totalCost: 7, pondId: 'pond-a', pondCycleId: 'cycle-a', currency: 'AUD' },
+    ] } } },
+  };
+  const result = await summarizePeriodFeedAndCost({ startDate: '2026-10-07', endDate: '2026-10-07' }, {
+    db: buildMockDb(fixture),
+    company: fixture.companies['farm-1'],
+    companyId: 'farm-1',
+    allowed: (permission) => ['viewFarm', 'viewFinance'].includes(permission),
+    enterpriseScoped: false,
+  });
+
+  assert.equal(result.status, 'partial');
+  assert.equal(result.ponds[0].finance.consumedFeedCost, null);
+  assert.equal(result.ponds[0].finance.recordedConsumedFeedCost, null);
+  assert.equal(result.ponds[0].finance.consumedFeedCostStatus, 'partial');
+  assert.deepEqual(result.ponds[0].finance.feedCurrencyCodes, ['AUD', 'USD']);
+  assert.equal(result.ponds[0].finance.currencyStatus, 'unspecified');
+  assert.match(result.ponds[0].finance.currencyDescription, /not configured.*not combined/i);
+});
+
+test('summarize_period_feed_and_cost: paginates ponds and marks the hard read cap partial', async () => {
+  const makePonds = (count) => Object.fromEntries(Array.from({ length: count }, (_, index) => [
+    `pond-${String(index).padStart(4, '0')}`,
+    { pondName: `Pond ${index}`, cycleStatus: 'active', samplings: [] },
+  ]).reverse());
+  const contextFor = (ponds) => ({
+    db: buildMockDb({ companies: { 'farm-1': { timeZone: 'UTC' } }, ponds: { 'farm-1': ponds } }),
+    company: { timeZone: 'UTC' },
+    companyId: 'farm-1',
+    allowed: (permission) => permission === 'viewFarm',
+    enterpriseScoped: false,
+  });
+  const period = { startDate: '2026-10-06', endDate: '2026-10-07' };
+
+  const paged = await summarizePeriodFeedAndCost(period, contextFor(makePonds(102)));
+  assert.equal(paged.ponds.length, 102);
+  assert.equal(paged.ponds[0].pondId, 'pond-0000', 'Document order is stable across shuffled fixture insertion order');
+  assert.equal(paged.retrieval.recordsRead.ponds, 102);
+  assert.equal(paged.retrieval.pondsTruncated, false);
+  assert.equal(paged.retrieval.complete, true);
+
+  const capped = await summarizePeriodFeedAndCost(period, contextFor(makePonds(1001)));
+  assert.equal(capped.ponds.length, 1000);
+  assert.equal(capped.retrieval.recordsRead.ponds, 1000);
+  assert.equal(capped.retrieval.pondsTruncated, true);
+  assert.equal(capped.retrieval.complete, false);
+  assert.equal(capped.feed.completeness, 'partial');
+  assert.equal(capped.status, 'unavailable');
+
+  const expenseRows = Object.fromEntries(Array.from({ length: 102 }, (_, index) => [
+    `expense-${String(index).padStart(4, '0')}`,
+    { date: '2026-10-07', amount: 1, category: 'energy', pondId: 'pond-a' },
+  ]));
+  const financeFixture = {
+    companies: { 'farm-1': { timeZone: 'UTC', currency: 'AUD' } },
+    ponds: { 'farm-1': { 'pond-a': {
+      pondName: 'Pond A', cycleStatus: 'active',
+      samplings: [{ id: 'feed-day', date: '2026-10-07', feedData: { totalDailyFeed: 5 } }],
+    } } },
+    expenses: { 'farm-1': expenseRows },
+  };
+  const expensePaged = await summarizePeriodFeedAndCost(period, {
+    db: buildMockDb(financeFixture),
+    company: financeFixture.companies['farm-1'],
+    companyId: 'farm-1',
+    allowed: (permission) => ['viewFarm', 'viewFinance'].includes(permission),
+    enterpriseScoped: false,
+  });
+  assert.equal(expensePaged.retrieval.recordsRead.expenses, 102);
+  assert.equal(expensePaged.retrieval.expensesTruncated, false);
+  assert.equal(expensePaged.ponds[0].finance.operatingExpenseEntryCount, 102);
+  assert.equal(expensePaged.ponds[0].finance.recordedOperatingExpenseSubtotal, 102);
 });
 
 test('summarize_period_feed_and_cost: enterprise technician scoping rejects unassigned block pond', async () => {
@@ -490,6 +794,13 @@ test('summarize_period_feed_and_cost: enterprise technician scoping rejects unas
     /Not permitted/,
     'Must reject enterprise technician access to pond in unassigned block',
   );
+
+  const assignedPondsResult = await summarizePeriodFeedAndCost({
+    startDate: '2026-09-01', endDate: '2026-09-05',
+  }, context);
+  assert.equal(assignedPondsResult.scope.boundary, 'assigned_ponds');
+  assert.deepEqual(assignedPondsResult.ponds.map((pond) => pond.pondId).sort(), ['pond-a', 'pond-b']);
+  assert.equal(Object.hasOwn(assignedPondsResult, 'finance'), false);
 });
 
 test('summarize_period_feed_and_cost: cross-company pond lookup returns not_found', async () => {
@@ -612,7 +923,8 @@ test('compare_pond_cycles: cycle comparison on same pond aligns at specified asO
   assert.equal(result.secondary.metrics.doc, 30);
   assert.equal(result.secondary.effectivePond, undefined, 'effectivePond must be omitted from public DTO');
   assert.equal(result.primary.effectivePond, undefined, 'effectivePond must be omitted from public DTO');
-  assert.equal(result.secondary.metrics.currentPopulation, 90000); // calculated from cycle-old initialPopulation 90000!
+  assert.ok(result.secondary.metrics.currentPopulation > 80000 && result.secondary.metrics.currentPopulation <= 90000,
+    'historical estimate uses the cycle-specific 90000 starting population, not the active cycle population');
   assert.equal(result.finance.secondaryFeedCost, 3500); // from cycle-old doc, not active pond's 4500!
   assert.equal(result.finance.feedCostDiff, -1000);
 });
@@ -694,7 +1006,7 @@ test('executeDecisionTool routes by name and rejects unknown tools', async () =>
     { pondId: 'pond-a', startDate: '2026-09-01', endDate: '2026-09-05' },
     context,
   );
-  assert.equal(feedRes.status, 'ok');
+  assert.equal(feedRes.status, 'partial');
 
   await assert.rejects(
     executeDecisionTool('unknown_tool', {}, context),
@@ -726,9 +1038,9 @@ test('createOrsonAppDataReader integrates decision tools and routes execution', 
     startDate: '2026-09-01',
     endDate: '2026-09-05',
   });
-  assert.equal(feedSummary.status, 'ok');
+  assert.equal(feedSummary.status, 'partial');
   assert.equal(feedSummary.feed.totalFeedKg, 85);
-  assert.equal(feedSummary.finance.financeAllowed, false, 'Finance must be denied to technician');
+  assert.equal(Object.hasOwn(feedSummary, 'finance'), false, 'Finance must be omitted for technician');
 
   const comparison = await techReader.execute('compare_pond_cycles', {
     pondId: 'pond-a',
@@ -773,7 +1085,8 @@ test('createOrsonAppDataReader integrates decision tools and routes execution', 
     endDate: '2026-09-05',
   });
   assert.equal(ownerFeedSummary.finance.financeAllowed, true, 'Owner has finance allowed');
-  assert.equal(ownerFeedSummary.finance.totalExpenses, 750);
+  assert.equal(ownerFeedSummary.finance.totalExpenses, null);
+  assert.equal(ownerFeedSummary.finance.recordedOperatingExpenseSubtotal, 750);
 });
 
 test('evaluate_inventory_replenishment: evaluates single feed replenishment with burn rate and runway', async () => {
@@ -817,7 +1130,7 @@ test('evaluate_inventory_replenishment: flags zero stock with critical shortfall
   };
 
   const result = await evaluateInventoryReplenishment(
-    { itemId: 'feed-depleted', requiredQuantity: 60, unit: 'kg' },
+    { itemId: 'feed-depleted', requiredQuantity: 60, unit: 'kg', plannedDays: 3 },
     context,
   );
 
@@ -851,9 +1164,10 @@ test('evaluate_inventory_replenishment: handles zero recorded usage and unknown 
   );
   assert.equal(zeroUsageRes.status, 'ok');
   const zeroItem = zeroUsageRes.items[0];
-  assert.equal(zeroItem.burnRate.kgPerDay, 0);
-  assert.equal(zeroItem.burnRate.isZeroUsage, true);
-  assert.equal(zeroItem.runway.runwayStatus, 'stable_zero_consumption');
+  assert.equal(zeroItem.burnRate.kgPerDay, null);
+  assert.equal(zeroItem.burnRate.isZeroUsage, false);
+  assert.equal(zeroItem.burnRate.isUnknown, true);
+  assert.equal(zeroItem.runway.runwayStatus, 'unknown');
   assert.equal(zeroItem.runway.daysOfSupply, null);
 
   // Unknown stock feed
@@ -984,6 +1298,7 @@ test('evaluate_harvest_scenario: owner evaluates harvest scenario with price lad
   };
 
   const priceLadder = [
+    { sizeCountPerKg: 220, pricePerKg: 3.8 },
     { sizeCountPerKg: 200, pricePerKg: 4.0 },
     { sizeCountPerKg: 100, pricePerKg: 6.5 },
     { sizeCountPerKg: 50, pricePerKg: 9.0 },
@@ -1000,7 +1315,7 @@ test('evaluate_harvest_scenario: owner evaluates harvest scenario with price lad
   assert.equal(result.scope.cycleId, 'cycle-101');
   assert.equal(result.finance.financeAllowed, true);
   assert.ok(result.finance.incurredCostsToDate.feed > 0);
-  assert.equal(result.marginBasis, 'operating_profit_after_all_incurred_and_projected_costs');
+  assert.equal(result.marginBasis, 'operating_profit_after_recorded_incurred_and_supported_projected_costs');
   assert.equal(result.assumptions.growthModel, 'von_bertalanffy_tapered_growth');
   assert.equal(result.assumptions.mortalityBasis, 'recorded_mortality_trend');
   assert.equal(result.guardrails.advisoryOnly, true);
@@ -1139,7 +1454,7 @@ test('evaluate_harvest_scenario: missing feed unit cost returns review_data and 
   assert.equal(result.decision, 'review_data');
   assert.ok(result.missingEvidence.includes('missing_historical_feed_unit_cost'));
   assert.ok(result.warnings.some((w) => w.includes('Feed unit cost is missing or zero')));
-  assert.equal(result.finance.feedUnitCostPerKg, 0); // Strictly not 1.5!
+  assert.equal(result.finance.feedUnitCostPerKg, null); // Missing valuation stays unavailable.
 });
 
 test('evaluate_harvest_scenario: enterprise technician blocked from unassigned pond in block 2', async () => {
@@ -1256,4 +1571,3 @@ test('pure CommonJS runtime smoke test: orsonDecisionTools loads cleanly without
   assert.ok(reloaded.evaluateHarvestScenario);
   assert.equal(reloaded.decisionToolSchemas.length, 4);
 });
-

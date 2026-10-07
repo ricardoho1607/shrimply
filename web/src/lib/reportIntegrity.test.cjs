@@ -33,7 +33,7 @@ test('cycle honors explicit ownership and signed stored corrections', () => {
 });
 test('projection excludes manufacture transfers and includes only treatment application', () => {
   const costs = projection.buildPondProfitabilityCostSnapshot({ pond, ponds: [pond], feeds: [], additives: [{ usageHistory: [{ id: 'prep', date: '2026-08-10', source: 'treatmentMixProduction', quantity: 10, totalCost: 100 }, { id: 'apply', date: '2026-08-10', pondId: 'p1', cycleId: 'c1', source: 'treatmentMixApplication', quantity: 10, totalCost: 100 }] }], expenses: [{ id: 'capital', date: '2026-08-10', category: 'Equipment', amount: 500 }], startDate: '2026-08-01', endDate: '2026-09-09', timeZone: 'UTC' });
-  assert.equal(costs.costsToDate.additives, 100); assert.equal(costs.costsToDate.generalExpenses, 0);
+  assert.equal(costs.costsToDate.additives, 100); assert.equal(costs.costsToDate.generalExpenses, null, 'no recorded operating expense remains unknown rather than becoming zero');
 });
 test('historical snapshots exclude later harvests and future post-harvest state', () => {
   const harvests = [{ date: '2026-09-01', ponds: [{ pondId: 'p1', biomass: 400, size: 50 }] }];
@@ -71,7 +71,7 @@ test('projection template escapes untrusted report text before DOM insertion', (
   const source = fs.readFileSync(root + '/web/src/app/dashboard/projections/page.tsx', 'utf8');
   const code = source.slice(source.indexOf('  const generateProjectionHTML ='), source.indexOf('  const handleExport ='));
   const i18n = load(root + '/shared/pdfReportI18n.ts');
-  const fn = new Function('currentLanguage', 'formatPdfDate', 'localizePdfHtml', 'formatCurrency', 'escapeReportText', ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText + '\nreturn generateProjectionHTML;')('en', i18n.formatPdfDate, i18n.localizePdfHtml, String, integrity.escapeReportText);
+  const fn = new Function('currentLanguage', 'formatPdfDate', 'localizePdfHtml', 'formatCurrency', 'escapeReportText', 'formatNullableCurrency', ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText + '\nreturn generateProjectionHTML;')('en', i18n.formatPdfDate, i18n.localizePdfHtml, String, integrity.escapeReportText, value => value === null || value === undefined ? 'N/A' : String(value));
   const costs = { feed: 1, additives: 1, generalExpenses: 1 };
   const html = fn({ pondName: '<Farm>', companyName: '<Company>', insight: '<img src=x onerror=alert(1)>', operatingComparison: { decision: 'review_data', decisionReason: '<Reason>', costsToDate: costs, futureCosts: costs, feedDailyIncreaseRatePercent: 1, dailyMortalityRatePercent: 0.01 } });
   assert.doesNotMatch(html, /<img src=x/); assert.match(html, /&lt;img src=x/); assert.match(html, /&lt;Farm&gt;/);

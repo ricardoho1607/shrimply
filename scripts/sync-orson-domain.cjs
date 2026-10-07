@@ -38,6 +38,8 @@ function compile(name) {
 }
 [
   "dailyFeedTransaction",
+  "financeIntegrity",
+  "harvestProfitability",
   "feedInventoryUsage",
   "financeSync",
   "harvestCalculations",

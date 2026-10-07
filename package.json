@@ -20,7 +20,7 @@
     "qa:orson": "node scripts/qa-bot/run.mjs --mode=orson",
     "qa:headed": "node scripts/qa-bot/run.mjs --headless=false",
     "check:orson-domain": "node scripts/sync-orson-domain.cjs --check",
-    "test:orson-agent": "npm run check:orson-domain && node --require ./scripts/register-typescript.cjs --test functions/shared/orsonAgentContract.test.js orson/agentState.test.cjs orson/conversationOperations.test.cjs orson/callableStream.test.ts orson/sessionUi.test.cjs web/src/app/dashboard/ai/orsonStreamingUi.test.cjs",
+  "test:orson-agent": "npm run check:orson-domain && node --require ./scripts/register-typescript.cjs --test functions/shared/orsonAgentContract.test.js functions/shared/orsonAppData.test.js functions/shared/orsonDecisionTools.test.js functions/shared/orsonInventoryPolicy.test.js shared/harvestProfitability.test.ts orson/agentState.test.cjs orson/conversationOperations.test.cjs orson/callableStream.test.ts orson/sessionUi.test.cjs web/src/app/dashboard/ai/orsonStreamingUi.test.cjs",
     "test:orson-observation-contract": "node --require ./scripts/register-typescript.cjs --test functions/shared/orsonAgentContract.source.test.cjs",
     "check": "node --require ./scripts/register-typescript.cjs --test functions/shared/orsonAgentContract.source.test.cjs orson/agentState.test.cjs orson/sessionUi.test.cjs web/src/app/dashboard/ai/orsonStreamingUi.test.cjs",
     "test:orson-agent:emulator": "firebase emulators:exec --project demo-shrimply-agent --config firebase.orson-agent-test.json --only firestore,storage \"node --test --test-concurrency=1 functions/orsonAgent.emulator.test.cjs functions/orsonAgentRules.emulator.test.cjs\""

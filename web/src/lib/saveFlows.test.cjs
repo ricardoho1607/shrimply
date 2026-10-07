@@ -66,7 +66,7 @@ function harness({ mode = 'stockIn', lostAck = false, fail = false, permissions 
     updateDoc: async (ref, data) => runTransaction(db, async tx => tx.update(ref, data)),
     addDoc: async (ref, data) => { const target = firestore.doc(ref); await runTransaction(db, async tx => tx.set(target, data)); return target; },
     companyId: 'company', company: { id: 'company', timeZone: 'Asia/Jakarta' }, user: { uid: 'owner', name: 'Owner' },
-    modalType: mode, selectedItem, selectedAsset, itemType: 'feed', formData, existingItems: [], activePonds: [], cycles: [], ponds: [], activeCycles: [],
+    modalType: mode, selectedItem, selectedAsset, itemType: 'feed', formData, existingItems: [], activePonds: [], cycles: [], ponds: [], activeCycles: [], allocationMethod: null, allocationDecimals: 2, editingTransaction: null,
     canEditInventory: permissions, canManageAssets: permissions, canLogMaintenance: permissions, canManageFinance: permissions,
     assetManagementPermissionMessage: 'permission', assetMaintenancePermissionMessage: 'permission', isMaintenanceOnly: false, isOpenFarmCycle: () => true,
     uploadPhotos: async () => [], copy: value => value, alert: value => alerts.push(value), console: { error() {} },
@@ -119,7 +119,7 @@ test('finance lost acknowledgement retains draft and retry does not add a second
   const h = harness({ lostAck: true });
   const submit = handler('finance/page.tsx', 'handlePost', 'resetForm', h.env);
   await Promise.all([submit(event), submit(event)]);
-  assert.equal(h.transactions, 1); assert.equal(h.closed, false); assert.equal(h.cleared, false); assert.equal(h.env.save.busy, false);
+  assert.equal(h.transactions, 1, JSON.stringify(h.alerts)); assert.equal(h.closed, false); assert.equal(h.cleared, false); assert.equal(h.env.save.busy, false);
   await submit(event); assert.equal(h.writes.length, 1); assert.equal(h.closed, true); assert.equal(h.cleared, true);
 });
 

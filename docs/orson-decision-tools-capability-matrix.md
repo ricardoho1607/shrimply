@@ -88,22 +88,24 @@ All decision scenario tools are strictly read-only, execute deterministically be
 
 ### 3.1 `summarize_period_feed_and_cost`
 
-- **Implementation:** `functions/shared/orsonDecisionTools.js#L238-L380`
+- **Route:** `generateOrsonResponse` -> `createOrsonAppDataReader.execute` -> `executeDecisionTool` -> `summarizePeriodFeedAndCost`.
+- **Implementation:** `functions/shared/orsonDecisionTools.js`; answer guidance is in `functions/orson.js`.
 - **Schema & Name:** `summarize_period_feed_and_cost`
-- **Purpose:** Aggregates actual feeding records and associated operating costs across a user-defined date window for a single pond or all accessible ponds across the farm.
-- **Required Permission:** `viewFarm` (base execution). Financial metrics (`feedCost`, `otherCost`, `totalExpense`, `costPerKgFeed`) require `viewFinance`.
+- **Purpose:** Summarizes recorded daily feed allocation and coverage, recorded consumed-feed valuation, and recorded operating-expense entries separately for one pond or all accessible ponds.
+- **Required Permission:** `viewFarm` (base execution). Financial source reads and derived financial values require `viewFinance`; for other callers, the result omits `finance` and `farmTotal`.
 - **Inputs:**
-  - `startDate` (string YYYY-MM-DD, required)
-  - `endDate` (string YYYY-MM-DD, optional, defaults to farm today)
-  - `pondId` (string, optional; aggregates all accessible ponds if omitted)
+  - `startDate` (string YYYY-MM-DD, optional; defaults to 29 calendar days before `endDate`)
+  - `endDate` (string YYYY-MM-DD, optional; defaults to farm-local today and is returned as the captured as-of date)
+  - `pondId` (string, optional; aggregates all accessible ponds if omitted or `all`)
 - **Output Model:**
-  - `evidencePeriod`: `{ startDate, endDate, daysInRange }`
-  - `feed`: `{ totalFeedKg, averageDailyFeedKg, daysWithRecordedFeed, daysWithoutRecordedFeed }`
-  - `coverage`: `{ totalPondsEvaluated, completeDataPonds, partialDataPonds, completenessRatio }`
-  - `finance`: `{ financeAllowed, totalFeedCost, otherExpenses, totalExpense, costPerKgFeed, currency }`
-    - When `viewFinance` is false: `financeAllowed: false`, all monetary numbers set to `null` with no financial leakage.
-- **Enterprise Scoping:** Enterprise technicians querying an unassigned block pond receive `{ status: 'not_found' }`. Farm-wide aggregations automatically filter ponds to assigned blocks only.
-- **Null & Coverage Preservation:** Days with unrecorded feed remain unrecorded and are counted in `daysWithoutRecordedFeed`; they are never fabricated as 0 kg. Explicit zeroes are preserved.
+  - `status`: `complete`, `partial`, or `unavailable`; `writesPerformed: 0`.
+  - `scope`: company or assigned-pond boundary and returned pond count; `period`: inclusive farm-local dates, timezone, and captured as-of date.
+  - `ponds[]`: readable pond name, cycle only when unambiguous, recorded feed allocation and pond-day coverage, explicit-zero and unrecorded days, evidence, and retrieval warnings.
+  - `ponds[].finance` and top-level `finance` (only with `viewFinance`): recorded usage-cost evidence, recorded operating-expense subtotal and entries, currency status, missing evidence, and completeness. Inventory stock-in and voided rows are excluded; no catalog-price fallback is used.
+  - `farmTotal`: emitted only to finance-authorized callers and marked available only when the full company scope, currency, and every required source support it.
+- **Enterprise Scoping:** Accessible pond rows are filtered through the existing enterprise scope. An explicit unassigned pond request is rejected. Assigned-pond results are labeled `assigned_ponds`; they are not represented as a company-wide total.
+- **Null & Coverage Preservation:** No feed usage is unavailable, an explicit zero stays distinct from a missing record, and unpriced rows make consumed cost partial. No expense entries means a recorded-entry subtotal of zero with actual spend unknown; no daily average is returned. Mixed currencies and incomplete bounded reads cannot produce complete totals.
+- **Current Pilot gap before this implementation:** The prior live one-day, single-pond response separated feed-use cost from operating expenses but rendered `[company currency]`, returned an expense average of zero without entries, and did not satisfy the 30-day per-pond target. It was a route smoke test only; the target answer requires deterministic multi-pond, permission, currency, missing-data, and paging checks before live acceptance.
 
 ### 3.2 `compare_pond_cycles`
 
@@ -206,7 +208,7 @@ All decision scenario tools are strictly read-only, execute deterministically be
 | **`read_app_records` (assets)** | Optional | Optional | Optional | **Required** | Throws `Not permitted` |
 | **`read_pond_timeline`** | **Required** | Optional | Optional | Optional | Throws `Not permitted` |
 | **`summarize_period_feed_and_cost` (Operational)** | **Required** | Optional | Optional | Optional | Throws `Not permitted` |
-| **`summarize_period_feed_and_cost` (Financial)** | **Required** | **Required** | Optional | Optional | Operational metrics returned; finance set to `null` |
+| **`summarize_period_feed_and_cost` (Financial)** | **Required** | **Required** | Optional | Optional | Operational metrics returned; `finance` and `farmTotal` omitted |
 | **`compare_pond_cycles` (Biological)** | **Required** | Optional | Optional | Optional | Throws `Not permitted` |
 | **`compare_pond_cycles` (Cost DTO)** | **Required** | **Required** | Optional | Optional | Biological deltas returned; financial fields omitted |
 | **`evaluate_inventory_replenishment` (Stock/Runway)** | **Required** | Optional | Optional | Optional | Throws `Not permitted` |
@@ -290,7 +292,7 @@ Orson's server-side system instructions (`functions/orson.js#L383-L500`) enforce
 
 | Identified Gap | Resolution Status | Implementing Source |
 | :--- | :---: | :--- |
-| **1. Analytical Feed/Cost Rollups** | **RESOLVED** | Implemented `summarize_period_feed_and_cost` in `functions/shared/orsonDecisionTools.js` with evidence period tracking, coverage completeness metrics, and `viewFinance` gating. |
+| **1. Analytical Feed/Cost Rollups** | **LOCAL CHECKS PASSED; EMULATOR PENDING** | The callable targets the 30-day per-pond result contract and passes the Orson-focused suite. Emulator-backed verification remains pending because the configured Java executable fails with an incompatible-architecture error on this host. |
 | **2. Historical Cycle Comparison** | **RESOLVED** | Implemented `compare_pond_cycles` in `functions/shared/orsonDecisionTools.js` enabling side-by-side active pond comparisons and completed cycle benchmarking reusing canonical `shared/pondCalculations.ts`. |
 | **3. Inventory Replenishment Runway** | **RESOLVED** | Implemented `evaluate_inventory_replenishment` in `functions/shared/orsonInventoryPolicy.js` and `orsonDecisionTools.js` with burn rate modeling, runway estimation, and zero procurement writes. |
 | **4. Read-Only Harvest Scenarios** | **RESOLVED** | Implemented `evaluate_harvest_scenario` in `functions/shared/orsonDecisionTools.js` and `evaluateHarvestDecisionForPond` in `shared/harvestProfitability.ts` with growth tapering, market ladders, and advisory disclaimers. |

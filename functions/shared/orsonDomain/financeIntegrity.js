@@ -29,7 +29,7 @@ exports.CAPITAL_CATEGORIES = ['Equipment', 'Property', 'Infrastructure'];
 exports.FINANCING_CATEGORIES = ['Loan Payment', 'Owner Withdrawal', 'Dividend'];
 exports.OTHER_EXPENSE_CATEGORIES = ['Taxes', 'Interest'];
 exports.NON_PRODUCTION_CATEGORIES = [...exports.CAPITAL_CATEGORIES, ...exports.FINANCING_CATEGORIES, ...exports.OTHER_EXPENSE_CATEGORIES];
-const isInventoryTransfer = (usage) => usage.source === 'treatmentMixProduction';
+const isInventoryTransfer = (usage) => Boolean(usage && (usage.source === 'treatmentMixProduction' || usage.transfer === true));
 exports.isInventoryTransfer = isInventoryTransfer;
 /** Reverse the remaining recorded cost proportionally, including earlier corrections. */
 function getUsageReturnCost(usages, quantity) {

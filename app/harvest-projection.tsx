@@ -45,8 +45,10 @@ import {
 import { hasFarmPermission } from '../shared/permissions';
 import { useFarmDateKey } from './hooks/useFarmDateKey';
 
-const totalScenarioCosts = (costs: { feed: number; additives: number; generalExpenses: number; other: number }) =>
-  costs.feed + costs.additives + costs.generalExpenses + costs.other;
+const totalScenarioCosts = (costs: { feed: number | null; additives: number | null; generalExpenses: number | null; other: number | null }) =>
+  Object.values(costs).some((value) => value === null)
+    ? null
+    : costs.feed! + costs.additives! + costs.generalExpenses! + costs.other!;
 
 export default function HarvestProjectionScreen() {
   const router = useRouter();
@@ -55,6 +57,8 @@ export default function HarvestProjectionScreen() {
   const { sendMessage, loading: aiLoading } = useGemini();
   const { t } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
+  const formatNullableCurrency = (value: number | null | undefined, options?: { showSymbol?: boolean; showCode?: boolean }) =>
+    value === null || value === undefined ? '—' : formatCurrency(value, options);
   const { company, user } = useAuth();
   const operationalToday = useFarmDateKey(company?.timeZone, FARM_OPERATIONAL_DAY_ROLLOVER_HOUR);
   const feeds = useFeedAdditiveStore((state) => state.feeds);
@@ -131,13 +135,13 @@ export default function HarvestProjectionScreen() {
     if (result.decision === 'keep_growing') {
       return (t.harvestProjectionScreen?.keepGrowingReason || 'Target size {{size}} is projected to improve operating profit by {{amount}}.')
         .replace('{{size}}', String(result.bestScenario.targetSizeCountPerKg))
-        .replace('{{amount}}', formatCurrency(result.bestScenario.incrementalProfitVsToday));
+        .replace('{{amount}}', formatNullableCurrency(result.bestScenario.incrementalProfitVsToday));
     }
     if (result.decision === 'harvest_now') {
       return t.harvestProjectionScreen?.harvestNowReason || 'Harvesting now has equal or higher projected operating profit than the reachable larger sizes.';
     }
     return t.harvestProjectionScreen?.reviewDataReason || 'Critical population, MBW, or market-price data is missing.';
-  }, [financialComparison, formatCurrency, t.harvestProjectionScreen]);
+  }, [financialComparison, formatNullableCurrency, t.harvestProjectionScreen]);
 
   const fallbackPondId = activePonds[0]?.id ?? null;
   if (!activePonds.some(pond => pond.id === selectedPondId) && selectedPondId !== fallbackPondId) {
@@ -211,9 +215,9 @@ export default function HarvestProjectionScreen() {
     return calculateOrsonHarvestProjection({
       pond: selectedPond,
       daysToHarvest: bestScenario.daysFromNow,
-      expectedPricePerKg: bestScenario.pricePerKg,
+      expectedPricePerKg: bestScenario.pricePerKg ?? 0,
       dailyFeedCost: bestScenario.daysFromNow > 0
-        ? bestScenario.futureCosts.feed / bestScenario.daysFromNow
+        ? (bestScenario.futureCosts.feed ?? 0) / bestScenario.daysFromNow
         : 0,
       targetAdgGPerDay: null,
       assumedSurvivalPercent: bestScenario.projectedSurvivalRatePercent,
@@ -274,8 +278,8 @@ Current MBW: ${projection.currentMbwG ?? 'unknown'}g | Projected MBW: ${projecti
 Historical ADG: ${projection.historicalAdgGPerDay ?? 'unknown'}g/day | Assumed ADG: ${projection.assumedAdgGPerDay ?? 'unknown'}g/day
 Assumed survival: ${projection.assumedSurvivalPercent ?? 'unknown'}% (${projection.survivalConfidence} confidence)
 Projected FCR: ${projection.projectedFcr ?? 'unknown'} | Market size status: ${projection.marketSizeRisk}
-${financialComparison ? `Harvest-today operating profit: ${formatCurrency(financialComparison.result.today.operatingProfit, {showCode: true})}
-Best scenario: ${financialComparison.result.bestScenario.kind === 'today' ? 'Harvest now' : `Size ${financialComparison.result.bestScenario.targetSizeCountPerKg}`} — ${formatCurrency(financialComparison.result.bestScenario.operatingProfit, {showCode: true})}
+${financialComparison ? `Harvest-today operating profit: ${formatNullableCurrency(financialComparison.result.today.operatingProfit, {showCode: true})}
+Best scenario: ${financialComparison.result.bestScenario.kind === 'today' ? 'Harvest now' : `Size ${financialComparison.result.bestScenario.targetSizeCountPerKg}`} — ${formatNullableCurrency(financialComparison.result.bestScenario.operatingProfit, {showCode: true})}
 Decision: ${financialComparison.result.decision} — ${financialComparison.result.decisionReason}
 Market price ladder: ${priceLadder.map((tier) => `${tier.sizeCountPerKg}=${formatCurrency(tier.pricePerKg, {showCode: true})}/kg`).join(', ')}` : 'Comprehensive operating-profit comparison is waiting for market price inputs.'}
 Projection confidence: ${(projection.confidenceScore * 100).toFixed(0)}%
@@ -405,23 +409,23 @@ Give a concise recommendation based on the operating-profit comparison and Orson
                 <View style={styles.comparisonRow}>
                   <View style={styles.comparisonColumn}>
                     <Text style={styles.financialLabel}>{t.harvestProjectionScreen?.harvestTodayProfit || 'Harvest-today profit'}</Text>
-                    <Text style={styles.comparisonProfit}>{formatCurrency(financialComparison.result.today.operatingProfit)}</Text>
-                    <Text style={styles.comparisonMeta}>{t.harvestProjectionScreen?.revenue || 'Revenue'}: {formatCurrency(financialComparison.result.today.revenue)}</Text>
-                    <Text style={styles.comparisonMeta}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}: {formatCurrency(totalScenarioCosts(financialComparison.result.today.totalCosts))}</Text>
+                    <Text style={styles.comparisonProfit}>{formatNullableCurrency(financialComparison.result.today.operatingProfit)}</Text>
+                    <Text style={styles.comparisonMeta}>{t.harvestProjectionScreen?.revenue || 'Revenue'}: {formatNullableCurrency(financialComparison.result.today.revenue)}</Text>
+                    <Text style={styles.comparisonMeta}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}: {formatNullableCurrency(totalScenarioCosts(financialComparison.result.today.totalCosts))}</Text>
                   </View>
                   <View style={[styles.comparisonColumn, styles.bestComparisonColumn]}>
                     <Text style={styles.financialLabel}>{financialComparison.result.bestScenario.kind === 'today'
                       ? (t.harvestProjectionScreen?.bestOption || 'Best option')
                       : `${t.harvestProjectionScreen?.targetSize || 'Target size'} ${financialComparison.result.bestScenario.targetSizeCountPerKg}`}</Text>
-                    <Text style={styles.comparisonProfit}>{formatCurrency(financialComparison.result.bestScenario.operatingProfit)}</Text>
+                    <Text style={styles.comparisonProfit}>{formatNullableCurrency(financialComparison.result.bestScenario.operatingProfit)}</Text>
                     <Text style={styles.comparisonMeta}>{financialComparison.result.bestScenario.daysFromNow} {t.harvestProjectionScreen?.days || 'days'}</Text>
-                    <Text style={styles.comparisonMeta}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}: {formatCurrency(totalScenarioCosts(financialComparison.result.bestScenario.totalCosts))}</Text>
+                    <Text style={styles.comparisonMeta}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}: {formatNullableCurrency(totalScenarioCosts(financialComparison.result.bestScenario.totalCosts))}</Text>
                   </View>
                 </View>
 
                 <View style={styles.profitDifferenceBox}>
                   <Text style={styles.profitDifferenceLabel}>{t.harvestProjectionScreen?.profitDifference || 'Profit difference'}</Text>
-                  <Text style={[styles.profitDifferenceValue, financialComparison.result.bestScenario.incrementalProfitVsToday < 0 && styles.negativeProfit]}>{formatCurrency(financialComparison.result.bestScenario.incrementalProfitVsToday)}</Text>
+                  <Text style={[styles.profitDifferenceValue, financialComparison.result.bestScenario.incrementalProfitVsToday !== null && financialComparison.result.bestScenario.incrementalProfitVsToday < 0 && styles.negativeProfit]}>{formatNullableCurrency(financialComparison.result.bestScenario.incrementalProfitVsToday)}</Text>
                   <Text style={styles.comparisonMeta}>{t.harvestProjectionScreen?.versusHarvestToday || 'versus harvesting today'}</Text>
                 </View>
 
@@ -430,12 +434,12 @@ Give a concise recommendation based on the operating-profit comparison and Orson
                   <View key={`${scenario.kind}-${scenario.targetSizeCountPerKg}`} style={[styles.scenarioRow, scenario === financialComparison.result.bestScenario && styles.bestScenarioRow]}>
                     <View style={styles.scenarioMain}>
                       <Text style={styles.scenarioSize}>{scenario.kind === 'today' ? `${t.harvestProjectionScreen?.today || 'Today'} · ${scenario.targetSizeCountPerKg}` : `${t.harvestProjectionScreen?.targetSize || 'Size'} ${scenario.targetSizeCountPerKg}`}</Text>
-                      <Text style={styles.scenarioMeta}>{scenario.daysFromNow} {t.harvestProjectionScreen?.days || 'days'} · {t.harvestProjectionScreen?.revenue || 'Revenue'} {formatCurrency(scenario.revenue)}</Text>
-                      <Text style={styles.scenarioMeta}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'} {formatCurrency(totalScenarioCosts(scenario.totalCosts))}</Text>
+                      <Text style={styles.scenarioMeta}>{scenario.daysFromNow} {t.harvestProjectionScreen?.days || 'days'} · {t.harvestProjectionScreen?.revenue || 'Revenue'} {formatNullableCurrency(scenario.revenue)}</Text>
+                      <Text style={styles.scenarioMeta}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'} {formatNullableCurrency(totalScenarioCosts(scenario.totalCosts))}</Text>
                     </View>
                     <View style={styles.scenarioProfitColumn}>
-                      <Text style={[styles.scenarioProfit, scenario.operatingProfit < 0 && styles.negativeProfit]}>{formatCurrency(scenario.operatingProfit)}</Text>
-                      <Text style={styles.scenarioDelta}>{formatCurrency(scenario.incrementalProfitVsToday)}</Text>
+                      <Text style={[styles.scenarioProfit, scenario.operatingProfit !== null && scenario.operatingProfit < 0 && styles.negativeProfit]}>{formatNullableCurrency(scenario.operatingProfit)}</Text>
+                      <Text style={styles.scenarioDelta}>{formatNullableCurrency(scenario.incrementalProfitVsToday)}</Text>
                     </View>
                   </View>
                 ))}
@@ -448,9 +452,9 @@ Give a concise recommendation based on the operating-profit comparison and Orson
 
                 <View style={styles.financialBox}>
                   <Text style={styles.costTitle}>{t.harvestProjectionScreen?.costsIncluded || 'Costs included to date'}</Text>
-                  <Text style={styles.costLine}>{t.inventory?.feeds || 'Feed'}: {formatCurrency(financialComparison.costSnapshot.costsToDate.feed)}</Text>
-                  <Text style={styles.costLine}>{t.inventory?.additives || 'Additives'}: {formatCurrency(financialComparison.costSnapshot.costsToDate.additives)}</Text>
-                  <Text style={styles.costLine}>{t.harvestProjectionScreen?.generalExpenses || 'Allocated general expenses'}: {formatCurrency(financialComparison.costSnapshot.costsToDate.generalExpenses)}</Text>
+                  <Text style={styles.costLine}>{t.inventory?.feeds || 'Feed'}: {formatNullableCurrency(financialComparison.costSnapshot.costsToDate.feed)}</Text>
+                  <Text style={styles.costLine}>{t.inventory?.additives || 'Additives'}: {formatNullableCurrency(financialComparison.costSnapshot.costsToDate.additives)}</Text>
+                  <Text style={styles.costLine}>{t.harvestProjectionScreen?.generalExpenses || 'Allocated general expenses'}: {formatNullableCurrency(financialComparison.costSnapshot.costsToDate.generalExpenses)}</Text>
                   <Text style={styles.costLine}>{t.harvestProjectionScreen?.feedTrend || 'Daily feed trend'}: {financialComparison.result.feedDailyIncreaseRatePercent.toFixed(2)}%</Text>
                   <Text style={styles.costLine}>{t.harvestProjectionScreen?.mortalityTrend || 'Daily mortality benchmark'}: {financialComparison.result.dailyMortalityRatePercent.toFixed(4)}% ({financialComparison.mortality.recordedDays} {t.harvestProjectionScreen?.recordedDays || 'recorded days'})</Text>
                   {financialComparison.costSnapshot.excludedInventoryPurchaseIds.length > 0 && <Text style={styles.warningText}>• {t.harvestProjectionScreen?.inventorySafeguard || 'Unused inventory is excluded; only consumed feed and additives are counted.'}</Text>}

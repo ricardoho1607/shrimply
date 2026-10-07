@@ -40,6 +40,7 @@ export const runHarvestProfitabilitySelfTest = () => {
     { id: 'direct', date: '2026-07-12', amount: 90, pondId: 'p1', pondCycleId: 'pc1', cycleId: 'c1', source: 'expense' },
     { id: 'cycle-shared', date: '2026-07-12', amount: 100, cycleId: 'c1', source: 'expense' },
     { id: 'company-shared', date: '2026-07-12', amount: 300, source: 'additive_usage' },
+    { id: 'unallocated-cycle', date: '2026-07-12', amount: 40, cycleId: 'missing-cycle', source: 'expense' },
     { id: 'after-ended', date: '2026-07-16', amount: 200, source: 'expense' },
   ];
   const allocation = allocateCostsToPond({
@@ -51,6 +52,7 @@ export const runHarvestProfitabilitySelfTest = () => {
   });
   assert(closeTo(allocation.directAmount, 90), 'assigns pond-specific cost directly');
   assert(closeTo(allocation.sharedAmount, 250), 'shares cycle and company costs only across active ponds on each date');
+  assert(closeTo(allocation.unallocatedAmount, 40), 'retains costs with no eligible active pond');
   assert(closeTo(allocation.allocatedAmount, 340), 'returns total pond allocation');
 
   const purchase = {
@@ -83,6 +85,37 @@ export const runHarvestProfitabilitySelfTest = () => {
   assert(costSnapshot.costsToDate.generalExpenses === 100, 'shares company expense across active ponds on its date');
   assert(costSnapshot.feedUnitCostPerKg === 2, 'derives feed unit cost from allocated consumed quantity and cost');
   assert(costSnapshot.excludedInventoryPurchaseIds.includes('purchase'), 'reports excluded inventory purchases');
+
+  const zeroCostSnapshot = buildPondProfitabilityCostSnapshot({
+    pond: ponds[0],
+    ponds,
+    feeds: [{ id: 'free-feed', usageHistory: [
+      { id: 'free-use', date: '2026-07-12', quantity: 5, totalCost: 0, pondId: 'p1', pondCycleId: 'pc1', cycleId: 'c1' },
+    ] }],
+    additives: [{ id: 'free-additive', usageHistory: [
+      { id: 'free-additive-use', date: '2026-07-12', quantity: 0, totalCost: 0, pondId: 'p1', pondCycleId: 'pc1', cycleId: 'c1' },
+    ] }],
+    expenses: [],
+    startDate: '2026-07-01',
+    endDate: '2026-07-19',
+  });
+  assert(zeroCostSnapshot.costsToDate.feed === 0, 'preserves an explicitly recorded zero feed cost');
+  assert(zeroCostSnapshot.costsToDate.additives === 0, 'preserves an explicitly recorded zero additive cost');
+  assert(zeroCostSnapshot.feedUnitCostPerKg === 0, 'derives a zero unit cost from explicitly recorded free feed');
+
+  const missingCostSnapshot = buildPondProfitabilityCostSnapshot({
+    pond: ponds[0],
+    ponds,
+    feeds: [{ id: 'unknown-cost-feed', usageHistory: [
+      { id: 'unknown-cost-use', date: '2026-07-12', quantity: 5, pondId: 'p1', pondCycleId: 'pc1', cycleId: 'c1' },
+    ] }],
+    additives: [],
+    expenses: [],
+    startDate: '2026-07-01',
+    endDate: '2026-07-19',
+  });
+  assert(missingCostSnapshot.costsToDate.feed === null, 'keeps feed cost unknown when usage has no price evidence');
+  assert(missingCostSnapshot.feedUnitCostPerKg === null, 'does not infer a unit cost from quantity alone');
 
   const mortalityRate = calculateRecordedDailyMortalityRate({
     records: [
@@ -143,8 +176,8 @@ export const runHarvestProfitabilitySelfTest = () => {
   const firstGrowthTarget = profitableGrowth.targets[0];
   assert(firstGrowthTarget.daysFromNow > Math.ceil((firstGrowthTarget.targetMbwG - 20) / 0.3), 'uses tapered growth instead of a straight-line forecast');
   const firstGrowthBiomassGain = firstGrowthTarget.projectedBiomassKg - profitableGrowth.today.projectedBiomassKg;
-  assert(firstGrowthTarget.futureFeedKg >= firstGrowthBiomassGain * 1.4 - 0.01, 'does not project feed below the quantity implied by historical FCR');
-  assert(profitableGrowth.bestScenario.operatingProfit >= profitableGrowth.today.operatingProfit, 'selects the highest-profit scenario');
+  assert(firstGrowthTarget.futureFeedKg !== null && firstGrowthTarget.futureFeedKg >= firstGrowthBiomassGain * 1.4 - 0.01, 'does not project feed below the quantity implied by historical FCR');
+  assert(profitableGrowth.bestScenario.operatingProfit !== null && profitableGrowth.today.operatingProfit !== null && profitableGrowth.bestScenario.operatingProfit >= profitableGrowth.today.operatingProfit, 'selects the highest-profit scenario');
   assert(profitableGrowth.decision === 'keep_growing', 'recommends growth when price uplift exceeds mortality and future cost');
 
   const highMortality = calculateHarvestProfitability({
@@ -228,17 +261,20 @@ export const runHarvestProfitabilitySelfTest = () => {
           ],
         },
       ],
-      additives: [],
+      additives: [{ id: 'additive-1', usageHistory: [
+        { id: 'zero-additive-use', date: '2026-07-19', quantity: 0, totalCost: 0, pondId: 'p1', pondCycleId: 'pc1', cycleId: 'c1' },
+      ] }],
       expenses: [{ id: 'e1', date: '2026-07-10', amount: 500, pondId: 'p1', pondCycleId: 'pc1', cycleId: 'c1' }],
+      projectedDailyOtherCost: 0,
     },
   });
 
   assert(decisionEvaluation.result.decision === 'keep_growing', 'evaluates profitable harvest growth scenario from canonical pond data');
   assert(decisionEvaluation.scope.pondId === 'p1', 'records explicit pondId scope');
-  assert(decisionEvaluation.scope.cycleId === 'pc1', 'records explicit cycleId scope');
+  assert(decisionEvaluation.scope.cycleId === 'c1', 'records explicit cycleId scope');
   assert(decisionEvaluation.assumptions.growthModel === 'von_bertalanffy_tapered_growth', 'explicitly cites tapered growth model');
   assert(decisionEvaluation.assumptions.mortalityBasis === 'recorded_mortality_trend', 'explicitly cites recorded mortality basis');
-  assert(decisionEvaluation.marginBasis === 'operating_profit_after_all_incurred_and_projected_costs', 'explicitly states full operating profit margin basis');
+  assert(decisionEvaluation.marginBasis === 'operating_profit_after_recorded_incurred_and_supported_projected_costs', 'explicitly states the supported operating profit margin basis');
   assert(decisionEvaluation.guardrails.advisoryOnly === true, 'enforces advisory-only guardrail');
   assert(decisionEvaluation.guardrails.noFarmWrites === true, 'enforces no-writes guardrail');
   assert(decisionEvaluation.missingEvidence.length === 0, 'flags zero missing evidence when all critical inputs present');

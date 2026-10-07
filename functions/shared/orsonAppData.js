@@ -1,7 +1,9 @@
 'use strict';
+const { Buffer } = require('node:buffer');
 const { hasUserPermission } = require('./permissions');
 const { selectDailyFeedEntries } = require('./orsonDomain/orsonEvidence');
 const { normalizeFarmDateKey } = require('./orsonDomain/farmDate');
+const { hasValidExpenseAllocations } = require('./orsonDomain/financeExpenseAllocation');
 const {
   decisionToolSchemas,
   periodFeedCostTool,
@@ -22,6 +24,8 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_ARRAY_PAGE_BYTES = 24000;
 const MAX_ARRAY_PAGE_ITEMS = 30;
+const MAX_SCOPED_BLOCKS = 100;
+const MAX_SCOPED_PONDS = 1000;
 const validDateKey = value => {
   if (typeof value !== 'string' || !ISO_DATE.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
@@ -171,6 +175,8 @@ const buildPondTimeline = (pondId, pond, args, timeZone) => {
     });
     return timeline.get(date);
   };
+  // Include unrecorded dates so null explicitly represents missing observations.
+  for (let date = startDate; date <= endDate; date = shiftDate(date, 1)) ensureDay(date);
   const setNumber = (day, key, value, decimals = 3) => {
     const parsed = round(value, decimals);
     if (parsed !== null) day[key] = parsed;
@@ -368,9 +374,14 @@ const createOrsonAppDataReader = ({ db, company, user, uid, companyId }) => {
     if (!enterpriseScoped) return record;
     scopePromise ||= (async () => {
       const base = db.collection('companies').doc(companyId);
-      const blocks = await base.collection('blocks').where('assignedTechnicianId', '==', uid).get();
+      const blocks = await base.collection('blocks')
+        .where('assignedTechnicianId', '==', uid)
+        .limit(MAX_SCOPED_BLOCKS + 1)
+        .get();
+      if (blocks.docs.length > MAX_SCOPED_BLOCKS) throw new Error('Scope exceeds the supported block limit.');
       const blockIds = new Set(blocks.docs.map(doc => doc.id));
-      const ponds = await base.collection('ponds').get();
+      const ponds = await base.collection('ponds').limit(MAX_SCOPED_PONDS + 1).get();
+      if (ponds.docs.length > MAX_SCOPED_PONDS) throw new Error('Scope exceeds the supported pond limit.');
       return { blockIds, pondIds: new Set(ponds.docs.filter(doc => blockIds.has(doc.data().blockId)).map(doc => doc.id)) };
     })();
     const { blockIds, pondIds } = await scopePromise;
@@ -378,6 +389,21 @@ const createOrsonAppDataReader = ({ db, company, user, uid, companyId }) => {
     if (dataset === 'blocks') return record.assignedTechnicianId === uid ? record : null;
     if (dataset === 'cycles') return (record.blockIds || [record.blockId]).some(id => blockIds.has(id)) ? { ...record, blockIds: (record.blockIds || []).filter(id => blockIds.has(id)), plannedPondIds: undefined } : null;
     if (['feeds', 'additives'].includes(dataset)) return { ...record, usageHistory: (record.usageHistory || []).filter(row => pondIds.has(row.pondId)) };
+    if (dataset === 'expenses' && record.pondAllocations?.length) {
+      if (!hasValidExpenseAllocations(record)) return null;
+      const pondAllocations = record.pondAllocations.filter(row => pondIds.has(row.pondId)).map(row => {
+        const { share, ...visible } = row;
+        void share;
+        return visible;
+      });
+      if (!pondAllocations.length) return null;
+      // Restricted readers see only authorized pond shares, never the full company invoice.
+      const { amount, settlements, notes, reference, ...scoped } = record;
+      void amount; void settlements; void notes; void reference;
+      const weights = pondAllocations.map(row => finite(row.pondArea ?? row.plQuantity));
+      return { ...scoped, pondAllocations, amount: Math.round(pondAllocations.reduce((sum, row) => sum + Number(row.amount), 0) * 100) / 100,
+        allocationBasisTotal: weights.every(weight => weight !== null && weight > 0) ? weights.reduce((sum, weight) => sum + weight, 0) : null };
+    }
     if (Array.isArray(record.ponds)) {
       const ponds = record.ponds.filter(row => pondIds.has(row.pondId));
       return ponds.length ? { ...record, ponds, financeEntry: undefined } : null;

@@ -182,6 +182,8 @@ test('evaluateReplenishmentScenario: comprehensive evaluation of missing, partia
       ],
       unit: 'kg',
     },
+    todayKey: '2026-09-02',
+    timeZone: 'UTC',
   });
   assert.equal(zeroUsage.burnRate.kgPerDay, 0);
   assert.equal(zeroUsage.burnRate.isZeroUsage, true);
@@ -207,6 +209,8 @@ test('evaluateReplenishmentScenario: comprehensive evaluation of missing, partia
         { date: '2026-09-02', quantity: 20, unit: 'kg' }, // valid
       ],
     },
+    todayKey: '2026-09-02',
+    timeZone: 'UTC',
   });
   // Day 1 (Sep 1): 20kg, Day 2 (Sep 2): 20kg -> average 20kg/day
   assert.equal(filteredUsage.burnRate.kgPerDay, 20);
@@ -274,6 +278,8 @@ test('evaluateReplenishmentScenario: comprehensive evaluation of missing, partia
       ],
     },
     plannedDays: 10,
+    todayKey: '2026-09-02',
+    timeZone: 'UTC',
   });
   assert.equal(normalScenario.stockStatus.status, REPLENISHMENT_STOCK_STATUS.IN_STOCK);
   assert.equal(normalScenario.burnRate.kgPerDay, 10);

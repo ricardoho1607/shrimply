@@ -102,7 +102,8 @@ test('pond timeline returns date-aligned chart series without inventing missing 
 
   assert.deepEqual(result.lineSeries.mortalityCount, [{ date: '2026-09-08', value: 7 }, { date: '2026-09-09', value: 0 }, { date: '2026-09-11', value: 118 }]);
   assert.deepEqual(result.lineSeries.doMinimumMgL, [{ date: '2026-09-09', value: 5.2 }, { date: '2026-09-11', value: 4.1 }]);
-  assert.equal(result.timeline.some(day => day.date === '2026-09-10'), false);
+  assert.equal(result.timeline.some(day => day.date === '2026-09-10'), true, 'unrecorded dates are present with unknown values');
+  assert.equal(result.timeline.find(day => day.date === '2026-09-10').mbwG, null);
   assert.equal(result.lineSeries.mbwG.some(point => point.date === '2026-09-08'), false);
   assert.equal(result.coverage.missingDatesAreUnknown, true);
   assert.ok(reader.tools.some(item => item.name === 'read_pond_timeline'));
@@ -551,15 +552,16 @@ test('createOrsonAppDataReader registers decision tools and routes period feed a
     startDate: '2026-09-01',
     endDate: '2026-09-02',
   });
-  assert.equal(feedSummary.status, 'ok');
+  assert.equal(feedSummary.status, 'partial');
   assert.equal(feedSummary.feed.totalFeedKg, 105);
-  assert.equal(feedSummary.finance.financeAllowed, false, 'Technician cannot access finance in period summary');
+  assert.equal(Object.hasOwn(feedSummary, 'finance'), false, 'Technician cannot access finance in period summary');
 
   const comparison = await reader.execute('compare_pond_cycles', {
     pondId: 'pond-1',
-    compareCycleId: 'cycle-old',
+    comparePondId: 'pond-2',
   });
   assert.equal(comparison.status, 'ok');
   assert.equal(comparison.primary.metrics.latestMbw, 3.4);
+  assert.equal(comparison.comparisonType, 'pond_to_pond');
   assert.equal(comparison.finance.financeAllowed, false, 'Technician cannot access finance in cycle comparison');
 });

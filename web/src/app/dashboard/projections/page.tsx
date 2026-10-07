@@ -125,24 +125,24 @@ interface ProjectionExportData {
     feedDailyIncreaseRatePercent: number;
     dailyMortalityRatePercent: number;
     mortalityRecordedDays: number;
-    todayRevenue: number;
-    todayOperatingProfit: number;
+    todayRevenue: number | null;
+    todayOperatingProfit: number | null;
     bestTargetSizeCountPerKg: number;
     bestDaysFromNow: number;
-    bestRevenue: number;
-    bestOperatingProfit: number;
-    incrementalProfit: number;
+    bestRevenue: number | null;
+    bestOperatingProfit: number | null;
+    incrementalProfit: number | null;
     costsToDate: {
-      feed: number;
-      additives: number;
-      generalExpenses: number;
-      other: number;
+      feed: number | null;
+      additives: number | null;
+      generalExpenses: number | null;
+      other: number | null;
     };
     futureCosts: {
-      feed: number;
-      additives: number;
-      generalExpenses: number;
-      other: number;
+      feed: number | null;
+      additives: number | null;
+      generalExpenses: number | null;
+      other: number | null;
     };
     inventoryPurchasesExcluded: boolean;
     dataQualityWarning: boolean;
@@ -159,13 +159,17 @@ type Html2PdfWorker = {
 
 type Html2PdfFactory = () => Html2PdfWorker;
 
-const totalScenarioCosts = (costs: { feed: number; additives: number; generalExpenses: number; other: number }) =>
-  costs.feed + costs.additives + costs.generalExpenses + costs.other;
+const totalScenarioCosts = (costs: { feed: number | null; additives: number | null; generalExpenses: number | null; other: number | null }) =>
+  Object.values(costs).some((value) => value === null)
+    ? null
+    : costs.feed! + costs.additives! + costs.generalExpenses! + costs.other!;
 
 export default function HarvestProjectionsPage() {
   const copy = useDashboardCopy();
   const { t, currentLanguage } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
+  const formatNullableCurrency = (value: number | null | undefined, options?: { showSymbol?: boolean; showCode?: boolean }) =>
+    value === null || value === undefined ? '—' : formatCurrency(value, options);
   
   const [ponds, setPonds] = useState<Pond[]>([]);
   const { save, busy: savePending } = useSaveOperation();
@@ -377,13 +381,13 @@ export default function HarvestProjectionsPage() {
     if (result.decision === 'keep_growing') {
       return (t.harvestProjectionScreen?.keepGrowingReason || 'Target size {{size}} is projected to improve operating profit by {{amount}}.')
         .replace('{{size}}', String(result.bestScenario.targetSizeCountPerKg))
-        .replace('{{amount}}', formatCurrency(result.bestScenario.incrementalProfitVsToday));
+        .replace('{{amount}}', formatNullableCurrency(result.bestScenario.incrementalProfitVsToday));
     }
     if (result.decision === 'harvest_now') {
       return t.harvestProjectionScreen?.harvestNowReason || 'Harvesting now has equal or higher projected operating profit than the reachable larger sizes.';
     }
     return t.harvestProjectionScreen?.reviewDataReason || 'Critical population, MBW, or market-price data is missing.';
-  }, [financialComparison, formatCurrency, t.harvestProjectionScreen]);
+  }, [financialComparison, formatNullableCurrency, t.harvestProjectionScreen]);
 
   const projection = useMemo(() => {
     if (!selectedPond || !financialComparison) return null;
@@ -392,9 +396,9 @@ export default function HarvestProjectionsPage() {
     return calculateOrsonHarvestProjection({
       pond: selectedPond,
       daysToHarvest: bestScenario.daysFromNow,
-      expectedPricePerKg: bestScenario.pricePerKg,
+      expectedPricePerKg: bestScenario.pricePerKg ?? 0,
       dailyFeedCost: bestScenario.daysFromNow > 0
-        ? bestScenario.futureCosts.feed / bestScenario.daysFromNow
+        ? (bestScenario.futureCosts.feed ?? 0) / bestScenario.daysFromNow
         : 0,
       targetAdgGPerDay: null,
       assumedSurvivalPercent: bestScenario.projectedSurvivalRatePercent,
@@ -449,8 +453,8 @@ Current MBW: ${projection.currentMbwG ?? 'unknown'}g | Projected MBW: ${projecti
 Historical ADG: ${projection.historicalAdgGPerDay ?? 'unknown'}g/day | Assumed ADG: ${projection.assumedAdgGPerDay ?? 'unknown'}g/day
 Assumed survival: ${projection.assumedSurvivalPercent ?? 'unknown'}% (${projection.survivalConfidence} confidence)
 Projected FCR: ${projection.projectedFcr ?? 'unknown'} | Market size status: ${projection.marketSizeRisk}
-${financialComparison ? `Harvest-today operating profit: ${formatCurrency(financialComparison.result.today.operatingProfit)}
-Best scenario: ${financialComparison.result.bestScenario.kind === 'today' ? 'Harvest now' : `Size ${financialComparison.result.bestScenario.targetSizeCountPerKg}`} — ${formatCurrency(financialComparison.result.bestScenario.operatingProfit)}
+${financialComparison ? `Harvest-today operating profit: ${formatNullableCurrency(financialComparison.result.today.operatingProfit)}
+Best scenario: ${financialComparison.result.bestScenario.kind === 'today' ? 'Harvest now' : `Size ${financialComparison.result.bestScenario.targetSizeCountPerKg}`} — ${formatNullableCurrency(financialComparison.result.bestScenario.operatingProfit)}
 Decision: ${financialComparison.result.decision} — ${financialComparison.result.decisionReason}
 Market price ladder: ${priceLadder.map((tier) => `${tier.sizeCountPerKg}=${formatCurrency(tier.pricePerKg)}/kg`).join(', ')}` : 'Comprehensive operating-profit comparison is waiting for market price inputs.'}
 Projection confidence: ${(projection.confidenceScore * 100).toFixed(0)}%
@@ -537,25 +541,25 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
           <div class="comparison">
             <div class="scenario">
               <div class="label">Harvest today</div>
-              <div class="value">${formatCurrency(operatingComparison.todayOperatingProfit)}</div>
-              <div class="note">Revenue: ${formatCurrency(operatingComparison.todayRevenue)}</div>
+              <div class="value">${formatNullableCurrency(operatingComparison.todayOperatingProfit)}</div>
+              <div class="note">Revenue: ${formatNullableCurrency(operatingComparison.todayRevenue)}</div>
             </div>
             <div class="scenario">
               <div class="label">Best projected scenario</div>
-              <div class="value">${formatCurrency(operatingComparison.bestOperatingProfit)}</div>
-              <div class="note">Size ${operatingComparison.bestTargetSizeCountPerKg} in ${operatingComparison.bestDaysFromNow} days; revenue ${formatCurrency(operatingComparison.bestRevenue)}</div>
+              <div class="value">${formatNullableCurrency(operatingComparison.bestOperatingProfit)}</div>
+              <div class="note">Size ${operatingComparison.bestTargetSizeCountPerKg} in ${operatingComparison.bestDaysFromNow} days; revenue ${formatNullableCurrency(operatingComparison.bestRevenue)}</div>
             </div>
           </div>
         </div>
         <div class="section">
           <div class="section-title">Cost Basis</div>
           <table class="table">
-            <tr><td>Consumed feed to date</td><td>${formatCurrency(operatingComparison.costsToDate.feed)}</td></tr>
-            <tr><td>Consumed additives to date</td><td>${formatCurrency(operatingComparison.costsToDate.additives)}</td></tr>
-            <tr><td>Allocated general expenses to date</td><td>${formatCurrency(operatingComparison.costsToDate.generalExpenses)}</td></tr>
-            <tr><td>Projected future feed at best scenario</td><td>${formatCurrency(operatingComparison.futureCosts.feed)}</td></tr>
-            <tr><td>Projected future additives at best scenario</td><td>${formatCurrency(operatingComparison.futureCosts.additives)}</td></tr>
-            <tr><td>Projected future general expenses at best scenario</td><td>${formatCurrency(operatingComparison.futureCosts.generalExpenses)}</td></tr>
+            <tr><td>Consumed feed to date</td><td>${formatNullableCurrency(operatingComparison.costsToDate.feed)}</td></tr>
+            <tr><td>Consumed additives to date</td><td>${formatNullableCurrency(operatingComparison.costsToDate.additives)}</td></tr>
+            <tr><td>Allocated general expenses to date</td><td>${formatNullableCurrency(operatingComparison.costsToDate.generalExpenses)}</td></tr>
+            <tr><td>Projected future feed at best scenario</td><td>${formatNullableCurrency(operatingComparison.futureCosts.feed)}</td></tr>
+            <tr><td>Projected future additives at best scenario</td><td>${formatNullableCurrency(operatingComparison.futureCosts.additives)}</td></tr>
+            <tr><td>Projected future general expenses at best scenario</td><td>${formatNullableCurrency(operatingComparison.futureCosts.generalExpenses)}</td></tr>
           </table>
           ${operatingComparison.inventoryPurchasesExcluded ? '<div class="note">Unused feed and additive inventory is excluded. Only recorded consumption is treated as production cost.</div>' : ''}
         </div>
@@ -779,9 +783,9 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                 <div className={styles.outcomeGrid}>
                   <div className={styles.outcomeCard} style={{ padding: '18px', borderRadius: '16px', background: 'var(--bg-mid)' }}>
                     <div className={styles.outcomeLabel} style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.harvestTodayProfit || 'HARVEST-TODAY PROFIT'}</div>
-                    <div className={styles.outcomeValue} style={{ fontSize: '25px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '7px' }}>{formatCurrency(financialComparison.result.today.operatingProfit)}</div>
-                    <div className={styles.outcomeMeta} style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{t.harvestProjectionScreen?.revenue || 'Revenue'}: {formatCurrency(financialComparison.result.today.revenue)}</div>
-                    <div className={styles.outcomeMeta} style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}: {formatCurrency(totalScenarioCosts(financialComparison.result.today.totalCosts))}</div>
+                    <div className={styles.outcomeValue} style={{ fontSize: '25px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '7px' }}>{formatNullableCurrency(financialComparison.result.today.operatingProfit)}</div>
+                    <div className={styles.outcomeMeta} style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{t.harvestProjectionScreen?.revenue || 'Revenue'}: {formatNullableCurrency(financialComparison.result.today.revenue)}</div>
+                    <div className={styles.outcomeMeta} style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}: {formatNullableCurrency(totalScenarioCosts(financialComparison.result.today.totalCosts))}</div>
                   </div>
                   <div className={styles.outcomeCard} style={{ padding: '18px', borderRadius: '16px', background: '#ECFDF5' }}>
                     <div className={styles.outcomeLabel} style={{ fontSize: '11px', fontWeight: 600, color: '#047857' }}>
@@ -789,14 +793,14 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                         ? (t.harvestProjectionScreen?.bestOption || 'BEST OPTION')
                         : `${t.harvestProjectionScreen?.targetSize || 'TARGET SIZE'} ${financialComparison.result.bestScenario.targetSizeCountPerKg}`}
                     </div>
-                    <div className={styles.outcomeValue} style={{ fontSize: '25px', fontWeight: 600, color: '#059669', marginTop: '7px' }}>{formatCurrency(financialComparison.result.bestScenario.operatingProfit)}</div>
-                    <div className={styles.outcomeMeta} style={{ fontSize: '11px', color: '#047857', marginTop: '6px' }}>{financialComparison.result.bestScenario.daysFromNow} {t.harvestProjectionScreen?.days || 'days'} · {t.harvestProjectionScreen?.revenue || 'Revenue'} {formatCurrency(financialComparison.result.bestScenario.revenue)}</div>
-                    <div className={styles.outcomeMeta} style={{ fontSize: '11px', color: '#047857', marginTop: '2px' }}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}: {formatCurrency(totalScenarioCosts(financialComparison.result.bestScenario.totalCosts))}</div>
+                    <div className={styles.outcomeValue} style={{ fontSize: '25px', fontWeight: 600, color: '#059669', marginTop: '7px' }}>{formatNullableCurrency(financialComparison.result.bestScenario.operatingProfit)}</div>
+                    <div className={styles.outcomeMeta} style={{ fontSize: '11px', color: '#047857', marginTop: '6px' }}>{financialComparison.result.bestScenario.daysFromNow} {t.harvestProjectionScreen?.days || 'days'} · {t.harvestProjectionScreen?.revenue || 'Revenue'} {formatNullableCurrency(financialComparison.result.bestScenario.revenue)}</div>
+                    <div className={styles.outcomeMeta} style={{ fontSize: '11px', color: '#047857', marginTop: '2px' }}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}: {formatNullableCurrency(totalScenarioCosts(financialComparison.result.bestScenario.totalCosts))}</div>
                   </div>
-                  <div className={styles.outcomeCard} style={{ padding: '18px', borderRadius: '16px', background: financialComparison.result.bestScenario.incrementalProfitVsToday >= 0 ? '#EFF6FF' : '#FEF2F2' }}>
+                  <div className={styles.outcomeCard} style={{ padding: '18px', borderRadius: '16px', background: financialComparison.result.bestScenario.incrementalProfitVsToday === null ? 'var(--bg-mid)' : financialComparison.result.bestScenario.incrementalProfitVsToday >= 0 ? '#EFF6FF' : '#FEF2F2' }}>
                     <div className={styles.outcomeLabel} style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.profitDifference || 'PROFIT DIFFERENCE'}</div>
-                    <div className={styles.outcomeValue} style={{ fontSize: '25px', fontWeight: 600, color: financialComparison.result.bestScenario.incrementalProfitVsToday >= 0 ? '#2563EB' : '#DC2626', marginTop: '7px' }}>
-                      {formatCurrency(financialComparison.result.bestScenario.incrementalProfitVsToday)}
+                    <div className={styles.outcomeValue} style={{ fontSize: '25px', fontWeight: 600, color: financialComparison.result.bestScenario.incrementalProfitVsToday === null ? 'var(--text-muted)' : financialComparison.result.bestScenario.incrementalProfitVsToday >= 0 ? '#2563EB' : '#DC2626', marginTop: '7px' }}>
+                      {formatNullableCurrency(financialComparison.result.bestScenario.incrementalProfitVsToday)}
                     </div>
                     <div className={styles.outcomeMeta} style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{t.harvestProjectionScreen?.versusHarvestToday || 'versus harvesting today'}</div>
                   </div>
@@ -821,10 +825,10 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                           <tr key={`${scenario.kind}-${scenario.targetSizeCountPerKg}`} style={{ borderTop: '1px solid var(--border)', background: scenario === financialComparison.result.bestScenario ? '#ECFDF5' : '#FFF' }}>
                             <td style={{ padding: '11px', fontWeight: 600 }}>{scenario.kind === 'today' ? `${t.harvestProjectionScreen?.today || 'Today'} (${scenario.targetSizeCountPerKg})` : scenario.targetSizeCountPerKg}</td>
                             <td style={{ padding: '11px', textAlign: 'right' }}>{scenario.daysFromNow}</td>
-                            <td style={{ padding: '11px', textAlign: 'right' }}>{formatCurrency(scenario.revenue)}</td>
-                            <td style={{ padding: '11px', textAlign: 'right' }}>{formatCurrency(totalScenarioCosts(scenario.totalCosts))}</td>
-                            <td style={{ padding: '11px', textAlign: 'right', fontWeight: 600, color: scenario.operatingProfit >= 0 ? '#059669' : '#DC2626' }}>{formatCurrency(scenario.operatingProfit)}</td>
-                            <td style={{ padding: '11px', textAlign: 'right', color: scenario.incrementalProfitVsToday >= 0 ? '#2563EB' : '#DC2626' }}>{formatCurrency(scenario.incrementalProfitVsToday)}</td>
+                            <td style={{ padding: '11px', textAlign: 'right' }}>{formatNullableCurrency(scenario.revenue)}</td>
+                            <td style={{ padding: '11px', textAlign: 'right' }}>{formatNullableCurrency(totalScenarioCosts(scenario.totalCosts))}</td>
+                            <td style={{ padding: '11px', textAlign: 'right', fontWeight: 600, color: scenario.operatingProfit === null ? 'var(--text-muted)' : scenario.operatingProfit >= 0 ? '#059669' : '#DC2626' }}>{formatNullableCurrency(scenario.operatingProfit)}</td>
+                            <td style={{ padding: '11px', textAlign: 'right', color: scenario.incrementalProfitVsToday === null ? 'var(--text-muted)' : scenario.incrementalProfitVsToday >= 0 ? '#2563EB' : '#DC2626' }}>{formatNullableCurrency(scenario.incrementalProfitVsToday)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -840,8 +844,8 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
 
                 <div className={styles.costDetails} style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', fontSize: '12px', lineHeight: 1.8, color: 'var(--text-muted)' }}>
                   <strong style={{ color: 'var(--text-primary)' }}>{t.harvestProjectionScreen?.costsIncluded || 'Costs included to date'}</strong><br />
-                  {t.inventory?.feeds || 'Feed'}: {formatCurrency(financialComparison.costSnapshot.costsToDate.feed)} · {t.inventory?.additives || 'Additives'}: {formatCurrency(financialComparison.costSnapshot.costsToDate.additives)}<br />
-                  {t.harvestProjectionScreen?.generalExpenses || 'Allocated general expenses'}: {formatCurrency(financialComparison.costSnapshot.costsToDate.generalExpenses)}<br />
+                  {t.inventory?.feeds || 'Feed'}: {formatNullableCurrency(financialComparison.costSnapshot.costsToDate.feed)} · {t.inventory?.additives || 'Additives'}: {formatNullableCurrency(financialComparison.costSnapshot.costsToDate.additives)}<br />
+                  {t.harvestProjectionScreen?.generalExpenses || 'Allocated general expenses'}: {formatNullableCurrency(financialComparison.costSnapshot.costsToDate.generalExpenses)}<br />
                   {t.harvestProjectionScreen?.feedTrend || 'Daily feed trend'}: {financialComparison.result.feedDailyIncreaseRatePercent.toFixed(2)}% · {t.harvestProjectionScreen?.mortalityTrend || 'Daily mortality benchmark'}: {financialComparison.result.dailyMortalityRatePercent.toFixed(4)}%
                   {financialComparison.costSnapshot.excludedInventoryPurchaseIds.length > 0 && <div style={{ color: '#92400E' }}>• {t.harvestProjectionScreen?.inventorySafeguard || 'Unused inventory is excluded; only consumed feed and additives are counted.'}</div>}
                   {(financialComparison.costSnapshot.warnings.length > 0 || financialComparison.result.warnings.length > 0 || financialComparison.mortality.recordedDays === 0) && <div style={{ color: '#92400E' }}>• {t.harvestProjectionScreen?.dataQualityWarning || 'Some projection inputs are incomplete. Review the recorded data before deciding.'}</div>}

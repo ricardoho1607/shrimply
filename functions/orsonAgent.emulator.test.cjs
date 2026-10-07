@@ -91,6 +91,86 @@ beforeEach(async () => {
     usageHistory: [],
   });
 });
+test("period feed/cost decision tool reads Firestore evidence with finance and enterprise scope", async () => {
+  await db.doc(`companies/${companyId}/ponds/p1`).update({
+    samplings: [{
+      id: "feed-day",
+      date,
+      pondCycleId: "cycle-a",
+      feedData: { totalDailyFeed: 12 },
+    }],
+  });
+  await db.doc(`companies/${companyId}/feeds/feed-a`).update({
+    usageHistory: [{
+      id: "feed-use",
+      date,
+      pondId: "p1",
+      pondCycleId: "cycle-a",
+      quantity: 5,
+      totalCost: 10,
+      currency: "AUD",
+    }],
+  });
+  await db.doc(`companies/${companyId}/expenses/energy-row`).set({
+    date,
+    amount: 20,
+    category: "energy",
+    pondId: "p1",
+    pondCycleId: "cycle-a",
+    currency: "AUD",
+  });
+
+  const companySnap = await db.doc(`companies/${companyId}`).get();
+  const company = { id: companyId, ...companySnap.data() };
+  const ownerReader = createOrsonAppDataReader({
+    db,
+    company,
+    user: { companyId, role: "owner" },
+    uid,
+    companyId,
+  });
+  const ownerResult = await ownerReader.execute("summarize_period_feed_and_cost", {
+    startDate: date,
+    endDate: date,
+  });
+
+  assert.equal(ownerResult.scope.boundary, "company");
+  assert.equal(ownerResult.ponds.length, 2);
+  const ownerPond = ownerResult.ponds.find((row) => row.pondId === "p1");
+  assert.equal(ownerPond.feed.totalFeedKg, 12);
+  assert.equal(ownerPond.finance.consumedFeedCost, 10);
+  assert.equal(ownerPond.finance.recordedOperatingExpenseSubtotal, 20);
+  assert.equal(ownerPond.finance.operatingExpenseEntryCount, 1);
+  assert.equal(ownerResult.retrieval.recordsRead.ponds, 2);
+  assert.equal(ownerResult.retrieval.recordsRead.feedItems, 1);
+  assert.equal(ownerResult.retrieval.recordsRead.expenses, 1);
+  assert.equal(ownerResult.writesPerformed, 0);
+
+  const technicianReader = createOrsonAppDataReader({
+    db,
+    company,
+    user: { companyId, role: "technician" },
+    uid: "tech",
+    companyId,
+  });
+  const technicianResult = await technicianReader.execute("summarize_period_feed_and_cost", {
+    startDate: date,
+    endDate: date,
+  });
+  assert.equal(technicianResult.scope.boundary, "assigned_ponds");
+  assert.deepEqual(technicianResult.ponds.map((row) => row.pondId), ["p1"]);
+  assert.equal(Object.hasOwn(technicianResult, "finance"), false);
+  assert.equal(Object.hasOwn(technicianResult.ponds[0], "finance"), false);
+  await assert.rejects(
+    technicianReader.execute("summarize_period_feed_and_cost", {
+      pondId: "p2",
+      startDate: date,
+      endDate: date,
+    }),
+    /Not permitted/,
+  );
+  assert.equal((await get("ponds/p1")).samplings.length, 1, "the query performs no Firestore writes");
+});
 test("draft never writes operational data; confirmation saves numeric sampling without inventory deduction", async () => {
   const op = await prepare([command("record_sampling", { mbw: 12, feed: 25 })]);
   assert.equal(op.rows[0].valid, true);

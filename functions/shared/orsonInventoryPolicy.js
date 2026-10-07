@@ -50,12 +50,40 @@ const REPLENISHMENT_STOCK_STATUS = Object.freeze({
   UNKNOWN_STOCK: 'unknown_stock',
 });
 
+const validDateKey = (value) => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+
+const farmDateKey = (value, timeZone = 'UTC') => {
+  if (typeof value === 'string' && validDateKey(value)) return value;
+  if (value === null || value === undefined) return null;
+  let date = value;
+  if (value && typeof value.toDate === 'function') date = value.toDate();
+  else if (!(value instanceof Date)) date = new Date(value);
+  if (!(date instanceof Date) || !Number.isFinite(date.getTime())) return null;
+  try {
+    const parts = new Intl.DateTimeFormat('en', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+    const part = (type) => parts.find((item) => item.type === type)?.value;
+    const key = `${part('year')}-${part('month')}-${part('day')}`;
+    return validDateKey(key) ? key : null;
+  } catch (_) {
+    return null;
+  }
+};
+
 const classifyStockStatus = (item) => {
   if (!item || typeof item !== 'object') {
     return { status: REPLENISHMENT_STOCK_STATUS.UNKNOWN_STOCK, availableStock: null, reason: 'missing_item' };
   }
   const rawStock = item.totalStock ?? item.stock;
-  if (rawStock === null || rawStock === undefined || !Number.isFinite(Number(rawStock))) {
+  if (rawStock === null || rawStock === undefined || (typeof rawStock === 'string' && !rawStock.trim()) || !Number.isFinite(Number(rawStock))) {
     return { status: REPLENISHMENT_STOCK_STATUS.UNKNOWN_STOCK, availableStock: null, reason: 'unspecified_stock' };
   }
   const stock = Number(rawStock);
@@ -172,6 +200,7 @@ const evaluateReplenishmentScenario = ({
   todayKey: optTodayKey,
   asOfDate: optAsOfDate,
   currentDateKey: optCurrentDateKey,
+  timeZone = 'UTC',
 } = {}) => {
   const stockStatus = classifyStockStatus(item);
   const lookback = Math.min(60, Math.max(3, Number(lookbackDays) || 14));
@@ -209,20 +238,12 @@ const evaluateReplenishmentScenario = ({
             if (rowU !== itemUnit) continue;
           }
 
+          if (h.quantity === null || h.quantity === undefined || (typeof h.quantity === 'string' && !h.quantity.trim())) continue;
           const qty = Number(h.quantity);
           if (!Number.isFinite(qty) || qty < 0) continue;
 
-          // Date extraction - exclude undated rows
-          let dateKey = null;
-          if (typeof h.date === 'string') {
-            const match = h.date.match(/^(\d{4}-\d{2}-\d{2})/);
-            if (match) dateKey = match[1];
-          } else if (h.date) {
-            const d = new Date(h.date);
-            if (!Number.isNaN(d.getTime())) {
-              dateKey = d.toISOString().slice(0, 10);
-            }
-          }
+          // Missing, malformed, and future dates cannot contribute to a burn rate.
+          const dateKey = farmDateKey(h.date, timeZone);
           if (!dateKey) continue; // Undated rows strictly excluded
 
           parsedRows.push({ dateKey, quantity: qty });
@@ -233,13 +254,7 @@ const evaluateReplenishmentScenario = ({
         } else {
           // Determine effective today key
           const rawRefDate = optTodayKey || optAsOfDate || optCurrentDateKey;
-          if (rawRefDate && /^\d{4}-\d{2}-\d{2}$/.test(String(rawRefDate))) {
-            effectiveTodayKey = String(rawRefDate);
-          } else {
-            // Default to latest date present in history or farm today
-            const sortedHistoryDates = parsedRows.map((r) => r.dateKey).sort();
-            effectiveTodayKey = sortedHistoryDates[sortedHistoryDates.length - 1];
-          }
+          effectiveTodayKey = farmDateKey(rawRefDate, timeZone) || farmDateKey(new Date(), timeZone);
 
           const refMs = Date.parse(`${effectiveTodayKey}T00:00:00.000Z`);
           windowStartKey = new Date(refMs - (lookback - 1) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -276,8 +291,14 @@ const evaluateReplenishmentScenario = ({
     stockStatus.status === REPLENISHMENT_STOCK_STATUS.ZERO_STOCK ||
       stockStatus.isBelowReorderLevel ||
       runway.runwayStatus === 'critical' ||
-      shortfall.hasSufficientStock === false,
+      shortfall.hasSufficientStock === false ||
+      (stockStatus.availableStock !== null && item?.unit && burnRate !== null && burnRate > 0 &&
+        stockStatus.availableStock < burnRate * horizonDays),
   );
+  const plannedDemand = burnRate !== null && burnRate > 0 ? burnRate * horizonDays : null;
+  const plannedShortfall = stockStatus.availableStock !== null && item?.unit && plannedDemand !== null
+    ? Math.round(Math.max(0, plannedDemand - stockStatus.availableStock) * 10) / 10
+    : null;
 
   let urgency = 'none';
   if (
@@ -288,7 +309,8 @@ const evaluateReplenishmentScenario = ({
   } else if (
     stockStatus.status === REPLENISHMENT_STOCK_STATUS.LOW_STOCK ||
     runway.runwayStatus === 'critical' ||
-    shortfall.hasSufficientStock === false
+    shortfall.hasSufficientStock === false ||
+    (plannedShortfall !== null && plannedShortfall > 0)
   ) {
     urgency = 'high';
   } else if (runway.runwayStatus === 'warning') {
@@ -298,21 +320,21 @@ const evaluateReplenishmentScenario = ({
   }
 
   let recommendedReorderQuantity = null;
-  if (burnRate !== null && burnRate > 0) {
+  if (stockStatus.availableStock !== null && item?.unit && burnRate !== null && burnRate > 0) {
     const targetStock = burnRate * horizonDays;
-    const currentStock = stockStatus.availableStock || 0;
+    const currentStock = stockStatus.availableStock;
     recommendedReorderQuantity = Math.max(
       shortfall.shortfall || 0,
       Math.round(Math.max(0, targetStock - currentStock) * 10) / 10,
     );
   } else if (
-    stockStatus.reorderLevel &&
+    stockStatus.availableStock !== null && item?.unit && stockStatus.reorderLevel &&
     (stockStatus.availableStock || 0) <= stockStatus.reorderLevel
   ) {
     recommendedReorderQuantity = Math.round(
       Math.max(0, stockStatus.reorderLevel * 2 - (stockStatus.availableStock || 0)) * 10,
     ) / 10;
-  } else if (shortfall.shortfall > 0) {
+  } else if (stockStatus.availableStock !== null && item?.unit && shortfall.shortfall > 0) {
     recommendedReorderQuantity = shortfall.shortfall;
   }
 
@@ -331,6 +353,11 @@ const evaluateReplenishmentScenario = ({
     },
     runway,
     shortfall,
+    planningNeed: {
+      demand: plannedDemand === null ? null : Math.round(plannedDemand * 10) / 10,
+      shortfall: plannedShortfall,
+      unit: item?.unit ? String(item.unit).trim() : null,
+    },
     reorderAssessment: {
       isReorderNeeded,
       urgency,
