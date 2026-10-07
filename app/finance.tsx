@@ -25,6 +25,9 @@ import {
   getOpenFinanceCycles,
   isCompanyWideExpenseCategory,
 } from '../shared/financeCycleAllocation';
+import FinanceAllocationPanel, { FinanceAllocationBreakdown } from './components/FinanceAllocationPanel';
+import { buildProductionAllocation, getActiveExpensePonds, getPlExpensePonds, productionAllocationMethod, productionExpenseFields, normalizeProductionExpenseCategory, savedAllocationPonds, scopeExpenseRecords, type ExpensePond, type ExpenseAllocationLink } from '../shared/financeExpenseAllocation';
+import { getFinanceAllocationCopy, productionExpenseLabel } from '../shared/financeAllocationCopy';
 import { hasFarmPermission } from '../shared/permissions';
 
 const PAYMENT_TYPES = ['Cash', 'Bank Transfer', 'Mobile Payment'];
@@ -111,8 +114,10 @@ type FormData = {
 export default function FinancePage() {
   const router = useRouter();
   const { user, company } = useAuth();
-  const { t } = useLanguage();
-  const { formatCurrency: displayCurrency } = useCurrency();
+  const { t, currentLanguage } = useLanguage();
+  const allocationCopy = getFinanceAllocationCopy(currentLanguage);
+  const categoryLabel = (category: string) => normalizeProductionExpenseCategory(category) === 'Utilities' ? (t.finance?.utilities || 'Utilities') : productionExpenseLabel(category, allocationCopy);
+  const { formatCurrency: displayCurrency, currencyConfig } = useCurrency();
   const formatCurrency = (value: number) => Number.isFinite(value) ? displayCurrency(value) : 'N/A';
   const { cycles, ponds } = usePondStore();
   const activeCycles = useMemo(() => getOpenFinanceCycles(cycles), [cycles]);
@@ -122,7 +127,7 @@ export default function FinancePage() {
     t.financeCycle.general,
     t.inventory?.feeds || 'Feed',
     t.inventory?.additives || 'Pond Additives',
-    t.finance?.labor || 'Labor',
+    'Salary', 'Consumption', 'Diesel', 'Petrol', 'Seed / PL',
     t.finance?.repairs || 'Repairs',
     t.finance?.utilities || 'Utilities',
     t.finance?.miscellaneous || 'Miscellaneous', 'Equipment', 'Property', 'Infrastructure', 'Interest', 'Taxes', 'Loan Payment', 'Owner Withdrawal', 'Dividend'
@@ -179,6 +184,19 @@ export default function FinancePage() {
     ? ponds.filter((pond) => pond.cycleId === selectedFormCycle.id)
     : [];
   const isCompanyWideExpense = formType === 'expense' && isCompanyWideExpenseCategory(formData.category);
+
+  const [selectedPlIds, setSelectedPlIds] = useState<string[]>([]);
+  const [plQuantities, setPlQuantities] = useState<Record<string, string | number>>({});
+  const [fixedAllocationPonds, setFixedAllocationPonds] = useState<ExpensePond[] | null>(null);
+  const allocationMethod = formType === 'expense' ? productionAllocationMethod(formData.category) : null;
+  const financePonds = ponds.map(pond => ({ ...pond, cycleName: pond.cycleName || cycles.find(cycle => cycle.id === pond.cycleId)?.cycleName }));
+  const activeAreaPonds = fixedAllocationPonds || getActiveExpensePonds(financePonds, cycles, formData.date, company?.timeZone);
+  const selectablePlPonds = [...getPlExpensePonds(financePonds, cycles, formData.date, company?.timeZone)];
+  fixedAllocationPonds?.forEach(pond => { const index = selectablePlPonds.findIndex(row => row.id === pond.id); if (index < 0) selectablePlPonds.push(pond); else selectablePlPonds[index] = pond; });
+  const plTargets = selectedPlIds.map(id => selectablePlPonds.find(pond => pond.id === id)).filter((pond): pond is ExpensePond => Boolean(pond));
+  const allocationDecimals = editingExpense?.allocationDecimalPlaces ?? currencyConfig.decimalPlaces;
+  const allocationPreview = buildProductionAllocation(Number(formData.amount), allocationMethod || 'active_pond_area', allocationMethod === 'pl_quantity' ? plTargets : activeAreaPonds, plQuantities, allocationDecimals);
+  if (allocationMethod === 'pl_quantity' && plTargets.length !== selectedPlIds.length) allocationPreview.error = 'noPonds';
 
   const hasFinanceAccess = hasFarmPermission(user, 'viewFinance', company?.ownerId);
   const canManageFinance = hasFarmPermission(user, 'manageFinance', company?.ownerId);
@@ -239,7 +257,7 @@ export default function FinancePage() {
       return;
     }
 
-    const amount = Number(formData.amount);
+    const amount = Math.round(Number(formData.amount) * 10 ** allocationDecimals) / 10 ** allocationDecimals;
     if (!Number.isFinite(amount) || amount <= 0) {
       Alert.alert(t.finance?.validationError || 'Validation Error', t.finance?.validAmount || 'Please enter a valid amount');
       return;
@@ -250,8 +268,10 @@ export default function FinancePage() {
       return;
     }
 
-    const selectedCycle = isCompanyWideExpense ? undefined : cycles.find((cycle) => cycle.id === formData.cycleId);
-    if (!isCompanyWideExpense && !selectedCycle) {
+    if (editingExpense && amount < (editingExpense.settlements || []).reduce((sum, payment) => sum + payment.amount, 0)) { Alert.alert('Invalid amount', 'The invoice amount cannot be lower than confirmed payments.'); return; }
+    if (allocationMethod && allocationPreview.error) { Alert.alert(t.finance?.validationError || 'Validation Error', allocationCopy[allocationPreview.error]); return; }
+    const selectedCycle = isCompanyWideExpense || allocationMethod ? undefined : cycles.find((cycle) => cycle.id === formData.cycleId);
+    if (!isCompanyWideExpense && !allocationMethod && !selectedCycle) {
       Alert.alert(t.financeCycle.selectCycleTitle, t.financeCycle.selectCycleMessage);
       return;
     }
@@ -260,7 +280,7 @@ export default function FinancePage() {
     setSubmitting(true);
     try {
       const baseData = {
-        date: formData.date, category: formData.category, item: formData.item, amount,
+        date: formData.date, category: allocationMethod ? normalizeProductionExpenseCategory(formData.category) : formData.category, item: formData.item, amount,
         paymentType: formData.paymentType, reference: formData.reference, notes: formData.notes,
         cycleId: isCompanyWideExpense ? '' : selectedCycle?.id || '',
         cycleName: isCompanyWideExpense ? '' : selectedCycle?.cycleName || '',
@@ -273,6 +293,8 @@ export default function FinancePage() {
           linkedInventory: formData.linkedInventory,
           allocationMethod: isCompanyWideExpense ? null : 'equal_per_pond',
           pondAllocations: isCompanyWideExpense ? [] : pondAllocations,
+          allocationBasisTotal: null, allocationRate: null, allocationCurrencyCode: null, allocationDecimalPlaces: null,
+          ...(allocationMethod ? productionExpenseFields(allocationPreview, allocationMethod, editingExpense?.allocationCurrencyCode || currencyConfig.code, allocationDecimals) : {}),
         };
         if (editingExpense) {
           await financeService.updateExpense(company.id, editingExpense.id, expenseData);
@@ -318,11 +340,15 @@ export default function FinancePage() {
     if (!save.reset()) return;
     const isExpense = type === 'expense';
     setFormData({
-      date: item.date, category: item.category, item: item.item, amount: item.amount.toString(),
+      date: item.date, category: normalizeProductionExpenseCategory(item.category) === 'Utilities' ? (t.finance?.utilities || 'Utilities') : ['Labor', 'Tenaga Kerja', '人工', 'แรงงาน', 'Lao động'].includes(item.category) ? 'Salary' : normalizeProductionExpenseCategory(item.category), item: item.item, amount: item.amount.toString(),
       paymentType: item.paymentType, reference: item.reference,
       linkedInventory: isExpense ? (item as Expense).linkedInventory || '' : '', notes: item.notes,
       cycleId: item.cycleId || '',
     });
+    const allocation = isExpense ? (item as Expense) : null;
+    setFixedAllocationPonds(allocation ? savedAllocationPonds(allocation) : null);
+    setSelectedPlIds(allocation?.allocationMethod === 'pl_quantity' ? allocation.pondAllocations?.map(row => row.pondId) || [] : []);
+    setPlQuantities(Object.fromEntries((allocation?.pondAllocations || []).filter(row => row.plQuantity !== undefined).map(row => [row.pondId, row.plQuantity!])));
     if (isExpense) setEditingExpense(item as Expense);
     else setEditingRevenue(item as Revenue);
     setFormType(type);
@@ -372,16 +398,17 @@ export default function FinancePage() {
       item: '', amount: '', paymentType: TRANSLATED_PAYMENT_TYPES[0], reference: '', linkedInventory: '', notes: '',
       cycleId: cycleScope === 'all' ? (activeCycles[0]?.id || '') : cycleScope,
     });
+    setSelectedPlIds([]); setPlQuantities({}); setFixedAllocationPonds(null);
     setEditingExpense(null);
     setEditingRevenue(null);
   };
 
-  const getCycleScopedData = <T extends { cycleId?: string }>(data: T[]) => {
+  const getCycleScopedData = <T extends { cycleId?: string; amount: number; pondAllocations?: ExpenseAllocationLink[] }>(data: T[]) => {
     if (cycleScope === 'all') return data;
-    return data.filter((item) => item.cycleId === cycleScope);
+    return scopeExpenseRecords(data, cycleScope, ponds);
   };
 
-  const getFilteredData = <T extends { date: string; category?: string; cycleId?: string }>(data: T[], useCategory = true) => {
+  const getFilteredData = <T extends { date: string; category?: string; cycleId?: string; amount: number; pondAllocations?: ExpenseAllocationLink[] }>(data: T[], useCategory = true) => {
     const period = selectedPeriod === 'Today'
       ? 'today'
       : selectedPeriod === 'This Week'
@@ -397,7 +424,7 @@ export default function FinancePage() {
     });
 
     if (useCategory && filterCategory !== (t.finance?.all || 'All')) {
-      filtered = filtered.filter(item => item.category === filterCategory);
+      filtered = filtered.filter(item => normalizeProductionExpenseCategory(item.category || '') === normalizeProductionExpenseCategory(filterCategory));
     }
     return filtered;
   };
@@ -419,8 +446,8 @@ export default function FinancePage() {
   const profit = revenueTotals.total - expenseTotals.total;
 
   const profitLossData = useMemo(() => {
-    const scopedExpenses = getCycleScopedData(expenses);
-    const scopedRevenues = getCycleScopedData(revenues);
+    const scopedExpenses = scopeExpenseRecords(expenses, cycleScope, ponds);
+    const scopedRevenues = cycleScope === 'all' ? revenues : revenues.filter(row => row.cycleId === cycleScope);
     if (scopedExpenses.length === 0 && scopedRevenues.length === 0) return null;
 
     const allDates = [...scopedExpenses.map(e => e.date), ...scopedRevenues.map(r => r.date)];
@@ -442,7 +469,7 @@ export default function FinancePage() {
       currentDate.setMonth(currentDate.getMonth() + 1);
     }
     return months;
-  }, [expenses, revenues, cycleScope]);
+  }, [expenses, revenues, cycleScope, ponds]);
 
   const createPieChartData = (byCategory: Record<string, number>) =>
     Object.entries(byCategory).map(([name, population]) => ({
@@ -466,14 +493,15 @@ export default function FinancePage() {
   };
 
   const renderLedgerItem = (item: Expense | Revenue, type: 'expense' | 'revenue') => {
-    const isSynced = isSourceLinkedFinance(item);
+    const original = type === 'expense' ? expenses.find(row => row.id === item.id) || item : item;
+    const isSynced = isSourceLinkedFinance(original);
     
     return (
       <View key={item.id} style={styles.ledgerItem}>
         <View style={styles.ledgerHeader}>
           <View style={styles.ledgerLeft}>
             <View style={[styles.categoryPill, type === 'revenue' ? styles.revenuePill : styles.expensePill]}>
-              <Text style={styles.categoryPillText}>{item.category}</Text>
+              <Text style={styles.categoryPillText}>{categoryLabel(item.category)}</Text>
             </View>
             <Text style={styles.ledgerItemName} numberOfLines={2}>{conciseFinanceDescription(item.item)}</Text>
           </View>
@@ -489,19 +517,21 @@ export default function FinancePage() {
             <Ionicons name="card-outline" size={12} color="#95A5A6" /> {item.paymentType}
           </Text>
           <Text style={styles.ledgerMetaText}>
-            <Ionicons name="repeat-outline" size={12} color="#95A5A6" /> {item.cycleName || t.financeCycle.general}
+            <Ionicons name="repeat-outline" size={12} color="#95A5A6" /> {item.cycleName || ((item as Expense).pondAllocations?.length ? allocationCopy.production : t.financeCycle.general)}
           </Text>
         </View>
+        {'billAmount' in item && <Text style={styles.ledgerMetaText}>{allocationCopy.billTotal}: {formatCurrency(Number(item.billAmount))}</Text>}
+        {type === 'expense' && <FinanceAllocationBreakdown rows={(item as Expense).pondAllocations || []} copy={allocationCopy} formatCurrency={formatCurrency} />}
         {item.reference && !isSynced && <Text style={styles.ledgerReference}>Ref: {item.reference}</Text>}
         <View style={styles.ledgerFooter}>
           <Text style={styles.ledgerAddedBy}>{item.addedByName}</Text>
           {canManageFinance && <View style={styles.ledgerActions}>
-            <TouchableOpacity onPress={() => { setPaymentTarget({ item, type }); setPaymentAmount(''); setPaymentDate(getFarmDateKey(new Date(), company?.timeZone)); }}><Text style={{ color: '#0F4C75' }}>Record payment</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => handleEdit(type, item)} 
+            <TouchableOpacity onPress={() => { setPaymentTarget({ item: original, type }); setPaymentAmount(''); setPaymentDate(getFarmDateKey(new Date(), company?.timeZone)); }}><Text style={{ color: '#0F4C75' }}>Record payment</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => handleEdit(type, original)}
               style={[styles.iconButton, isSynced && styles.iconButtonDisabled]} disabled={isSynced}>
               <Ionicons name="create-outline" size={18} color={isSynced ? "#BDC3C7" : "#3498DB"} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleDelete(type, item)} 
+            <TouchableOpacity onPress={() => handleDelete(type, original)}
               style={[styles.iconButton, isSynced && styles.iconButtonDisabled]} disabled={isSynced}>
               <Ionicons name="trash-outline" size={18} color={isSynced ? "#BDC3C7" : "#E74C3C"} />
             </TouchableOpacity>
@@ -729,7 +759,7 @@ export default function FinancePage() {
                     {Object.entries(expenseTotals.byCategory).map(([category, amount]) => (
                       <View key={category} style={styles.legendItem}>
                         <View style={[styles.legendDot, { backgroundColor: COLORS[category] }]} />
-                        <Text style={styles.legendLabel}>{category}</Text>
+                        <Text style={styles.legendLabel}>{categoryLabel(category)}</Text>
                         <Text style={styles.legendValue}>{((amount / expenseTotals.total) * 100).toFixed(0)}%</Text>
                       </View>
                     ))}
@@ -764,9 +794,9 @@ export default function FinancePage() {
             {Object.keys(expenseTotals.byCategory).length > 0 && (
               <View style={styles.sectionCard}>
                 <Text style={styles.sectionTitle}>{t.finance?.expenseBreakdown || 'Expense Breakdown'}</Text>
-                {CATEGORIES.filter(cat => expenseTotals.byCategory[cat] > 0).map(category => (
+                {Object.keys(expenseTotals.byCategory).filter(category => expenseTotals.byCategory[category] > 0).map(category => (
                   <View key={category} style={styles.breakdownRow}>
-                    <Text style={styles.breakdownCategory}>{category}</Text>
+                    <Text style={styles.breakdownCategory}>{categoryLabel(category)}</Text>
                     <View style={styles.breakdownRight}>
                       <View style={styles.breakdownBar}>
                         <View style={[styles.breakdownFill, { 
@@ -792,7 +822,7 @@ export default function FinancePage() {
                   <TouchableOpacity key={cat}
                     style={[styles.filterPill, filterCategory === cat && styles.filterPillActive]}
                     onPress={() => setFilterCategory(cat)}>
-                    <Text style={[styles.filterPillText, filterCategory === cat && styles.filterPillTextActive]}>{cat}</Text>
+                    <Text style={[styles.filterPillText, filterCategory === cat && styles.filterPillTextActive]}>{categoryLabel(cat)}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -867,15 +897,47 @@ export default function FinancePage() {
                   label={`Date ${t.finance?.required || '*'}`}
                   value={formData.date}
                   maximumDate={new Date()}
-                  onChange={(date) => setFormData((current) => ({
-                    ...current,
-                    date: getFarmDateKey(date, company?.timeZone),
-                  }))}
+                  onChange={(date) => { const dateKey = getFarmDateKey(date, company?.timeZone); if (dateKey !== formData.date) setFixedAllocationPonds(null); setFormData(current => ({ ...current, date: dateKey })); }}
                   cancelLabel={t.actions.cancel}
                   confirmLabel={t.actions.confirm}
                 />
               </View>
 
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>{t.financeCycle.category} {t.finance?.required || '*'}</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+                  {(formType === 'expense' ? CATEGORIES : REVENUE_CATEGORIES).map(cat => (
+                    <TouchableOpacity key={cat}
+                      style={[styles.categoryOption, formData.category === cat && styles.categoryOptionActive]}
+                      onPress={() => { if (cat !== formData.category) setFixedAllocationPonds(null); setFormData(prev => ({ ...prev, category: cat })); }}>
+                      <Text style={[styles.categoryOptionText, formData.category === cat && styles.categoryOptionTextActive]}>{categoryLabel(cat)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>{t.finance?.itemDescription || 'Item/Description'} {t.finance?.required || '*'}</Text>
+                <TextInput style={styles.formInput} value={formData.item}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, item: text }))}
+                  placeholder={t.finance?.enterDescription || 'Enter description'} placeholderTextColor="#6b8aa0" />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>{t.finance?.amountRp || 'Amount (Rp)'} {t.finance?.required || '*'}</Text>
+                <TextInput style={styles.formInput} value={formData.amount}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, amount: text }))}
+                  placeholder="0" placeholderTextColor="#6b8aa0" keyboardType="numeric" />
+              </View>
+
+              {allocationMethod ? <View style={styles.formGroup}>
+                <FinanceAllocationPanel method={allocationMethod} ponds={allocationMethod === 'pl_quantity' ? selectablePlPonds : activeAreaPonds}
+                  preview={allocationPreview} selectedIds={selectedPlIds} quantities={plQuantities} onSelection={setSelectedPlIds}
+                  onQuantity={(id, value) => setPlQuantities(current => ({ ...current, [id]: value }))}
+                  copy={allocationCopy} formatCurrency={formatCurrency} currencySymbol={currencyConfig.symbol}
+                  usingSaved={Boolean(fixedAllocationPonds)} onRecalculate={allocationMethod === 'active_pond_area' ? () => setFixedAllocationPonds(null) : undefined} />
+              </View> : <>
               <View style={styles.formGroup}>
                 <CycleSelector
                   label={isCompanyWideExpense ? t.financeCycle.general : t.financeCycle.allocateToCycle}
@@ -896,33 +958,7 @@ export default function FinancePage() {
                   </Text>
                 ) : null}
               </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>{t.financeCycle.category} {t.finance?.required || '*'}</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-                  {(formType === 'expense' ? CATEGORIES : REVENUE_CATEGORIES).map(cat => (
-                    <TouchableOpacity key={cat}
-                      style={[styles.categoryOption, formData.category === cat && styles.categoryOptionActive]}
-                      onPress={() => setFormData(prev => ({ ...prev, category: cat }))}>
-                      <Text style={[styles.categoryOptionText, formData.category === cat && styles.categoryOptionTextActive]}>{cat}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>{t.finance?.itemDescription || 'Item/Description'} {t.finance?.required || '*'}</Text>
-                <TextInput style={styles.formInput} value={formData.item}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, item: text }))}
-                  placeholder={t.finance?.enterDescription || 'Enter description'} placeholderTextColor="#6b8aa0" />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>{t.finance?.amountRp || 'Amount (Rp)'} {t.finance?.required || '*'}</Text>
-                <TextInput style={styles.formInput} value={formData.amount}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, amount: text }))}
-                  placeholder="0" placeholderTextColor="#6b8aa0" keyboardType="numeric" />
-              </View>
+              </>}
 
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>{t.finance?.paymentType || 'Payment Type'} {t.finance?.required || '*'}</Text>

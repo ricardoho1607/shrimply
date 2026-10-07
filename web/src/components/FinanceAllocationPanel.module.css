@@ -1,0 +1,30 @@
+.panel { padding: 16px; border: 1px solid #d9e6ee; border-radius: 12px; background: #f6f9fb; color: #17394f; }
+.panel p { margin: 8px 0; font-size: 14px; line-height: 1.5; }
+.selector, .done { background: #0f4c75; color: white; border: 0; border-radius: 8px; padding: 12px 16px; font: inherit; cursor: pointer; }
+.selector { width: 100%; text-align: left; }
+.link { background: none; border: 0; color: #0f4c75; font: inherit; text-decoration: underline; cursor: pointer; padding: 8px; }
+.metrics { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; font-size: 14px; }
+.breakdown { margin-top: 12px; color: #17394f; font-size: 14px; }
+.breakdown summary { cursor: pointer; padding: 8px 0; font-weight: 600; }
+.rows { max-height: 280px; overflow: auto; }
+.row { display: flex; justify-content: space-between; align-items: start; gap: 12px; padding: 10px 0; border-bottom: 1px solid #d9e6ee; }
+.row > strong { flex-shrink: 0; }
+.row small, .option small { display: block; margin-top: 4px; color: #526b7c; line-height: 1.4; }
+.error { color: #a13429; }
+.dialog { border: 1px solid #d9e6ee; border-radius: 16px; padding: 20px; width: min(560px, calc(100vw - 32px)); max-height: 85dvh; color: #17394f; background: #fff; box-shadow: 0 20px 60px #0f263b40; }
+.dialog::backdrop { background: #0f263b80; }
+.dialog header, .dialog footer, .group { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.dialog header h3 { margin: 0; font-size: 20px; }
+.dialog header button { background: none; border: 0; font-size: 28px; padding: 8px; cursor: pointer; }
+.search { width: 100%; margin: 16px 0; }
+.search, .quantity input { border: 1px solid #c7d9e6; border-radius: 8px; padding: 10px; color: #17394f; font: inherit; background: #fff; }
+.options { max-height: 50dvh; overflow: auto; }
+.group { padding: 10px 0; border-bottom: 1px solid #d9e6ee; }
+.option { padding: 12px 0; border-bottom: 1px solid #eef3f6; }
+.option > label:first-child { display: flex; gap: 12px; align-items: center; cursor: pointer; }
+.option input[type='checkbox'] { width: 20px; height: 20px; accent-color: #0f4c75; }
+.quantity { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin: 10px 0 0 32px; font-size: 14px; }
+.quantity input { width: 150px; min-width: 0; }
+.dialog footer { padding-top: 16px; font-size: 14px; }
+.panel button:focus-visible, .dialog button:focus-visible, .dialog input:focus-visible, .breakdown summary:focus-visible { outline: 2px solid #3282b8; outline-offset: 3px; }
+@media (max-width: 480px) { .dialog { margin: auto auto 0; border-radius: 16px 16px 0 0; width: 100%; } .quantity { margin-left: 0; } }

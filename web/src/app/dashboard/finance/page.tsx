@@ -45,9 +45,12 @@ import {
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { getOperatingMarginDisplay } from '../../../../../shared/financeMetrics';
 import styles from './finance.module.css';
+import FinanceAllocationPanel, { FinanceAllocationBreakdown } from '@/components/FinanceAllocationPanel';
+import { buildProductionAllocation, getActiveExpensePonds, getPlExpensePonds, productionAllocationMethod, productionExpenseFields, normalizeProductionExpenseCategory, savedAllocationPonds, scopeExpenseRecords, type ExpensePond, type ExpenseAllocationFields } from '../../../../../shared/financeExpenseAllocation';
+import { getFinanceAllocationCopy, productionExpenseLabel } from '../../../../../shared/financeAllocationCopy';
 
 /* --- Types --------------------------------------------------- */
-interface Transaction {
+interface Transaction extends ExpenseAllocationFields {
   id: string;
   date: string;
   category: string;
@@ -65,7 +68,7 @@ interface Transaction {
 }
 
 interface FinanceCycle { id: string; cycleName: string; status?: string; blockName?: string; blockNames?: string[] }
-interface FinancePond { id: string; pondName: string; cycleId?: string; pondCycleId?: string }
+type FinancePond = ExpensePond;
 
 const conciseFinanceDescription = (value: string) => value
   .replace(/\s*\(Batch:[^)]+\)/gi, '')
@@ -74,7 +77,9 @@ const conciseFinanceDescription = (value: string) => value
 
 export default function FinancePage() {
   const copy = useDashboardCopy();
-  const { t } = useLanguage();
+  const { t, currentLanguage } = useLanguage();
+  const allocationCopy = getFinanceAllocationCopy(currentLanguage);
+  const categoryLabel = (category: string) => normalizeProductionExpenseCategory(category) === 'Utilities' ? t.finance.utilities : productionExpenseLabel(category, allocationCopy);
   const generalCategoryLabel = t.financeCycle.general;
   const { formatCurrency: displayCurrency, currencyConfig } = useCurrency();
   const formatCurrency = (value: number) => Number.isFinite(value) ? displayCurrency(value) : 'N/A';
@@ -84,15 +89,15 @@ export default function FinancePage() {
   const canManageFinance = hasPermission('manageFinance');
   const today = useFarmDateKey(company?.timeZone);
 
-  const EXPENSE_CATEGORIES = [t.financeCycle.general, t.finance.labor, t.finance.repairs, t.finance.utilities, t.finance.miscellaneous, t.financeCycle.feed, t.financeCycle.chemicals, t.financeCycle.probiotics, 'Equipment', 'Property', 'Infrastructure', 'Interest', 'Taxes', 'Loan Payment', 'Owner Withdrawal', 'Dividend'];
+  const EXPENSE_CATEGORIES = [t.financeCycle.general, 'Salary', 'Consumption', 'Diesel', 'Petrol', 'Seed / PL', t.finance.repairs, t.finance.utilities, t.finance.miscellaneous, t.financeCycle.feed, t.financeCycle.chemicals, t.financeCycle.probiotics, 'Equipment', 'Property', 'Infrastructure', 'Interest', 'Taxes', 'Loan Payment', 'Owner Withdrawal', 'Dividend'];
   const INCOME_CATEGORIES = [t.finance.shrimpSales, t.finance.consultation, t.finance.equipmentRental, t.finance.otherIncome, 'Loan Received', 'Capital Contribution', 'Asset Sale'];
   const PAYMENT_TYPES = [t.finance.cash, t.finance.bankTransfer, t.finance.mobilePayment];
 
   const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'income'>('overview');
   const { save, busy: savePending } = useSaveOperation();
   const { expenses, revenues: income, loading } = useFinanceRecords<Transaction, Transaction>();
-  const { data: cycles, loading: cyclesLoading } = useCompanyCycles<FinanceCycle>();
-  const { data: ponds, loading: pondsLoading } = useCompanyPonds<FinancePond>();
+  const { data: cycles, loading: cyclesLoading, error: cyclesError } = useCompanyCycles<FinanceCycle>();
+  const { data: ponds, loading: pondsLoading, error: pondsError } = useCompanyPonds<FinancePond>();
   const activeCycles = useMemo(() => getOpenFinanceCycles(cycles), [cycles]);
   const [cycleScope, setCycleScope] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -114,6 +119,21 @@ export default function FinancePage() {
     notes: '',
     cycleId: activeCycles[0]?.id || '',
   });
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [selectedPlIds, setSelectedPlIds] = useState<string[]>([]);
+  const [plQuantities, setPlQuantities] = useState<Record<string, string | number>>({});
+  const [fixedAllocationPonds, setFixedAllocationPonds] = useState<ExpensePond[] | null>(null);
+  const allocationMethod = formType === 'expense' ? productionAllocationMethod(formData.category) : null;
+  const financePonds = ponds.map(pond => ({ ...pond, cycleName: pond.cycleName || cycles.find(cycle => cycle.id === pond.cycleId)?.cycleName }));
+  const activeAreaPonds = fixedAllocationPonds || getActiveExpensePonds(financePonds, cycles, formData.date, company?.timeZone);
+  const selectablePlPonds = [...getPlExpensePonds(financePonds, cycles, formData.date, company?.timeZone)];
+  fixedAllocationPonds?.forEach(pond => { const index = selectablePlPonds.findIndex(row => row.id === pond.id); if (index < 0) selectablePlPonds.push(pond); else selectablePlPonds[index] = pond; });
+  const plTargets = selectedPlIds.map(id => selectablePlPonds.find(pond => pond.id === id)).filter((pond): pond is ExpensePond => Boolean(pond));
+  const allocationDecimals = editingTransaction?.allocationDecimalPlaces ?? currencyConfig.decimalPlaces;
+  const allocationPreview = buildProductionAllocation(Number(formData.amount), allocationMethod || 'active_pond_area', allocationMethod === 'pl_quantity' ? plTargets : activeAreaPonds, plQuantities, allocationDecimals);
+  if (allocationMethod === 'pl_quantity' && plTargets.length !== selectedPlIds.length) allocationPreview.error = 'noPonds';
+  const editedCycle = cycles.find(cycle => cycle.id === editingTransaction?.cycleId);
+  const formCycles = editedCycle && !activeCycles.some(cycle => cycle.id === editedCycle.id) ? [...activeCycles, editedCycle] : activeCycles;
   const isCompanyWideExpense = formType === 'expense' && isCompanyWideExpenseCategory(formData.category);
 
   useEffect(() => {
@@ -137,6 +157,7 @@ export default function FinancePage() {
   const openTransactionForm = (type: 'expense' | 'income') => {
     if (!save.reset()) return;
     setInputMenuOpen(false);
+    setEditingTransaction(null); setSelectedPlIds([]); setPlQuantities({}); setFixedAllocationPonds(null);
     setFormType(type);
     setFormData((previous) => ({
       ...previous,
@@ -149,7 +170,7 @@ export default function FinancePage() {
 
   const scopedExpenses = useMemo(() => cycleScope === 'all'
     ? expenses
-    : expenses.filter((expense) => expense.cycleId === cycleScope), [cycleScope, expenses]);
+    : scopeExpenseRecords(expenses, cycleScope, ponds), [cycleScope, expenses, ponds]);
   const scopedIncome = useMemo(() => cycleScope === 'all'
     ? income
     : income.filter((record) => record.cycleId === cycleScope), [cycleScope, income]);
@@ -205,7 +226,7 @@ export default function FinancePage() {
     .slice(0, 5), [scopedExpenses, scopedIncome]);
 
   const filteredTransactions = useMemo(() => {
-    const target = activeTab === 'expenses' ? scopedExpenses : scopedIncome;
+    const target = (activeTab === 'expenses' ? scopedExpenses : scopedIncome).map(record => ({ ...record, type: activeTab === 'expenses' ? 'expense' as const : 'income' as const }));
     const normalizedSearch = debouncedSearchQuery.trim().toLowerCase();
     if (!normalizedSearch) return target;
     return target.filter(t => 
@@ -223,37 +244,56 @@ export default function FinancePage() {
     setIsSubmitting(true);
 
     const collectionName = formType === 'expense' ? 'expenses' : 'revenues';
-    const selectedCycle = isCompanyWideExpense ? undefined : activeCycles.find((cycle) => cycle.id === formData.cycleId);
-    const amount = Number(formData.amount);
-    if (!isCompanyWideExpense && !selectedCycle) {
+    if (allocationMethod && (cyclesLoading || pondsLoading || cyclesError || pondsError)) { alert(copy('Pond data could not be loaded. Try again before saving.')); setIsSubmitting(false); return; }
+    if (allocationMethod && allocationPreview.error) { alert(allocationCopy[allocationPreview.error]); setIsSubmitting(false); return; }
+    const selectedCycle = isCompanyWideExpense || allocationMethod ? undefined : formCycles.find((cycle) => cycle.id === formData.cycleId);
+    const amount = Math.round(Number(formData.amount) * 10 ** allocationDecimals) / 10 ** allocationDecimals;
+    if (!isCompanyWideExpense && !allocationMethod && !selectedCycle) {
       alert(t.financeCycle.selectCycleMessage);
       setIsSubmitting(false);
       return;
     }
 
-    if (!save.acquire()) return;
+    if (!save.acquire()) { setIsSubmitting(false); return; }
     try {
-      await createRecordOnce(db, doc(db, 'companies', company.id, collectionName, save.id(`finance:${company.id}:${collectionName}`)), {
+      const payload = {
         ...formData,
         amount,
+        category: allocationMethod ? normalizeProductionExpenseCategory(formData.category) : formData.category,
         cycleId: isCompanyWideExpense ? '' : selectedCycle?.id || '',
         cycleName: isCompanyWideExpense ? '' : selectedCycle?.cycleName || '',
         ...(formType === 'expense' ? {
           allocationMethod: isCompanyWideExpense ? null : 'equal_per_pond',
           pondAllocations: isCompanyWideExpense ? [] : allocateExpenseAcrossCyclePonds(amount, selectedCycle?.id, ponds),
+          allocationBasisTotal: null, allocationRate: null, allocationCurrencyCode: null, allocationDecimalPlaces: null,
+          ...(allocationMethod ? productionExpenseFields(allocationPreview, allocationMethod, editingTransaction?.allocationCurrencyCode || currencyConfig.code, allocationDecimals) : {}),
         } : {}),
         addedBy: user.uid,
         addedByName: user.name || 'Unknown',
         timestamp: new Date(formData.date).getTime(),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      });
+      };
+      if (editingTransaction) {
+        const ref = doc(db, 'companies', company.id, collectionName, editingTransaction.id);
+        await runTransaction(db, async tx => {
+          const snapshot = await tx.get(ref);
+          if (!snapshot.exists() || isSourceLinkedFinance(snapshot.data() as Transaction)) throw new Error('Correct linked entries from their source record.');
+          const paid = (snapshot.data().settlements || []).reduce((sum: number, payment: { amount: number }) => sum + payment.amount, 0);
+          if (amount < paid) throw new Error('The invoice amount cannot be lower than confirmed payments.');
+          const { addedBy, addedByName, timestamp, createdAt, ...updated } = payload;
+          void addedBy; void addedByName; void timestamp; void createdAt;
+          tx.update(ref, removeUndefinedFields(updated));
+        });
+      } else {
+        await createRecordOnce(db, doc(db, 'companies', company.id, collectionName, save.id(`finance:${company.id}:${collectionName}`)), removeUndefinedFields(payload));
+      }
       setIsModalOpen(false);
       save.complete();
       resetForm();
     } catch (err) {
       console.error(err);
-      alert(t.financeCycle.saveFailed);
+      alert(err instanceof Error ? err.message : t.financeCycle.saveFailed);
     } finally {
       save.release();
       setIsSubmitting(false);
@@ -261,6 +301,7 @@ export default function FinancePage() {
   };
 
   const resetForm = () => {
+    setEditingTransaction(null); setSelectedPlIds([]); setPlQuantities({}); setFixedAllocationPonds(null);
     setFormData({
       date: today,
       category: formType === 'expense' ? EXPENSE_CATEGORIES[0] : INCOME_CATEGORIES[0],
@@ -269,9 +310,23 @@ export default function FinancePage() {
     });
   };
 
+  const openEditTransaction = (record: Transaction) => {
+    if (!canManageFinance || isSourceLinkedFinance(record) || !save.reset()) return;
+    const type = record.type === 'income' ? 'income' : 'expense';
+    const original = (type === 'expense' ? expenses : income).find(row => row.id === record.id) || record;
+    setEditingTransaction(original); setFormType(type);
+    const category = normalizeProductionExpenseCategory(original.category);
+    setFormData({ date: original.date, category: category === 'Utilities' ? t.finance.utilities : ['Labor', 'Tenaga Kerja', '人工', 'แรงงาน', 'Lao động'].includes(category) ? 'Salary' : category, item: original.item, amount: String(original.amount), paymentType: original.paymentType, reference: original.reference || '', notes: original.notes || '', cycleId: original.cycleId || '' });
+    setFixedAllocationPonds(savedAllocationPonds(original));
+    setSelectedPlIds(original.allocationMethod === 'pl_quantity' ? original.pondAllocations?.map(row => row.pondId) || [] : []);
+    setPlQuantities(Object.fromEntries((original.pondAllocations || []).filter(row => row.plQuantity !== undefined).map(row => [row.pondId, row.plQuantity!])));
+    setIsModalOpen(true);
+  };
+
   const recordPayment = async (record: Transaction, type: 'expense' | 'income') => {
     if (save.busy) return;
     if (!company?.id || !canManageFinance) return;
+    record = (type === 'expense' ? expenses : income).find(row => row.id === record.id) || record;
     const outstanding = (monetaryValue(record.amount) ?? 0) - (record.settlements || []).reduce((sum, payment) => sum + payment.amount, 0);
     const raw = window.prompt(`Amount ${type === 'income' ? 'received' : 'paid'} (${currencyConfig.symbol}), outstanding ${outstanding}`, String(outstanding));
     if (raw === null) return;
@@ -496,7 +551,7 @@ export default function FinancePage() {
               {recentTransactions.map((transaction) => (
                 <div className={styles.recentRow} key={`${transaction.type}-${transaction.id}`}>
                   <time>{new Date(transaction.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</time>
-                  <span>{transaction.category}</span>
+                  <span>{categoryLabel(transaction.category)}</span>
                   <strong title={transaction.item}>{conciseFinanceDescription(transaction.item)}</strong>
                   <em className={transaction.type === 'income' ? styles.incomeValue : styles.expenseValue}>{transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}</em>
                 </div>
@@ -544,24 +599,27 @@ export default function FinancePage() {
                     </td>
                     <td style={{ padding: '20px 32px' }}>
                       <span style={{ padding: '6px 12px', borderRadius: '8px', background: t.type === 'income' ? 'rgba(39, 174, 96, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: t.type === 'income' ? '#27AE60' : '#ef4444', fontSize: '12px', fontWeight: 600 }}>
-                        {t.category}
+                        {categoryLabel(t.category)}
                       </span>
                     </td>
                     <td style={{ padding: '20px 32px' }}>
                       <div title={t.item} style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{conciseFinanceDescription(t.item)}</div>
+                      <FinanceAllocationBreakdown rows={t.pondAllocations || []} copy={allocationCopy} formatCurrency={formatCurrency} />
                     </td>
                     <td style={{ padding: '20px 32px' }}>
                       <div style={{ fontSize: '16px', fontWeight: 600, color: t.type === 'income' ? '#27AE60' : '#ef4444' }}>
                         {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
                       </div>
+                      {'billAmount' in t && <small>{allocationCopy.billTotal}: {formatCurrency(Number(t.billAmount))}</small>}
                     </td>
                     <td style={{ padding: '20px 32px' }}>
                       <div style={{ fontSize: '13px', fontWeight: 600 }}>{t.paymentType}</div>
                       <div style={{ fontSize: '11px', color: 'var(--text-faint)', fontWeight: 600 }}>Confirmed: {formatCurrency((t.settlements || []).reduce((sum, payment) => sum + payment.amount, 0))}</div>
                     </td>
-                    <td style={{ padding: '20px 32px', fontSize: '13px', fontWeight: 600 }}>{t.cycleName || generalCategoryLabel}</td>
+                    <td style={{ padding: '20px 32px', fontSize: '13px', fontWeight: 600 }}>{t.cycleName || (t.pondAllocations?.length ? allocationCopy.production : generalCategoryLabel)}</td>
                     <td style={{ padding: '20px 32px', textAlign: 'right' }}>
                       {canManageFinance && <button type="button" onClick={() => recordPayment(t, t.type)} style={{ color: '#0F4C75', padding: 8 }} disabled={savePending}>Record payment</button>}
+                      {canManageFinance && !isSourceLinkedFinance(t) && <button type="button" onClick={() => openEditTransaction({ ...t, type: activeTab === 'income' ? 'income' : 'expense' })} disabled={savePending} style={{ color: '#0F4C75', padding: 8 }}>{copy('Edit')}</button>}
                       {canManageFinance && !isSourceLinkedFinance(t) && (
                       <button 
                         onClick={() => handleDelete(t.id, t.type)}
@@ -588,11 +646,13 @@ export default function FinancePage() {
                 <div className={styles.mobileLedgerMain}>
                   <div>
                     <h3 title={transaction.item}>{conciseFinanceDescription(transaction.item)}</h3>
-                    <p>{transaction.paymentType} · {transaction.cycleName || generalCategoryLabel}</p>
+                    <p>{transaction.paymentType} · {transaction.cycleName || (transaction.pondAllocations?.length ? allocationCopy.production : generalCategoryLabel)}</p>
                   </div>
                   <strong className={transaction.type === 'income' ? styles.incomeValue : styles.expenseValue}>{transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}</strong>
                 </div>
-                {canManageFinance ? <div className={styles.mobileLedgerActions}><button type="button" onClick={() => recordPayment(transaction, transaction.type)} disabled={savePending}>Record payment</button>{!isSourceLinkedFinance(transaction) ? <button type="button" aria-label={t.actions.delete} onClick={() => handleDelete(transaction.id, transaction.type)} disabled={savePending}><Trash2 size={17} /></button> : null}</div> : null}
+                <FinanceAllocationBreakdown rows={transaction.pondAllocations || []} copy={allocationCopy} formatCurrency={formatCurrency} />
+                {'billAmount' in transaction && <small>{allocationCopy.billTotal}: {formatCurrency(Number(transaction.billAmount))}</small>}
+                {canManageFinance ? <div className={styles.mobileLedgerActions}><button type="button" onClick={() => recordPayment(transaction, transaction.type)} disabled={savePending}>Record payment</button>{!isSourceLinkedFinance(transaction) && <button type="button" onClick={() => openEditTransaction({ ...transaction, type: activeTab === 'income' ? 'income' : 'expense' })} disabled={savePending}>{copy('Edit')}</button>}{!isSourceLinkedFinance(transaction) ? <button type="button" aria-label={t.actions.delete} onClick={() => handleDelete(transaction.id, transaction.type)} disabled={savePending}><Trash2 size={17} /></button> : null}</div> : null}
               </article>
             ))}
           </div>
@@ -614,19 +674,40 @@ export default function FinancePage() {
               <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: '16px', rowGap: '14px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.forms.date}</label>
-                  <input type="date" required value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} onKeyDown={e => e.preventDefault()} onPaste={e => e.preventDefault()} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
+                  <input type="date" required value={formData.date} onChange={e => { setFixedAllocationPonds(null); setFormData({...formData, date: e.target.value}); }} onKeyDown={e => e.preventDefault()} onPaste={e => e.preventDefault()} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.financeCycle.category}</label>
-                  <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
-                    {(formType === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+                  <select value={formData.category} onChange={e => { setFixedAllocationPonds(null); setFormData({...formData, category: e.target.value}); }} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
+                    {(formType === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map(c => <option key={c} value={c}>{categoryLabel(c)}</option>)}
                   </select>
                 </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', gridColumn: 'span 2' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.finance.itemDescription}</label>
+                  <input required value={formData.item} onChange={e => setFormData({...formData, item: e.target.value})} placeholder={t.finance.enterDescription} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.financeCycle.amount.replace('{{currency}}', currencyConfig.symbol)}</label>
+                  <input type="number" min="0" step={10 ** -allocationDecimals} required value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} placeholder="0.00" style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.finance.paymentType}</label>
+                  <select value={formData.paymentType} onChange={e => setFormData({...formData, paymentType: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
+                    {PAYMENT_TYPES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                {allocationMethod ? <div style={{ gridColumn: 'span 2' }}>
+                  <FinanceAllocationPanel method={allocationMethod} ponds={allocationMethod === 'pl_quantity' ? selectablePlPonds : activeAreaPonds}
+                    preview={allocationPreview} selectedIds={selectedPlIds} quantities={plQuantities} onSelection={setSelectedPlIds}
+                    onQuantity={(id, value) => setPlQuantities(current => ({ ...current, [id]: value }))}
+                    copy={allocationCopy} formatCurrency={formatCurrency} currencySymbol={currencyConfig.symbol}
+                    usingSaved={Boolean(fixedAllocationPonds)} onRecalculate={allocationMethod === 'active_pond_area' ? () => setFixedAllocationPonds(null) : undefined} />
+                </div> : <>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', gridColumn: 'span 2' }}>
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>{isCompanyWideExpense ? generalCategoryLabel : t.financeCycle.allocateToCycle}</label>
                   <select required={!isCompanyWideExpense} disabled={isCompanyWideExpense} value={isCompanyWideExpense ? '' : formData.cycleId} onChange={e => setFormData({...formData, cycleId: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: isCompanyWideExpense ? '#edf3f8' : 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
                     <option value="" disabled>{t.financeCycle.selectCycle}</option>
-                    {activeCycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.cycleName}</option>)}
+                    {formCycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.cycleName}</option>)}
                   </select>
                   {isCompanyWideExpense ? <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{t.financeCycle.companyWideHint}</span> : null}
                   {!isCompanyWideExpense && formType === 'expense' && formData.cycleId ? <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
@@ -635,20 +716,7 @@ export default function FinancePage() {
                       .replace('{{cycleName}}', activeCycles.find((cycle) => cycle.id === formData.cycleId)?.cycleName || t.financeCycle.cycle)}
                   </span> : null}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.finance.itemDescription}</label>
-                  <input required value={formData.item} onChange={e => setFormData({...formData, item: e.target.value})} placeholder={t.finance.enterDescription} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.financeCycle.amount.replace('{{currency}}', currencyConfig.symbol)}</label>
-                  <input type="number" required value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} placeholder="0.00" style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.finance.paymentType}</label>
-                  <select value={formData.paymentType} onChange={e => setFormData({...formData, paymentType: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
-                    {PAYMENT_TYPES.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
+                </>}
               </div>
 
               <div className="responsive-modal-footer" style={{ display: 'flex', gap: '12px', borderTop: '1px solid var(--border)', paddingTop: '18px' }}>

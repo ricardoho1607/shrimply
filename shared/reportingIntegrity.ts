@@ -1,5 +1,6 @@
 import { normalizeFarmDateKey } from './farmDate';
 import { monetaryValue, NON_PRODUCTION_CATEGORIES } from './financeIntegrity';
+import { expenseMatchesCycle, expenseAmountForCycle, type ExpenseAllocationLink } from './financeExpenseAllocation';
 
 export const escapeReportText = (value: unknown): string => String(value ?? '')
   .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
@@ -17,7 +18,7 @@ export const isMaintenanceExpense = (expense: { category?: string | null }): boo
 
 /** The register is recorded activity, including unpaid entries, under the same scope as its rows. */
 export function transactionOpeningPosition(input: {
-  expenses: { date?: string; amount?: unknown; voided?: boolean; cycleId?: string }[];
+  expenses: { date?: string; amount?: number | string | null; voided?: boolean; cycleId?: string; pondAllocations?: ExpenseAllocationLink[] }[];
   revenues: { date?: string; amount?: unknown; voided?: boolean; cycleId?: string }[];
   startDateKey: string | null; cycleScope: string; timeZone?: string;
 }): number {
@@ -26,8 +27,10 @@ export function transactionOpeningPosition(input: {
   for (const [records, sign] of [[input.revenues, 1], [input.expenses, -1]] as const) {
     for (const entry of records) {
       const key = normalizeFarmDateKey(entry.date, input.timeZone);
-      if (entry.voided || !key || key >= input.startDateKey || (input.cycleScope !== 'all' && entry.cycleId !== input.cycleScope)) continue;
-      const amount = monetaryValue(entry.amount);
+      if (entry.voided || !key || key >= input.startDateKey) continue;
+      if (sign < 0 && !expenseMatchesCycle(entry as typeof input.expenses[number], input.cycleScope)) continue;
+      if (sign > 0 && input.cycleScope !== 'all' && entry.cycleId !== input.cycleScope) continue;
+      const amount = sign < 0 ? expenseAmountForCycle(entry as typeof input.expenses[number], input.cycleScope) : monetaryValue(entry.amount);
       if (amount === null) return Number.NaN;
       total += sign * amount;
     }

@@ -8,11 +8,13 @@ import {
 } from './pondCalculations';
 import { isInventoryTransfer, monetaryValue } from './financeIntegrity';
 import { isCompanyWideExpenseCategory } from './financeCycleAllocation';
+import { hasValidExpenseAllocations, normalizeProductionExpenseCategory, requiresProductionAllocation, type ExpenseAllocationLink } from './financeExpenseAllocation';
 
 export type HarvestDecision = 'harvest_now' | 'keep_growing' | 'review_data';
 
 export interface ProfitabilityPond {
   id: string;
+  name?: string | null;
   pondCycleId?: string | null;
   cycleId?: string | null;
   cycleStartedAt?: string | null;
@@ -28,6 +30,8 @@ export interface AllocatableCostRecord {
   pondId?: string | null;
   pondCycleId?: string | null;
   cycleId?: string | null;
+  pondAllocations?: ExpenseAllocationLink[];
+  allocationMethod?: string | null;
   source: 'expense' | 'feed_usage' | 'additive_usage' | 'maintenance' | 'other';
 }
 
@@ -42,6 +46,8 @@ export interface ExpenseCostLike {
   pondId?: string | null;
   pondCycleId?: string | null;
   cycleId?: string | null;
+  pondAllocations?: ExpenseAllocationLink[];
+  allocationMethod?: string | null;
 }
 
 export interface InventoryUsageCostLike {
@@ -198,6 +204,8 @@ export const expenseToCostRecord = (expense: ExpenseCostLike, timeZone?: string)
     pondId: expense.pondId,
     pondCycleId: expense.pondCycleId,
     cycleId: expense.cycleId,
+    pondAllocations: expense.pondAllocations,
+    allocationMethod: expense.allocationMethod,
     source: 'expense',
   };
 };
@@ -289,6 +297,16 @@ export const allocateCostsToPond = ({
     if (normalizedStart && record.date < normalizedStart) return;
     if (normalizedEnd && record.date > normalizedEnd) return;
 
+    // Explicit invoice shares are historical records, even after the farm's active pond set changes.
+    if (record.pondAllocations?.length || requiresProductionAllocation(record)) {
+      if (!hasValidExpenseAllocations(record)) { unallocatedAmount += record.amount; return; }
+      const allocation = record.pondAllocations?.find(row => row.pondCycleId
+        ? row.pondCycleId === (pond.pondCycleId || pond.id)
+        : row.pondId === pond.id && (!row.cycleId || row.cycleId === pond.cycleId));
+      if (allocation) { directAmount += Number(allocation.amount); includedRecordIds.push(record.id); }
+      return;
+    }
+
     if (record.pondId || record.pondCycleId) {
       if (recordDirectlyMatchesPond(record, pond)) {
         directAmount += record.amount;
@@ -353,13 +371,18 @@ export const buildPondProfitabilityCostSnapshot = ({
   timeZone?: string;
 }): PondProfitabilityCostSnapshot => {
   const excludedInventoryPurchaseIds = expenses.filter(isInventoryPurchaseExpense).map((expense) => expense.id);
-  const expenseRecords = expenses
+  const isPlExpense = (expense: ExpenseCostLike) => normalizeProductionExpenseCategory(expense.category || '') === 'Seed / PL';
+  const expenseRecords = expenses.filter(expense => !isPlExpense(expense))
     .map((expense) => expenseToCostRecord(expense, timeZone))
+    .filter((record): record is AllocatableCostRecord => record !== null);
+  const plRecords = expenses.filter(isPlExpense)
+    .map(expense => expenseToCostRecord(expense, timeZone))
     .filter((record): record is AllocatableCostRecord => record !== null);
   const feedRecords = flattenUsageRecords(feeds, 'feed_usage', timeZone);
   const additiveRecords = flattenUsageRecords(additives, 'additive_usage', timeZone);
   const allocationInput = { pond, ponds, startDate, endDate, timeZone };
   const expenseAllocation = allocateCostsToPond({ ...allocationInput, records: expenseRecords, excludedInventoryPurchaseIds });
+  const plAllocation = allocateCostsToPond({ ...allocationInput, records: plRecords });
   const feedAllocation = allocateCostsToPond({ ...allocationInput, records: feedRecords });
   const additiveAllocation = allocateCostsToPond({ ...allocationInput, records: additiveRecords });
 
@@ -390,8 +413,8 @@ export const buildPondProfitabilityCostSnapshot = ({
   if (feedQuantityAllocation.allocatedAmount > 0 && feedAllocation.allocatedAmount <= 0) {
     warnings.push('Consumed feed quantity exists, but its allocated cost is missing or zero.');
   }
-  if (expenseAllocation.unallocatedAmount > 0 || additiveAllocation.unallocatedAmount > 0) {
-    warnings.push('Some shared costs could not be allocated because no pond was active on the record date.');
+  if (expenseAllocation.unallocatedAmount > 0 || additiveAllocation.unallocatedAmount > 0 || plAllocation.unallocatedAmount > 0) {
+    warnings.push('Some costs could not be allocated. Review saved pond shares and the ponds active on the record date.');
   }
   if (excludedInventoryPurchaseIds.length > 0) {
     warnings.push('Inventory stock-in purchases were excluded; only consumed feed and additive usage is counted.');
@@ -407,7 +430,8 @@ export const buildPondProfitabilityCostSnapshot = ({
       feed: allocatedFeedCost,
       additives: additiveAllocation.allocatedAmount,
       generalExpenses: expenseAllocation.allocatedAmount,
-      other: 0,
+      // Seed is incurred once at stocking, rather than extrapolated as a daily operating cost.
+      other: plAllocation.allocatedAmount,
     },
     feedUnitCostPerKg: calculatedFeedUnitCost,
     projectedDailyAdditiveCost: round(additiveAllocation.allocatedAmount / elapsedDays),

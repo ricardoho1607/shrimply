@@ -1,5 +1,8 @@
 "use client";
 
+import { scopeExpenseRecords } from '../../../../../../shared/financeExpenseAllocation';
+import { getFinanceAllocationCopy } from '../../../../../../shared/financeAllocationCopy';
+
 import { buildProfitLoss, buildConfirmedCashFlow } from '../../../../../../shared/financeReports';
 import { monetaryValue, NON_OPERATING_INCOME } from '../../../../../../shared/financeIntegrity';
 import { transactionOpeningPosition } from '../../../../../../shared/reportingIntegrity';
@@ -37,6 +40,7 @@ import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { buildCogsReport, type CogsPond, type CogsHarvest, type CogsUsage } from '../../../../../../shared/cogsReport';
 
 interface Expense {
+  allocationMethod?: string | null;
   id: string;
   amount: number;
   settlements?: { id: string; date: string; amount: number }[];
@@ -52,7 +56,7 @@ interface Expense {
   timestamp?: number;
   pondId?: string;
   pondCycleId?: string;
-  pondAllocations?: { pondId: string; pondCycleId?: string; amount: number }[];
+  pondAllocations?: { pondId: string; pondCycleId?: string; cycleId?: string; amount: number }[];
 }
 
 interface Revenue {
@@ -71,7 +75,7 @@ interface Revenue {
   timestamp?: number;
   pondId?: string;
   pondCycleId?: string;
-  pondAllocations?: { pondId: string; pondCycleId?: string; amount: number }[];
+  pondAllocations?: { pondId: string; pondCycleId?: string; cycleId?: string; amount: number }[];
 }
 
 interface FinanceCycle { id: string; cycleName: string; status?: string }
@@ -97,6 +101,7 @@ export default function FinancialReportsPage() {
   const { formatCurrency: displayCurrency, currencyConfig } = useCurrency();
   const formatCurrency = (value: number) => Number.isFinite(value) ? displayCurrency(value) : 'N/A';
   const { currentLanguage, t } = useLanguage();
+  const allocationCopy = getFinanceAllocationCopy(currentLanguage);
   const { company, loading: authLoading } = useAuth();
   const hasPermission = useFarmPermissions();
   const canViewFinance = hasPermission('viewFinance');
@@ -200,8 +205,8 @@ export default function FinancialReportsPage() {
     };
   }, [company?.timeZone, customDateRange, selectedPeriod]);
 
-  const filteredExpenses = expenses.filter((expense) => (
-    !expense.voided && (cycleScope === 'all' || expense.cycleId === cycleScope)
+  const filteredExpenses = scopeExpenseRecords(expenses, cycleScope, ponds).filter((expense) => (
+    !expense.voided
     && isDateKeyInRange(expense.date, dateRange.startDateKey, dateRange.endDateKey, company?.timeZone)
   ));
   const filteredRevenues = revenues.filter((revenue) => (
@@ -388,7 +393,14 @@ export default function FinancialReportsPage() {
                     { label: cogsGrossProfit >= 0 ? 'Gross Profit' : 'Gross Loss', value: formatCurrency(Math.abs(cogsGrossProfit)) },
                     { label: 'Gross Profit Margin', value: cogs.revenue > 0 ? `${(cogsGrossProfit / cogs.revenue * 100).toFixed(2)}%` : 'N/A' },
                   ].map(metric => <div key={metric.label} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>{copy(metric.label)}</span><strong>{metric.value}</strong></div>)}
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{copy('Pond costs and revenue reconciliation are included in the PDF.')}</p>
+                  <details style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 600, padding: '8px 0' }}>{allocationCopy.hpp} · {cogs.details.pondRows.length} {allocationCopy.ponds}</summary>
+                    {cogs.details.pondRows.map(row => <div key={row.pondId} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, borderBottom: '1px solid var(--border)', padding: '12px 0' }}>
+                      <div><strong>{row.pondName}</strong><div style={{ color: 'var(--text-muted)', fontSize: 13 }}>{row.cycleName}</div></div>
+                      <div style={{ textAlign: 'right' }}><strong>{formatCurrency(row.total)}</strong><div style={{ color: 'var(--text-muted)', fontSize: 13 }}>{row.harvestedKg > 0 ? `${formatCurrency(row.total / row.harvestedKg)} / kg` : 'N/A / kg'}</div></div>
+                    </div>)}
+                    {cogs.details.unallocatedCost !== 0 && <p>{allocationCopy.unallocated}: {formatCurrency(cogs.details.unallocatedCost)}</p>}
+                  </details>
                 </>
               ) : (
                 <>

@@ -1,5 +1,6 @@
 import { isDateKeyInRange } from './farmDate';
 import { NON_PRODUCTION_CATEGORIES, NON_OPERATING_INCOME, isInventoryTransfer } from './financeIntegrity';
+import { allocationCycleId, expenseMatchesCycle, expenseAmountForCycle, hasValidExpenseAllocations, requiresProductionAllocation, type ExpenseAllocationLink } from './financeExpenseAllocation';
 
 export interface CogsPond {
   id: string;
@@ -8,7 +9,7 @@ export interface CogsPond {
   cycleName?: string;
   pondCycleId?: string | null;
 }
-interface Allocation { pondId: string; pondCycleId?: string; amount: number }
+type Allocation = ExpenseAllocationLink;
 export interface CogsTransaction {
   id?: string;
   voided?: boolean;
@@ -20,6 +21,7 @@ export interface CogsTransaction {
   pondId?: string;
   pondCycleId?: string;
   pondAllocations?: Allocation[];
+  allocationMethod?: string | null;
 }
 export interface CogsUsage extends Omit<CogsTransaction, 'amount'> { source?: string; totalCost?: number | string | null }
 export interface CogsHarvest {
@@ -83,8 +85,7 @@ export function buildCogsReport(input: {
     (record.pondCycleId ? (pond.pondCycleId || pond.id) === record.pondCycleId : pond.id === record.pondId)
     && (!record.cycleId || pond.cycleId === record.cycleId));
   const inPeriod = (record: { date?: string; voided?: boolean }) => Boolean(!record.voided && record.date && isDateKeyInRange(record.date, input.startDateKey, input.endDateKey, input.timeZone));
-  const inScope = (record: CogsTransaction) => input.cycleScope === 'all'
-    || (record.cycleId || findPond(record)?.cycleId) === input.cycleScope;
+  const inScope = (record: CogsTransaction) => expenseMatchesCycle(record, input.cycleScope, input.ponds);
   const rows = new Map<string, PondCogsRow>();
   input.ponds.filter(pond => input.cycleScope === 'all' || pond.cycleId === input.cycleScope).forEach(pond => rows.set(pond.id, {
     pondId: pond.id, pondName: pond.pondName, cycleName: pond.cycleName || pond.cycleId || 'Unassigned cycle',
@@ -102,11 +103,12 @@ export function buildCogsReport(input: {
     categoryBreakdown[category] = (categoryBreakdown[category] || 0) + amount;
     let allocated = 0;
     const allocations = record.pondAllocations;
-    const allocationTotal = allocations?.reduce((sum, row) => sum + (number(row.amount) ?? 0), 0) ?? 0;
     // Invalid allocation totals are left unallocated instead of silently scaling or double counting them.
-    if (allocations?.length && Math.abs(allocationTotal - amount) < 0.01) {
+    if (allocations?.length && hasValidExpenseAllocations(record)) {
       for (const allocation of allocations) {
-        const pond = findPond({ ...allocation, cycleId: record.cycleId });
+        const cycleId = allocationCycleId(allocation, record, input.ponds) || undefined;
+        if (input.cycleScope !== 'all' && cycleId !== input.cycleScope) continue;
+        const pond = findPond({ ...allocation, cycleId });
         const row = pond && rows.get(pond.id);
         if (!row || number(allocation.amount) === null) continue;
         const value = number(allocation.amount)!;
@@ -131,15 +133,16 @@ export function buildCogsReport(input: {
     }
   }
   for (const expense of input.expenses.filter(record => inPeriod(record) && inScope(record))) {
-    const amount = number(expense.amount);
+    const amount = expenseAmountForCycle(expense, input.cycleScope, input.ponds);
     const category = input.normalizeCategory(expense.category || 'Uncategorised');
     if (expense.reference?.startsWith('INVENTORY-')) continue; // Stock purchases are represented by consumption.
-    if ((!expense.cycleId && !findPond(expense)?.cycleId) || EXCLUDED.has(category)) {
+    if ((!expense.cycleId && !findPond(expense)?.cycleId && !expense.pondAllocations?.length && !requiresProductionAllocation(expense)) || EXCLUDED.has(category)) {
       details.excludedExpenseAmount += amount ?? 0;
       continue;
     }
     if (amount === null) { details.missingCostCount++; continue; }
-    addCost(expense, amount, category === 'Feed' ? 'feed' : category === 'Labor' ? 'labor' : category === 'Pond Additives' ? 'additives' : 'other', category);
+    if (requiresProductionAllocation(expense) && !hasValidExpenseAllocations(expense)) details.missingCostCount++;
+    addCost(expense, amount, category === 'Feed' ? 'feed' : ['Labor', 'Salary'].includes(category) ? 'labor' : category === 'Pond Additives' ? 'additives' : 'other', category);
   }
   const revenues = input.revenues.filter(record => inPeriod(record) && inScope(record) && !NON_OPERATING_INCOME.includes(input.normalizeCategory(record.category || '')));
   const harvests = input.harvests.filter(inPeriod);

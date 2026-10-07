@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
 import type { PondCostAllocation } from '../../shared/financeCycleAllocation';
+import type { ExpenseAllocationMethod } from '../../shared/financeExpenseAllocation';
 import {
   createOfflineOperationId,
   isWorkspaceOnline,
@@ -35,7 +36,11 @@ export interface Expense {
   cycleName?: string;
   pondCycleId?: string;
   pondId?: string;
-  allocationMethod?: 'equal_per_pond' | null;
+  allocationMethod?: ExpenseAllocationMethod | null;
+  allocationBasisTotal?: number | null;
+  allocationRate?: number | null;
+  allocationCurrencyCode?: string | null;
+  allocationDecimalPlaces?: number | null;
   pondAllocations?: PondCostAllocation[];
   paymentType: string;
   reference: string;
@@ -57,7 +62,11 @@ export interface ExpenseInput {
   cycleName?: string;
   pondCycleId?: string;
   pondId?: string;
-  allocationMethod?: 'equal_per_pond' | null;
+  allocationMethod?: ExpenseAllocationMethod | null;
+  allocationBasisTotal?: number | null;
+  allocationRate?: number | null;
+  allocationCurrencyCode?: string | null;
+  allocationDecimalPlaces?: number | null;
   pondAllocations?: PondCostAllocation[];
   paymentType: string;
   reference: string;

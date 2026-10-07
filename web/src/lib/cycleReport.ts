@@ -1,4 +1,5 @@
 import { monetaryValue } from '../../../shared/financeIntegrity';
+import { scopeExpenseRecords, type ExpenseAllocationLink } from '../../../shared/financeExpenseAllocation';
 import { savedUsageCost, isCycleOperatingExpense, isMaintenanceExpense } from '../../../shared/reportingIntegrity';
 import {
   calculatePondMetricsWithHarvest,
@@ -91,6 +92,7 @@ export interface CycleReportExpense {
   category?: string;
   reference?: string;
   cycleId?: string;
+  pondAllocations?: ExpenseAllocationLink[];
 }
 
 export interface CycleReportAsset {
@@ -303,7 +305,7 @@ export function buildWebCycleReport({
     .filter(matchesUsage)
     .reduce((sum, usage) => sum + usageCost(usage), 0);
   // Finance is the posting source; asset-register entries are retained as supporting history.
-  const operatingExpenses = expenses.filter(expense => expense.cycleId === cycle.id && isCycleOperatingExpense(expense));
+  const operatingExpenses = scopeExpenseRecords(expenses, cycle.id, ponds).filter(isCycleOperatingExpense);
   const maintenanceCost = operatingExpenses.filter(isMaintenanceExpense).reduce((sum, expense) => sum + (monetaryValue(expense.amount) ?? Number.NaN), 0);
   const manualExpenses = operatingExpenses.filter(expense => !isMaintenanceExpense(expense)).reduce((sum, expense) => sum + (monetaryValue(expense.amount) ?? Number.NaN), 0);
 

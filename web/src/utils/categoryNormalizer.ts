@@ -7,6 +7,8 @@
  * so that filtering, grouping, and PDF generation always work correctly.
  */
 
+import { normalizeProductionExpenseCategory } from '../../../shared/financeExpenseAllocation';
+
 export const CATEGORY_NORMALIZER: Record<string, string> = {
   // -- Expense categories ----------------------------------------------
   // Feed
@@ -94,4 +96,4 @@ export const CATEGORY_NORMALIZER: Record<string, string> = {
  * if no mapping exists (future-proofing for custom categories).
  */
 export const normalizeCategory = (category: string): string =>
-  CATEGORY_NORMALIZER[category] ?? category;
+  CATEGORY_NORMALIZER[category] ?? normalizeProductionExpenseCategory(category);

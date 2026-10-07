@@ -1,3 +1,5 @@
+import { scopeExpenseRecords } from '../shared/financeExpenseAllocation';
+import { getFinanceAllocationCopy, productionExpenseLabel } from '../shared/financeAllocationCopy';
 import { transactionOpeningPosition } from '../shared/reportingIntegrity';
 import { buildProfitLoss, buildConfirmedCashFlow } from '../shared/financeReports';
 import { monetaryValue } from '../shared/financeIntegrity';
@@ -42,6 +44,8 @@ export default function FinancialReportsPage() {
   const { formatCurrency: displayCurrency, currencyConfig } = useCurrency();
   const formatCurrency = (value: number) => Number.isFinite(value) ? displayCurrency(value) : 'N/A';
   const { cycles, ponds, harvestRecords } = usePondStore();
+  const allocationCopy = getFinanceAllocationCopy(currentLanguage);
+  const [pondHppExpanded, setPondHppExpanded] = useState(false);
   const activeCycles = useMemo(() => getOpenFinanceCycles(cycles), [cycles]);
   const feedAdditiveStore = useFeedAdditiveStore();
 
@@ -164,7 +168,7 @@ export default function FinancialReportsPage() {
         : items;
 
     return {
-      filteredExpenses: scopeFinance(expenses).filter(e => !e.voided && isDateKeyInRange(e.date, startDateKey, endDateKey, company?.timeZone)),
+      filteredExpenses: scopeExpenseRecords(expenses, cycleScope, ponds).filter(e => !e.voided && isDateKeyInRange(e.date, startDateKey, endDateKey, company?.timeZone)),
       filteredRevenues: scopeFinance(revenues).filter(r => !r.voided && isDateKeyInRange(r.date, startDateKey, endDateKey, company?.timeZone))
     };
   };
@@ -451,7 +455,7 @@ export default function FinancialReportsPage() {
                 <Text style={styles.breakdownTitle}>{t.financialReports?.revenueBreakdown || 'Revenue Breakdown'}</Text>
                 {Object.entries(pl.revenueBreakdown).slice(0, 3).map(([category, amount]) => (
                   <View key={category} style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLabel}>{category}</Text>
+                    <Text style={styles.breakdownLabel}>{productionExpenseLabel(category, allocationCopy)}</Text>
                     <Text style={styles.breakdownValue}>{formatCurrency(amount)}</Text>
                   </View>
                 ))}
@@ -460,7 +464,7 @@ export default function FinancialReportsPage() {
                 <Text style={styles.breakdownTitle}>{t.financialReports?.expenseBreakdown || 'Expense Breakdown'}</Text>
                 {Object.entries(pl.expenseBreakdown).slice(0, 3).map(([category, amount]) => (
                   <View key={category} style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLabel}>{category}</Text>
+                    <Text style={styles.breakdownLabel}>{productionExpenseLabel(category, allocationCopy)}</Text>
                     <Text style={styles.breakdownValue}>{formatCurrency(amount)}</Text>
                   </View>
                 ))}
@@ -525,12 +529,22 @@ export default function FinancialReportsPage() {
                 <Text style={styles.summaryLabel}>{t.financialReports?.grossProfitMargin || 'Gross Profit Margin'}</Text>
                 <Text style={[styles.summaryValue, cogsGrossProfit >= 0 ? styles.revenueColor : styles.expenseColor]}>{cogs.revenue > 0 ? `${((cogsGrossProfit / cogs.revenue) * 100).toFixed(2)}%` : 'N/A'}</Text>
               </View>
+              <View style={styles.breakdownPreview}>
+                <TouchableOpacity accessibilityRole="button" accessibilityState={{ expanded: pondHppExpanded }} onPress={() => setPondHppExpanded(!pondHppExpanded)} style={{ paddingVertical: 12 }}>
+                  <Text style={styles.breakdownTitle}>{allocationCopy.hpp} · {cogs.details.pondRows.length} {allocationCopy.ponds} {pondHppExpanded ? '−' : '+'}</Text>
+                </TouchableOpacity>
+                {pondHppExpanded && cogs.details.pondRows.map(row => <View key={row.pondId} style={[styles.summaryRow, { gap: 12 }]}>
+                  <View style={{ flex: 1 }}><Text style={styles.summaryLabel}>{row.pondName}</Text><Text style={styles.previewSubtitle}>{row.cycleName}</Text></View>
+                  <View><Text style={styles.summaryValue}>{formatCurrency(row.total)}</Text><Text style={styles.previewSubtitle}>{row.harvestedKg > 0 ? `${formatCurrency(row.total / row.harvestedKg)} / kg` : 'N/A / kg'}</Text></View>
+                </View>)}
+                {cogs.details.unallocatedCost !== 0 && <Text style={styles.previewSubtitle}>{allocationCopy.unallocated}: {formatCurrency(cogs.details.unallocatedCost)}</Text>}
+              </View>
               {Object.keys(cogs.categoryBreakdown).length > 0 && (
                 <View style={styles.breakdownPreview}>
                   <Text style={styles.breakdownTitle}>{t.financialReports?.cogsBreakdown || 'COGS Breakdown'}</Text>
                   {Object.entries(cogs.categoryBreakdown).map(([category, amount]) => (
                     <View key={category} style={styles.breakdownRow}>
-                      <Text style={styles.breakdownLabel}>{category}</Text>
+                      <Text style={styles.breakdownLabel}>{productionExpenseLabel(category, allocationCopy)}</Text>
                       <Text style={styles.breakdownValue}>{formatCurrency(amount)}</Text>
                     </View>
                   ))}

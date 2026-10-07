@@ -17,6 +17,12 @@ export interface PondCostAllocation {
   pondCycleId: string;
   amount: number;
   share: number;
+  cycleId?: string;
+  cycleName?: string;
+  blockId?: string;
+  blockName?: string;
+  pondArea?: number;
+  plQuantity?: number;
 }
 
 const COMPANY_WIDE_EXPENSE_LABELS = new Set([

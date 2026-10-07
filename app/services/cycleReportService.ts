@@ -12,6 +12,7 @@ import {
   isPondCycleActive,
 } from '../store/pondStore';
 import type { Expense } from './financeService';
+import { scopeExpenseRecords } from '../../shared/financeExpenseAllocation';
 import { getPreviousEnterpriseCycleForSameBlocks } from '../../shared/enterpriseCycles';
 
 export type CycleReportNote = {
@@ -365,7 +366,7 @@ export const buildCycleReport = ({
   const feedUsageQty = feedUsages.reduce((sum, item) => sum + toNumber(item.usage.quantity), 0);
   const additiveUsageQty = additiveUsages.reduce((sum, item) => sum + toNumber(item.usage.quantity), 0);
 
-  const operatingExpenses = expenses.filter(expense => expense.cycleId === cycleId && isCycleOperatingExpense(expense));
+  const operatingExpenses = scopeExpenseRecords(expenses, cycleId, ponds).filter(isCycleOperatingExpense);
   const maintenanceCost = operatingExpenses.filter(isMaintenanceExpense).reduce((sum, expense) => sum + (monetaryValue(expense.amount) ?? Number.NaN), 0);
   const manualExpenses = operatingExpenses.filter(expense => !isMaintenanceExpense(expense)).reduce((sum, expense) => sum + (monetaryValue(expense.amount) ?? Number.NaN), 0);
 

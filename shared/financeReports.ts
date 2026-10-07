@@ -1,6 +1,7 @@
 import { buildCogsReport, type CogsTransaction } from './cogsReport';
 import { CAPITAL_CATEGORIES, FINANCING_CATEGORIES, OTHER_EXPENSE_CATEGORIES, NON_PRODUCTION_CATEGORIES, NON_OPERATING_INCOME, monetaryValue } from './financeIntegrity';
 import { isDateKeyInRange, normalizeFarmDateKey } from './farmDate';
+import { expenseAmountForCycle, expenseMatchesCycle, requiresProductionAllocation } from './financeExpenseAllocation';
 
 export function buildProfitLoss(input: Parameters<typeof buildCogsReport>[0], openingWip = 0, closingWip = 0) {
   const cogs = buildCogsReport(input);
@@ -11,14 +12,14 @@ export function buildProfitLoss(input: Parameters<typeof buildCogsReport>[0], op
   for (const expense of input.expenses) {
     if (expense.voided || !expense.date || !isDateKeyInRange(expense.date, input.startDateKey, input.endDateKey, input.timeZone)) continue;
     const cycleId = expense.cycleId || input.ponds.find(p => p.id === expense.pondId)?.cycleId;
-    if (input.cycleScope !== 'all' && cycleId !== input.cycleScope) continue;
-    const amount = monetaryValue(expense.amount);
+    if (!expenseMatchesCycle(expense, input.cycleScope, input.ponds)) continue;
+    const amount = expenseAmountForCycle(expense, input.cycleScope, input.ponds);
     if (amount === null) { missingAmounts++; continue; }
     const category = input.normalizeCategory(expense.category || 'Uncategorised');
     if (expense.reference?.startsWith('INVENTORY-')) continue;
     if (CAPITAL_CATEGORIES.includes(category) || FINANCING_CATEGORIES.includes(category)) { excludedCapital += amount; continue; }
     const target = OTHER_EXPENSE_CATEGORIES.includes(category) ? otherExpenseBreakdown
-      : !cycleId && !NON_PRODUCTION_CATEGORIES.includes(category) ? opexBreakdown : null;
+      : !cycleId && !expense.pondAllocations?.length && !requiresProductionAllocation(expense) && !NON_PRODUCTION_CATEGORIES.includes(category) ? opexBreakdown : null;
     if (target) target[category] = (target[category] || 0) + amount;
   }
   const revenueBreakdown: Record<string, number> = {};
