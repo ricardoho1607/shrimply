@@ -3,4 +3,5 @@
   <color name="ic_launcher_background">#FFFFFF</color>
   <color name="colorPrimary">#023c69</color>
   <color name="colorPrimaryDark">#ffffff</color>
+  <color name="notification_icon_color">#0F4C75</color>
 </resources>

@@ -1,3 +1,5 @@
+import { SopObservationTimes } from '../components/SopObservationTimes';
+import { parseObservationTimes } from '../../shared/sop/observationTimes';
 import { labMeasurementLabel, validateLabRow } from '../../functions/shared/labMeasurementContract';
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { FlatList, StyleSheet, Text, View, TouchableOpacity, Modal, TextInput, ScrollView, StatusBar, Alert, Platform, KeyboardAvoidingView, ActivityIndicator, Linking, InteractionManager } from "react-native";
@@ -72,6 +74,7 @@ interface WaterQualityValues {
   waterDepthCm: string;
   alkalinity: string;
   ammonia: string;
+  ammoniaBasis: string;
   operationalNotes: string;
   weatherEvent: WeatherEvent | null;
   waterExchangePercent: string;
@@ -92,6 +95,7 @@ const createEmptyWaterQualityValues = (): WaterQualityValues => ({
   waterDepthCm: '',
   alkalinity: '',
   ammonia: '',
+  ammoniaBasis: '',
   operationalNotes: '',
   weatherEvent: null,
   waterExchangePercent: '',
@@ -154,6 +158,7 @@ export default function WaterQualityScreen() {
   const { user, company } = useAuth();
   const { t } = useLanguage();
   const { ponds, addWaterQuality } = usePondStore();
+  const [sopTimes, setSopTimes] = useState<Record<string,string>>({});
   const canEditPonds = hasFarmPermission(user, 'recordPondData', company?.ownerId);
   const canManageLabReports = hasFarmPermission(user, 'manageLabReports', company?.ownerId);
   const enterpriseOwnerView = isEnterpriseOwner(company?.businessSize, user?.role);
@@ -378,7 +383,10 @@ export default function WaterQualityScreen() {
       return;
     }
 
+    let observedAtByField: Record<string,string>;
+    try { observedAtByField = parseObservationTimes(sopTimes); } catch (error) { Alert.alert('Observation time', error instanceof Error ? error.message : 'Invalid observation time'); submitLockRef.current = false; setIsSubmitting(false); return; }
     addWaterQuality(pond.id, {
+      observedAtByField,
       phMorning: values.phMorning.trim(), phEvening: values.phEvening.trim(),
       doMorning: values.doMorning.trim(), doEvening: values.doEvening.trim(),
       transparency: values.transparency.trim(), salinity: values.salinity.trim(),
@@ -386,20 +394,21 @@ export default function WaterQualityScreen() {
       waterDepthCm: values.waterDepthCm.trim(), alkalinity: values.alkalinity.trim(),
       waterQualityRecordedByName: user?.name || user?.email?.split('@')[0] || undefined,
       weatherEvent: values.weatherEvent,
-      ammonia: values.ammonia.trim(), operationalNotes: values.operationalNotes.trim(),
+      ammonia: values.ammonia.trim(), ammoniaBasis: values.ammoniaBasis, operationalNotes: values.operationalNotes.trim(),
       waterExchangePercent: values.waterExchangePercent.trim(), sludgeLoad: values.sludgeLoad,
       surfaceScum: values.surfaceScum, shrimpBehaviour: values.shrimpBehaviour,
     });
     setValues(createEmptyWaterQualityValues());
     setSelectedPond(null);
     setIsModalVisible(false);
-  }, [canEditPonds, selectedPond, activePonds, values, addWaterQuality, t, user?.email, user?.name]);
+  }, [canEditPonds, selectedPond, activePonds, values, sopTimes, addWaterQuality, t, user?.email, user?.name]);
 
   const handlePondSelection = useCallback((pondName: string) => {
     setSelectedPond(pondName);
     const today = getFarmDateKey(new Date(), company?.timeZone);
     const pond = ponds.find(p => p.pondName === pondName);
     const todayWQRecord = pond?.samplings.find(s => s.date === today && hasWaterQualityData(s));
+    setSopTimes(todayWQRecord?.observedAtByField || {});
     setValues(todayWQRecord ? {
       phMorning: todayWQRecord.phMorning || "", phEvening: todayWQRecord.phEvening || "",
       doMorning: todayWQRecord.doMorning || "", doEvening: todayWQRecord.doEvening || "",
@@ -407,7 +416,7 @@ export default function WaterQualityScreen() {
       temperature: todayWQRecord.temperature || '', waterAppearance: todayWQRecord.waterAppearance || '',
       waterDepthCm: todayWQRecord.waterDepthCm || '', alkalinity: todayWQRecord.alkalinity || '',
       weatherEvent: todayWQRecord.weatherEvent || null,
-      ammonia: todayWQRecord.ammonia || '', operationalNotes: todayWQRecord.operationalNotes || '',
+      ammonia: todayWQRecord.ammonia || '', ammoniaBasis: todayWQRecord.ammoniaBasis || '', operationalNotes: todayWQRecord.operationalNotes || '',
       waterExchangePercent: todayWQRecord.waterExchangePercent || '', sludgeLoad: todayWQRecord.sludgeLoad || null,
       surfaceScum: todayWQRecord.surfaceScum ?? null, shrimpBehaviour: todayWQRecord.shrimpBehaviour || null,
     } : createEmptyWaterQualityValues());
@@ -1162,6 +1171,7 @@ export default function WaterQualityScreen() {
                 keyboardShouldPersistTaps="handled"
                 nestedScrollEnabled={true}
               >
+                <SopObservationTimes values={{...values}} times={sopTimes} onChange={setSopTimes} />
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>{t.waterQuality.selectPond}</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pondSelector}>
@@ -1241,6 +1251,11 @@ export default function WaterQualityScreen() {
                     <View style={styles.inputGroup}>
                       <Input label={`${t.waterQuality.ammonia} (mg/L)`} value={values.ammonia} onChange={updateValue('ammonia')} placeholder="e.g., 0.35" />
                     </View>
+                  </View>
+
+                  <Text style={styles.conditionLabel}>Ammonia analytical basis (use the test kit label)</Text>
+                  <View style={styles.conditionOptions}>
+                    {['', 'TAN-N', 'NH3-N', 'NH3'].map(basis=><TouchableOpacity key={basis || 'unknown'} accessibilityRole="radio" accessibilityState={{checked:values.ammoniaBasis===basis}} style={[styles.conditionOption,values.ammoniaBasis===basis&&styles.conditionOptionSelected]} onPress={()=>setValues(prev=>({...prev,ammoniaBasis:basis}))}><Text style={[styles.conditionOptionText,values.ammoniaBasis===basis&&styles.conditionOptionTextSelected]}>{basis || 'Unknown'}</Text></TouchableOpacity>)}
                   </View>
 
                   <Input label={t.waterQuality.waterExchangePercent} value={values.waterExchangePercent} onChange={updateValue('waterExchangePercent')} placeholder="e.g., 10" />

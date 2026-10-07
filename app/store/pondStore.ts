@@ -94,6 +94,10 @@ export interface PhysicalPond {
 }
 
 export interface Sampling {
+  observedAt?: string;
+  observedAtByField?: Record<string,string>;
+  ammoniaBasis?: string;
+  nitriteBasis?: string;
   id: string; date: string; mbw: number; mortality: number; feed?: number;
   feedEntryStatus?: 'not_recorded' | 'fasted' | 'recorded';
   cycleId?: string; cycleName?: string; pondCycleId?: string;
@@ -265,7 +269,7 @@ interface PondStore {
   addPond: (pond: Pond) => boolean; updatePond: (pondId: string, updates: Partial<Pond>) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => Promise<DurableOutcome>; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void; addMortalityRecord: (pondId: string, record: MortalityRecord) => Promise<DurableOutcome>; updateMortalityRecord: (pondId: string, recordId: string, updates: Partial<MortalityRecord>) => void; deleteMortalityRecord: (pondId: string, recordId: string) => void;
   addHarvestRecord: (record: HarvestRecord, operationId?: string) => Promise<DurableOutcome>; updateHarvestRecord: (harvestId: string, record: HarvestRecord, operationId?: string) => Promise<DurableOutcome>; removeHarvestRecord: (harvestId: string, operationId?: string) => Promise<DurableOutcome>; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
   
-  addWaterQuality: (pondId: string, record: { phMorning: string; phEvening: string; doMorning: string; doEvening: string; transparency: string; salinity: string; temperature?: string; waterAppearance?: string; waterDepthCm?: string; alkalinity?: string; waterQualityRecordedByName?: string; ammonia?: string; operationalNotes?: string; weatherEvent?: Sampling['weatherEvent']; waterExchangePercent?: string; sludgeLoad?: Sampling['sludgeLoad']; surfaceScum?: boolean | null; shrimpBehaviour?: Sampling['shrimpBehaviour']; }) => void;
+  addWaterQuality: (pondId: string, record: { observedAtByField?: Record<string,string>; ammoniaBasis?: string; nitriteBasis?: string; phMorning: string; phEvening: string; doMorning: string; doEvening: string; transparency: string; salinity: string; temperature?: string; waterAppearance?: string; waterDepthCm?: string; alkalinity?: string; waterQualityRecordedByName?: string; ammonia?: string; operationalNotes?: string; weatherEvent?: Sampling['weatherEvent']; waterExchangePercent?: string; sludgeLoad?: Sampling['sludgeLoad']; surfaceScum?: boolean | null; shrimpBehaviour?: Sampling['shrimpBehaviour']; }) => void;
   addFeedData: (pondId: string, record: FeedData, date: string, localOnly?: boolean) => void;
   addHarvestData: (pondId: string, record: HarvestData) => void;
   
@@ -1252,6 +1256,7 @@ export const usePondStore = create<PondStore>()(
               updatedSamplings = p.samplings.map((s, index) => index === todayWQIndex ? {
                 ...s,
                 ...cycleFields,
+                observedAtByField: { ...s.observedAtByField, ...record.observedAtByField },
                 phMorning: record.phMorning || s.phMorning,
                 phEvening: record.phEvening || s.phEvening,
                 doMorning: record.doMorning || s.doMorning,
@@ -1264,6 +1269,8 @@ export const usePondStore = create<PondStore>()(
                 alkalinity: record.alkalinity || s.alkalinity,
                 waterQualityRecordedByName: record.waterQualityRecordedByName || s.waterQualityRecordedByName,
                 ammonia: record.ammonia || s.ammonia,
+                ammoniaBasis: record.ammoniaBasis ?? s.ammoniaBasis,
+                nitriteBasis: record.nitriteBasis ?? s.nitriteBasis,
                 operationalNotes: record.operationalNotes ?? s.operationalNotes,
                 weatherEvent: record.weatherEvent ?? null,
                 waterExchangePercent: record.waterExchangePercent || s.waterExchangePercent,

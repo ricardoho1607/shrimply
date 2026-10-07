@@ -1,0 +1,190 @@
+.sop-shell {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 28px;
+  color: #18344b;
+  font-family: inherit;
+  background: #f8fafc;
+  min-height: 100%;
+}
+.sop-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.sop-heading h1 {
+  font-size: 32px;
+  margin: 4px 0;
+}
+.sop-eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: #3282b8;
+}
+.sop-shell p {
+  line-height: 1.6;
+  color: #526b7d;
+}
+.sop-shell h2 {
+  font-size: 21px;
+}
+.sop-shell h3 {
+  font-size: 17px;
+}
+.sop-tabs,
+.sop-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 16px 0;
+}
+.sop-tabs {
+  border-bottom: 1px solid #dce6ec;
+  padding-bottom: 12px;
+}
+.sop-shell button,
+.sop-button {
+  border: 1px solid #cbdde8;
+  background: white;
+  color: #0f4c75;
+  padding: 10px 15px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.sop-shell button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.sop-shell button:hover {
+  background: #eaf4fb;
+}
+.sop-shell .sop-primary,
+.sop-tabs button[aria-current] {
+  background: #0f4c75;
+  color: white;
+}
+.sop-card {
+  background: white;
+  border: 1px solid #dce6ec;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 4px #0f4c7506;
+}
+.sop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(245px, 1fr));
+  gap: 16px;
+}
+.sop-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.sop-metrics strong {
+  font-size: 22px;
+}
+.sop-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 14px;
+  margin: 8px 0;
+}
+.sop-field span {
+  font-weight: 600;
+}
+.sop-shell input:not([type="checkbox"]),
+.sop-shell textarea,
+.sop-shell select {
+  width: 100%;
+  border: 1px solid #c9dae6;
+  border-radius: 7px;
+  padding: 10px;
+  background: white;
+  color: #18344b;
+  font: inherit;
+  box-sizing: border-box;
+}
+.sop-shell textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+.sop-shell input[type="checkbox"] {
+  margin-right: 8px;
+}
+.sop-shell label:has(input[type="checkbox"]) {
+  display: block;
+  margin: 8px 0;
+}
+.sop-alert {
+  white-space: pre-wrap;
+  background: #fff3ed;
+  border: 1px solid #ebcbbf;
+  padding: 15px;
+  border-radius: 9px;
+  margin: 12px 0;
+  color: #8f3524;
+}
+.sop-dialog {
+  position: fixed;
+  inset: 0;
+  background: #102b4266;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 20px;
+  overflow: auto;
+}
+.sop-dialog > .sop-card {
+  width: min(850px, 100%);
+}
+.sop-shell summary {
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 0;
+}
+.sop-shell pre {
+  white-space: pre-wrap;
+}
+.sop-shell li {
+  margin: 12px 0;
+  line-height: 1.6;
+}
+.sop-shell a {
+  color: #0f4c75;
+}
+.sop-status {
+  display: inline-block;
+  background: #eaf4fb;
+  border-radius: 20px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.sop-shell :focus-visible {
+  outline: 3px solid #3282b8;
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .sop-shell {
+    padding: 18px 14px;
+  }
+  .sop-heading {
+    align-items: flex-start;
+  }
+  .sop-heading h1 {
+    font-size: 26px;
+  }
+  .sop-dialog {
+    padding: 15px 8px;
+  }
+  .sop-grid {
+    grid-template-columns: 1fr;
+  }
+}

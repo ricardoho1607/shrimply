@@ -10,7 +10,7 @@ const app = initializeApp({ projectId: 'demo-start-cycle' }, 'start-cycle-test')
 const db = firestore.getFirestore(app);
 after(() => deleteApp(app));
 
-function harness({ physical = {}, cycle = {}, loseAck = false } = {}) {
+function harness({ physical = {}, cycle = {}, loseAck = false, gateBlocked = false } = {}) {
   const documents = new Map([
     ['companies/company/physicalPonds/physical', { pondName: 'C6', status: 'idle', ...physical }],
     ['companies/company/cycles/existing', { cycleName: 'Cycle 15', status: 'active', stockingStartDate: '2026-07-01', stockingEndDate: '2026-09-01', ...cycle }],
@@ -32,6 +32,7 @@ function harness({ physical = {}, cycle = {}, loseAck = false } = {}) {
   const exports = {};
   new Function('require', 'exports', compiled)(name => ({
     'firebase/firestore': { ...firestore, runTransaction }, '@/lib/firebase': { db }, './firestoreData': { removeUndefinedFields },
+    './sopGuards': { assertSopStageGate: async () => { if (gateBlocked) throw new Error('SOP prerequisites incomplete'); } },
     './physicalPondIdentity': { resolveCompanyPhysicalPond: async () => ({ id: 'physical', pondName: 'C6' }) },
   })[name], exports);
   const args = {
@@ -72,3 +73,5 @@ test('invalid calendar day cannot start a pond cycle', async () => {
   const h = harness(); h.args.form.docStart = '2026-02-30';
   await assert.rejects(h.startPondCycle(h.args), /invalidStartDate/); assert.equal(h.writes.length, 0);
 });
+
+test('unmet SOP stage requirements stop a planned stocking before operational writes', async () => { const h = harness({gateBlocked:true}); await assert.rejects(h.startPondCycle(h.args), /SOP prerequisites/); assert.equal(h.writes.length,0); });

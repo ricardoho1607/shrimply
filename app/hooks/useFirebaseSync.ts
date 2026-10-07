@@ -1,3 +1,4 @@
+import { waterObservationChanges } from "../../shared/sop/waterObservations";
 import { overlayDailyFeedIntents } from '../../shared/dailyFeedTransaction';
 import { buildHarvestRevenue, financeSyncDocumentId, financeSourceEntry } from '../../shared/financeSync';
 import { resolvePhysicalPond, PHYSICAL_POND_LINK_ERROR } from '../../shared/physicalPondIdentity';
@@ -1022,6 +1023,10 @@ const useFirebaseSyncController = () => {
                 else samplings.push(removeUndefinedFields(samplingFields));
               } else if (change.action === 'delete' && change.samplingId) {
                 samplings = samplings.filter(s => s.id !== change.samplingId);
+              }
+              const recordIndex=samplings.findIndex(s=>s.id===change.samplingId);
+              if(recordIndex>=0){const projected=waterObservationChanges(change.pondId!,pondData.samplings?.find((s:{id:string})=>s.id===change.samplingId),samplings[recordIndex]);samplings[recordIndex]=projected.sampling;
+                for(const observation of projected.observations)transaction.set(doc(db,'companies',activeCompanyId,'waterObservations',observation.id),{...observation,companyId:activeCompanyId,pondId:change.pondId,physicalPondId:pondData.physicalPondId||pondData.previousCyclePondId||change.pondId,cycleId:pondData.pondCycleId||pondData.cycleId||change.pondId,recordIndex,recordedBy:user.uid,updatedAt:serverTimestamp()});
               }
               transaction.update(pondRef, {
                 samplings,

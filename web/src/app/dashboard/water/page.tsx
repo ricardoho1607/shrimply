@@ -1,4 +1,5 @@
 "use client";
+import { waterObservationChanges } from "../../../../../shared/sop/waterObservations";
 
 import { useSaveOperation } from '../../../../../shared/useSaveOperation';
 import { createRecordOnce } from '@/lib/saveData';
@@ -44,8 +45,12 @@ import type { PlanktonOverwatchSnapshot } from '../../../../../shared/planktonOv
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 
+import { SopObservationTimes } from '@/components/SopObservationTimes';
+import { parseObservationTimes } from '../../../../../shared/sop/observationTimes';
+
 /* --- Types --------------------------------------------------- */
 interface Sampling {
+  observedAtByField?: Record<string,string>;
   id: string; date: string; mbw: number; mortality: number; feed: number;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
   isBaselineEstimate?: boolean; source?: string;
@@ -59,6 +64,7 @@ interface Sampling {
   alkalinity?: string;
   waterQualityRecordedByName?: string;
   ammonia?: string;
+  ammoniaBasis?: string;
   operationalNotes?: string;
   weatherEvent?: 'rain' | 'heavy_rain' | 'sudden_cloud' | null;
   waterExchangePercent?: string;
@@ -269,6 +275,7 @@ export default function WaterQualityPage() {
   }), [company?.businessSize, farmBlocks, ponds, user?.role, user?.uid]);
 
   // Form State
+  const [sopTimes, setSopTimes] = useState<Record<string,string>>({});
   const [formData, setFormData] = useState({
     pondId: '',
     date: today,
@@ -291,6 +298,7 @@ export default function WaterQualityPage() {
     waterDepthCm: '',
     alkalinity: '',
     ammonia: '',
+    ammoniaBasis: '',
     operationalNotes: '',
     weatherEvent: null as Sampling['weatherEvent'],
     waterExchangePercent: '',
@@ -370,12 +378,14 @@ export default function WaterQualityPage() {
   const openWaterRecord = (pondId = '') => {
     if (!save.reset()) return;
     waterDrafts.current.clear();
+    setSopTimes({});
     setFormData(createWaterDraft(pondId, today));
     setModalOpen(true);
   };
   const selectWaterRecord = (pondId: string, date: string) => {
     if (save.busy) return;
     waterDrafts.current.set(`${formData.pondId}:${formData.date}`, formData);
+    setSopTimes(accessiblePonds.find(p=>p.id===pondId)?.samplings.find(r=>isDailyWaterRecord(r,date))?.observedAtByField||{});
     setFormData(waterDrafts.current.get(`${pondId}:${date}`) || createWaterDraft(pondId, date));
   };
 
@@ -399,6 +409,7 @@ export default function WaterQualityPage() {
         const existingIndex = samplings.findIndex((record: Sampling) => isDailyWaterRecord(record, formData.date));
 
         const wqData = {
+          observedAtByField: { ...(existingIndex >= 0 ? samplings[existingIndex].observedAtByField : {}), ...parseObservationTimes(sopTimes) },
           cycleId: pondData.cycleId,
           cycleName: pondData.cycleName,
           pondCycleId: pondData.pondCycleId || formData.pondId,
@@ -422,6 +433,7 @@ export default function WaterQualityPage() {
           alkalinity: formData.alkalinity,
           waterQualityRecordedByName: user.name || (typeof user.email === 'string' ? user.email.split('@')[0] : '') || '',
           ammonia: formData.ammonia,
+          ammoniaBasis: formData.ammoniaBasis,
           operationalNotes: formData.operationalNotes.trim(),
           weatherEvent: formData.weatherEvent,
           waterExchangePercent: formData.waterExchangePercent,
@@ -441,6 +453,10 @@ export default function WaterQualityPage() {
           });
         }
 
+        const recordIndex=existingIndex>=0?existingIndex:samplings.length-1;
+        const projected=waterObservationChanges(formData.pondId,existingIndex>=0?pondData.samplings[existingIndex]:undefined,samplings[recordIndex]);
+        samplings[recordIndex]=projected.sampling;
+        for(const observation of projected.observations)transaction.set(doc(db,'companies',companyId,'waterObservations',observation.id),{...observation,companyId,pondId:formData.pondId,physicalPondId:pondData.physicalPondId||pondData.previousCyclePondId||formData.pondId,cycleId:pondData.pondCycleId||pondData.cycleId||formData.pondId,recordIndex,recordedBy:user.uid,updatedAt:serverTimestamp()});
         transaction.update(pondRef, removeUndefinedFields({
           samplings,
           updatedAt: serverTimestamp(),
@@ -1833,6 +1849,7 @@ export default function WaterQualityPage() {
                   <input type="number" step="0.1" placeholder="N/A" value={formData.temperatureEvening} onChange={e => setFormData({...formData, temperatureEvening: e.target.value})} className="form-input" />
                 </div>
 
+                <SopObservationTimes values={formData} times={sopTimes} onChange={setSopTimes} />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">{copy('pH (Morning)')}</label>
                   <input type="number" step="0.1" placeholder="N/A" value={formData.phMorning} onChange={e => setFormData({...formData, phMorning: e.target.value})} className="form-input" />
@@ -1896,6 +1913,8 @@ export default function WaterQualityPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">{copy('Ammonia (TAN) (mg/L)')}</label>
                   <input type="number" min="0" step="0.01" placeholder="N/A" value={formData.ammonia} onChange={e => setFormData({...formData, ammonia: e.target.value})} className="form-input" />
+                  <label className="form-label" htmlFor="water-ammonia-basis">{copy('Analytical basis (use the test kit label)')}</label>
+                  <select id="water-ammonia-basis" value={formData.ammoniaBasis} onChange={e=>setFormData({...formData,ammoniaBasis:e.target.value})} className="form-input"><option value="">{copy('Unknown')}</option><option value="TAN-N">TAN-N</option><option value="NH3-N">NH3-N</option><option value="NH3">NH3</option></select>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>

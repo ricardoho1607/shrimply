@@ -26,6 +26,7 @@ const textFields = [
   'waterDepthCm',
   'alkalinity',
   'ammonia',
+  'ammoniaBasis',
   'operationalNotes',
   'waterExchangePercent',
 ] as const;

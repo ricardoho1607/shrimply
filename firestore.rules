@@ -1019,6 +1019,7 @@ service cloud.firestore {
       match /ponds/{pondId} {
         allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm'));
         allow create: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'managePonds')
+          && sopStockingAllowed(companyId, request.resource.data)
           && validPhysicalPondCycle(request.resource.data, pondId)
           && validEnterprisePondBlock(companyId, request.resource.data)
           && validEnterprisePondCycle(companyId, request.resource.data));
@@ -1319,6 +1320,77 @@ service cloud.firestore {
           && validActivityDailyUpdate(request.resource.data, companyId));
         allow delete: if currentSessionAllowed() && (isFounderAdmin());
       }
+    }
+
+    // SOP definitions are shared with approved farm staff. Execution reads are assignment scoped;
+    // all state transitions, evaluations, approvals and audit writes are server-only.
+    function sopStockingAllowed(companyId, data) {
+      let physicalId = data.get('physicalPondId', 'missing');
+      let gatePath = /databases/$(database)/documents/companies/$(companyId)/sopGates/$(physicalId + '-stocking');
+      let stagePath = /databases/$(database)/documents/companies/$(companyId)/sopStages/$(physicalId);
+      return !exists(gatePath) || get(gatePath).data.get('allowed', false) == true
+        || data.get('cycleStartMode', 'new') == 'midcycle'
+        || (exists(stagePath) && get(stagePath).data.stage == 'stocking'
+          && (get(stagePath).data.get('actual', true) == false || get(stagePath).data.get('reason', '') != '')
+          && get(stagePath).data.changedAt > request.time.toMillis() - 86400000);
+    }
+    function canManageSop(companyId) {
+      return isCompanyMember(companyId) && (isCompanyOwner(companyId)
+        || currentUserRole() in ['owner', 'co-owner', 'manager']);
+    }
+    function validSopAssignment(companyId, data) {
+      return companyDoc(companyId).data.get('businessSize', '') != 'enterprise'
+        || currentUserRole() != 'technician'
+        || data.target.scope == 'company'
+        || (data.target.blockId is string && data.target.blockId != ''
+          && get(/databases/$(database)/documents/companies/$(companyId)/blocks/$(data.target.blockId)).data.assignedTechnicianId == request.auth.uid);
+    }
+    function canReadSopWork(companyId, data) {
+      return hasCompanyPermission(companyId, 'viewFarm') && (canManageSop(companyId)
+        || (request.auth.uid in data.visibleTo && validSopAssignment(companyId, data)));
+    }
+
+    match /companies/{companyId}/waterObservations/{observationId} {
+      function parentPond(data){return getAfter(/databases/$(database)/documents/companies/$(companyId)/ponds/$(data.pondId)).data;}
+      function validReading(data){
+        let pond=parentPond(data);
+        let record=pond.samplings[data.recordIndex];
+        return data.companyId==companyId && data.recordedBy==request.auth.uid && data.recordIndex is int && data.recordIndex>=0
+          && data.field in ['doMorning','doEvening','phMorning','phEvening','temperatureMorning','temperatureEvening','salinity','alkalinity','ammonia','nitriteMgL','transparencyMorning','transparencyEvening','waterDepthCmMorning','waterDepthCmEvening','waterExchangePercent','weatherEvent','sludgeLoad','surfaceScum','shrimpBehaviour']
+          && record.id==data.recordId && record.observationIdsByField[data.field]==observationId
+          && record.observedAtByField[data.field]==data.observedAt
+          && data.value==record.get(data.field,null)
+          && data.basis==(data.field=='ammonia'?record.get('ammoniaBasis',''):data.field=='nitriteMgL'?record.get('nitriteBasis',''):'')
+          && data.unit==({'doMorning':'mg/L','doEvening':'mg/L','phMorning':'','phEvening':'','temperatureMorning':'°C','temperatureEvening':'°C','salinity':'ppt','alkalinity':'mg/L','ammonia':'mg/L','nitriteMgL':'mg/L','transparencyMorning':'cm','transparencyEvening':'cm','waterDepthCmMorning':'cm','waterDepthCmEvening':'cm','waterExchangePercent':'%','weatherEvent':'','sludgeLoad':'','surfaceScum':'','shrimpBehaviour':''}[data.field])
+          && data.physicalPondId==pond.get('physicalPondId',pond.get('previousCyclePondId',data.pondId))
+          && data.cycleId==pond.get('pondCycleId',pond.get('cycleId',data.pondId))
+          && validSopAssignment(companyId,{target:{scope:'pond',blockId:pond.get('blockId','')}});
+      }
+      allow read: if currentSessionAllowed() && hasCompanyPermission(companyId,'viewFarm')
+        && validSopAssignment(companyId,{target:{scope:'pond',blockId:get(/databases/$(database)/documents/companies/$(companyId)/ponds/$(resource.data.pondId)).data.get('blockId','')}});
+      allow create, update: if currentSessionAllowed() && hasCompanyPermission(companyId,'recordPondData') && validReading(request.resource.data);
+      allow delete: if false;
+    }
+    match /companies/{companyId}/sops/{sopId} {
+      allow read: if currentSessionAllowed() && hasCompanyPermission(companyId, 'viewFarm');
+      allow write: if false;
+      match /versions/{versionId} {
+        allow read: if currentSessionAllowed() && hasCompanyPermission(companyId, 'viewFarm');
+        allow write: if false;
+      }
+    }
+    match /companies/{companyId}/{sopCollection}/{recordId} {
+      allow read: if currentSessionAllowed() && (
+        (sopCollection in ['tasks','sopIssues','sopSubmissions','sopEvaluations'] && canReadSopWork(companyId, resource.data))
+        || (sopCollection in ['sopAdoptions','sopAudit','sopStages','sopStageTransitions','sopEvidence','sopEvidenceRevisions','sopCommands','sopGates'] && canManageSop(companyId))
+        || (sopCollection == 'sopTranslations' && hasCompanyPermission(companyId, 'viewFarm'))
+        || (sopCollection == 'sopNotifications' && isCompanyMember(companyId) && resource.data.recipientId == request.auth.uid));
+      allow write: if false;
+    }
+    match /communitySops/{publicationId} {
+      allow read: if currentSessionAllowed() && signedIn()
+        && isCompanyMember(userDoc().data.companyId) && resource.data.status == 'published';
+      allow write: if false;
     }
 
     match /publicCompanyProfiles/{companyId} {

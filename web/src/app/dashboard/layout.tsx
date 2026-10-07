@@ -55,6 +55,8 @@ const NAV_STRUCTURE = (t: DashboardTranslations, copy: (text: string) => string)
   management: [
     { label: getString(t.nav.home, 'Home'), icon: 'home', href: '/dashboard' },
     { label: getString(t.nav.ponds, 'Ponds'), icon: 'ponds', href: '/dashboard/ponds' },
+    { label: copy('SOPs'), icon: 'reports', href: '/dashboard/sops' },
+    { label: copy('To-do'), icon: 'daily-operations', href: '/dashboard/todo' },
     { label: getString(t.nav.waterQuality, 'Water Quality'), icon: 'water-quality', href: '/dashboard/water' },
     { label: getString(t.nav.feed, 'Feed'), icon: 'feed', href: '/dashboard/feed' },
     { label: getString(t.nav.harvest, 'Harvest'), icon: 'harvest', href: '/dashboard/harvest' },

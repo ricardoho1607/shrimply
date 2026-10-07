@@ -1,3 +1,4 @@
+import { assertSopStageGate, previewSopPondChange } from '../services/sopGuards';
 // app/(tabs)/index.tsx - Fully translated version with keyboard handling
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
@@ -490,6 +491,7 @@ export default function PondManagementScreen() {
       { companyId: string; pondId: string; pond: { pondName: string; pondArea: number; blockId?: string; blockName?: string } },
       { id: string }
     >(getFunctions(firebaseApp), 'createCompanyPhysicalPond');
+    if (!await previewSopPondChange(currentCompanyId, pond)) throw new Error('Pond creation was cancelled.');
     const result = await createPhysicalPond({
       companyId: currentCompanyId,
       pondId: pond.id,
@@ -571,7 +573,7 @@ export default function PondManagementScreen() {
     }
   }, [availableEnterpriseBlocks, canManagePonds, closeModal, createPhysicalPondOnServer, formData, isEnterpriseFarm, physicalPonds, ponds, t]);
 
-  const handleAddCycle = useCallback(() => {
+  const handleAddCycle = useCallback(async () => {
     if (submitLockRef.current) return;
     submitLockRef.current = true;
     setIsSubmitting(true);
@@ -595,6 +597,10 @@ export default function PondManagementScreen() {
       baselineCumulativeFeed,
     } = formData;
 
+    const gatePond = startablePondOptions.find(pond => pond.id === cyclePondId);
+    if (company?.id && gatePond && cycleStartMode !== 'midcycle') {
+      try { await assertSopStageGate(company.id, gatePond.id, 'stocking'); } catch (error) { Alert.alert('SOP stage prerequisites', error instanceof Error ? error.message : 'Unable to verify stage requirements.'); submitLockRef.current = false; setIsSubmitting(false); return; }
+    }
     const isCreatingNewCycle = !isEnterpriseFarm && (formData.cycleTargetMode === 'new' || openAccessibleFarmCycles.length === 0);
     const docStartString = formatLocalDateKey(docStart);
 
@@ -1113,7 +1119,7 @@ export default function PondManagementScreen() {
     );
   }, [activeCyclePonds, activeFarmCycle, canManageFarmCycle, closeFarmCycle, company?.timeZone, currentCyclePonds, harvestRecords, router, t, user]);
 
-  const handleSaveEnterpriseProductionCycle = useCallback((input: {
+  const handleSaveEnterpriseProductionCycle = useCallback(async (input: {
     cycle?: FarmCycle;
     cycleName: string;
     block: FarmBlock;
@@ -1130,6 +1136,7 @@ export default function PondManagementScreen() {
       baselineCumulativeFeed?: number;
     }[];
   }) => {
+    if (company?.id && input.cycleStartMode !== 'midcycle') for (const entry of input.ponds) await assertSopStageGate(company.id, entry.pond.id, 'stocking');
     const stockingRange = getEnterpriseStockingDateRange([
       input.cycle?.stockingStartDate,
       input.cycle?.stockingEndDate,
@@ -1208,7 +1215,7 @@ export default function PondManagementScreen() {
       });
       if (!added) throw new Error('Could not start this pond. Sync the farm and check its physical pond link before trying again.');
     });
-  }, [addFarmCycle, addPond, company?.timeZone, updateFarmCycle]);
+  }, [addFarmCycle, addPond, company?.id, company?.timeZone, updateFarmCycle]);
 
   const handleCreateEnterprisePhysicalPond = useCallback(async (input: {
     pondName: string;

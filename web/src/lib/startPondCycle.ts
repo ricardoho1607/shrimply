@@ -1,3 +1,4 @@
+import { assertSopStageGate } from './sopGuards';
 import {
   collection,
   doc,
@@ -126,6 +127,7 @@ export async function startPondCycle({
   ));
   if (hasDuplicate) throw new StartPondCycleError('duplicate');
   const physicalPond = await resolveCompanyPhysicalPond(companyId, pondType === 'physical' ? { ...pond, physicalPondId: pond.id } : pond);
+  if(form.cycleStartMode!=='midcycle')await assertSopStageGate(companyId, physicalPond.id, 'stocking');
 
   const isCreatingNewCycle = form.cycleTargetMode === 'new' || !activeCycle;
   const assignedBlockIds = (!isCreatingNewCycle && activeCycle?.blockIds?.length)

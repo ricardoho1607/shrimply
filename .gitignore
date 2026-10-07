@@ -52,3 +52,7 @@ expo-env.d.ts
 .vercel
 .env*
 qa-reports/
+
+# Local isolated SOP emulator harness
+.sop-emulator/
+android/sentry.properties

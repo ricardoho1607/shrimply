@@ -3,12 +3,12 @@ export default {
   expo: {
     name: 'Shrimply',
     slug: 'investashrimp',
-    version: '3.2.1',
+    version: '3.3.0',
     orientation: 'portrait',
     icon: './assets/images/app-icon.png',
     scheme: 'shrimply',
     userInterfaceStyle: 'automatic',
-    runtimeVersion: '3.2.1-sdk57',
+    runtimeVersion: '3.3.0-sdk57',
     updates: {
       url: 'https://u.expo.dev/8a20b603-ee9c-44cc-8797-1865788511db',
       checkAutomatically: 'NEVER',
@@ -62,6 +62,7 @@ export default {
         },
       ],
       ['expo-speech-recognition', { microphonePermission: 'Allow Shrimply to transcribe farm entries you dictate.', speechRecognitionPermission: 'Allow Shrimply to convert your speech into an editable message.' }],
+      ['expo-notifications', { color: '#0F4C75' }],
       'expo-router',
       'expo-asset',
       'expo-sharing',
