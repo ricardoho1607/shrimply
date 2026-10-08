@@ -24,10 +24,11 @@
     "test:orson-observation-contract": "node --require ./scripts/register-typescript.cjs --test functions/shared/orsonAgentContract.source.test.cjs",
     "check": "node --require ./scripts/register-typescript.cjs --test functions/shared/orsonAgentContract.source.test.cjs orson/agentState.test.cjs orson/sessionUi.test.cjs web/src/app/dashboard/ai/orsonStreamingUi.test.cjs",
     "test:orson-agent:emulator": "firebase emulators:exec --project demo-shrimply-agent --config firebase.orson-agent-test.json --only firestore,storage \"node --test --test-concurrency=1 functions/orsonAgent.emulator.test.cjs functions/orsonAgentRules.emulator.test.cjs\"",
-    "test:sop": "node --require ./scripts/register-typescript.cjs --test shared/sop/*.test.cjs functions/sop/evidence.test.cjs",
+    "test:sop": "node --require ./scripts/register-typescript.cjs --test shared/sop/*.test.cjs functions/sop/evidence.test.cjs functions/sop/model.test.cjs",
     "test:sop:emulator": "firebase emulators:exec --project demo-shrimply-sop --config firebase.sop-test.json --only firestore,storage \"node --test --test-concurrency=1 functions/sop/adaptive.emulator.test.cjs\"",
     "test:sop:browser": "node scripts/sop/prepare-e2e.cjs && firebase emulators:exec --project demo-shrimply-agent --config firebase.sop-e2e-test.json --only auth,firestore,storage,functions \"node scripts/sop/run-browser.cjs\"",
-    "test:sop:calibration": "node scripts/sop/calibrate-narrative.cjs"
+    "test:sop:calibration": "node scripts/sop/calibrate-narrative.cjs",
+    "test:sop:meta": "node scripts/sop/verify-meta.cjs"
   },
   "dependencies": {
     "@expo-google-fonts/libre-baskerville": "^0.4.2",

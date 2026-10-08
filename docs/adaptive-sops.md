@@ -63,13 +63,13 @@ The integration suite verifies private files, sanitized publication/withdrawal, 
 ## Release checks still requiring external access
 
 1. **Physical device push and native build.** `expo-notifications` and Android/iOS configuration are prepared with app/runtime `3.3.0` / `3.3.0-sdk57`. Android signing protections are preserved. This workspace has no Android SDK/adb or CocoaPods, so no native build or physical device delivery was verified. Build compatible native binaries, configure provider credentials, then verify permission denial, normal/critical channels, foreground/background/killed app, quiet hours, company-safe deep links and invalid-token receipts. An OTA to the old runtime cannot supply the module.
-2. **Live narrative calibration.** `SOP_NARRATIVE_CALIBRATED` defaults to false. The actual evaluator/model prompt is shared with the labelled fixture runner:
+2. **Narrative release configuration.** SOP drafting, PDF/DOCX/text authoring, translation and narrative evaluation use the same Meta Muse Spark adapter and `MODEL_API_KEY` as Orson chat. `SOP_NARRATIVE_CALIBRATED` defaults to false, and automatic approvals additionally require `SOP_NARRATIVE_CALIBRATION_ID=muse-spark-1.3-contributor:v2`. The actual evaluator/model prompt is shared with the labelled fixture runner:
 
    ```sh
    SOP_CALIBRATION_ENV=/path/to/authorized/local/key-file npm run test:sop:calibration
    ```
 
-   The fixture report goes to gitignored `artifacts/sop/narrative-calibration.json`. Access to the existing Firebase Gemini secret returned `403 secretmanager.versions.access`; live calibration was not possible here. Do not enable automatic decisions before the configured production model passes the labelled suite. Only complete low-severity narrative passes with validated citations, explanation and confidence >= 0.90 can be automatic. Photos, failures, uncertainty, unsupported claims, higher severity and provider failures require human review.
+   The fixture report goes to gitignored `artifacts/sop/narrative-calibration.json`. Muse Spark passed all 10 live labelled fixtures using the existing authorized Meta key. The previous Gemini secret-access blocker is resolved. Set the matching calibration ID and enable the calibration boolean only as part of the controlled deployment. Recalibrate after model/evaluator changes; earlier calibration cannot enable a different evaluator. Only complete low-severity narrative passes with validated citations, explanation and confidence >= 0.90 can be automatic. Photos, failures, uncertainty, unsupported claims, higher severity and provider failures require human review.
 3. **Native/offline acceptance.** Verify actual mobile sampling saves, offline evidence/attachment replay, company switching, revoked scope on reconnect, and the full corrective loop on Android and iOS devices. Browser emulators and TypeScript do not replace these checks.
 
 Expo Doctor currently passes 18/21 checks. The remaining checks include pre-existing Expo SDK patch-version drift, missing CocoaPods and the project's existing native/non-CNG configuration warning. Unrelated dependencies were not upgraded. A pre-existing offline harvest rollback test returns 72 instead of 720; it was reproduced in the untouched primary checkout and is not fixed by this feature.
@@ -80,8 +80,23 @@ No production deployment or Git push is part of this implementation. Deploy addi
 
 Monitor adoption `nextDueAt` lag, `lastSchedulerError`, pending source verifications, oldest offline submissions, open/repeated episodes, projection failures, AI human-review rate and `sopPushDeliveries` retry/receipt errors. Failed evaluation must remain pending/needs-review. Audit/source retention must survive retirement and unlisting. Avoid deleting SOP runtime services while client guidance gates are active.
 
-Release acceptance is incomplete until the device, live AI and mobile/offline checks above are verified.
+Release acceptance is incomplete until the device and mobile/offline checks above are verified and the calibrated evaluator configuration is applied during deployment.
 
 ## Verified checkpoint
 
-Final checks passed: 23 SOP/evidence tests, 19 Firebase emulator integration tests, 41 affected regression tests, mobile/web TypeScript, new feature ESLint, shared-domain mirror consistency, Android signing/release integrity and the web production build. The final browser rerun passed the complete committed-record water-quality corrective loop, including the critical review action and responsive To-do page. The primary `v3` checkout stayed unchanged. Native/device and live-model acceptance remain outstanding as described above.
+Initial implementation checks passed: 23 SOP/evidence tests, 19 Firebase emulator integration tests, 41 affected regression tests, mobile/web TypeScript, new feature ESLint, shared-domain mirror consistency, Android signing/release integrity and the web production build. The final browser rerun passed the complete committed-record water-quality corrective loop, including the critical review action and responsive To-do page. The primary `v3` checkout stayed unchanged. Native/device acceptance remains outstanding. Live model verification is recorded below.
+
+## Meta provider correction
+
+SOP functions now share Orson's `muse-spark-1.3-contributor` model, `MODEL_API_KEY`, and Responses adapter. The adapter's default endpoint matches [Meta's documented base URL](https://dev.meta.ai/docs/overview). Its optional `text.format` schema leaves normal Orson chat requests unchanged. Strict [structured output](https://dev.meta.ai/docs/structured-output), complete-response checks and runtime narrative validation prevent malformed or truncated output becoming a pass. PDFs use private inline `input_file` data as described by [Meta file handling](https://dev.meta.ai/docs/file-handling); they are not published or uploaded to a reusable provider file store. Existing non-SOP OCR handlers keep their current provider.
+
+To rerun the live synthetic provider checks:
+
+```sh
+SOP_CALIBRATION_ENV=/path/to/authorized/local/key-file npm run test:sop:meta
+SOP_CALIBRATION_ENV=/path/to/authorized/local/key-file npm run test:sop:calibration
+```
+
+Keys are read locally and never printed or written to reports. Live tests use synthetic guidelines and evidence only. Reports are gitignored under `artifacts/sop/`. No production functions, flags, farm data, or secrets were deployed or changed by this correction.
+
+Provider correction verification passed: 28 SOP/model tests, 36 Meta/Orson response tests, 19 Firebase emulator integration tests, 10 live narrative fixtures and the three live draft/PDF/translation checks. The full browser water-quality corrective loop also passed with the Meta-backed function codebase.

@@ -1,63 +1,46 @@
 "use strict";
-const fs = require("node:fs"),
-  path = require("node:path"),
-  assert = require("node:assert/strict");
-const backendRequire = require("node:module").createRequire(
-  path.resolve("functions/package.json"),
-);
+const fs = require("node:fs");
 const {
   MODEL,
   EVALUATOR_VERSION,
+  CALIBRATION_ID,
   narrativePrompt,
 } = require("../../functions/sop/narrative");
 const {
   assessNarrative,
 } = require("../../functions/shared/orsonDomain/sop/engine");
 (async () => {
-  let apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey && process.env.SOP_CALIBRATION_ENV) {
-    const text = fs.readFileSync(process.env.SOP_CALIBRATION_ENV, "utf8");
-    apiKey =
-      text.trim().match(/^AIza[\w-]+$/)?.[0] ||
-      text
-        .match(/^GEMINI_API_KEY\s*=\s*([^\r\n]+)/m)?.[1]
-        ?.trim()
-        .replace(/^["']|["']$/g, "");
-  }
-  assert.ok(
-    apiKey,
-    "Set GEMINI_API_KEY or SOP_CALIBRATION_ENV to an authorized local secret file.",
-  );
-  const { GoogleGenerativeAI } = backendRequire("@google/generative-ai");
-  const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({
-      model: MODEL,
-      generationConfig: {
-        responseMimeType: "application/json",
-        temperature: 0,
-      },
-    }),
-    results = [];
+  const apiKey = require("./model-key.cjs").loadSopModelKey();
+  const {
+    generateSopJson,
+    SOP_NARRATIVE_FORMAT,
+  } = require("../../functions/sop/model");
+  const results = [];
   for (const fixture of require("./narrative-fixtures.json")) {
-    const evidenceId = `fixture-${fixture.id}`,
-      response = await model.generateContent([
-        narrativePrompt({
-          rubric: fixture.rubric,
-          instructions: "Record direct inspection observations.",
-          evidenceId,
-          notes: fixture.notes,
-        }),
-      ]);
-    const judgment = JSON.parse(response.response.text()),
-      decision = assessNarrative({
-        severity: "low",
-        calibrated: true,
-        allowedIds: [evidenceId],
-        ...judgment,
-      });
+    const evidenceId = `fixture-${fixture.id}`;
+    const judgment = await generateSopJson({
+      apiKey,
+      prompt: narrativePrompt({
+        rubric: fixture.rubric,
+        instructions: "Record direct inspection observations.",
+        evidenceId,
+        notes: fixture.notes,
+      }),
+      format: SOP_NARRATIVE_FORMAT,
+    });
+    const decision = assessNarrative({
+      severity: "low",
+      calibrated: true,
+      allowedIds: [evidenceId],
+      ...judgment,
+    });
     const acceptable =
       fixture.expected === "pass"
         ? decision === "pass"
         : decision === "needs_review";
+    console.log(
+      `Calibration ${fixture.id}: ${decision} (${acceptable ? "PASS" : "FAIL"})`,
+    );
     results.push({
       id: fixture.id,
       expected: fixture.expected,
@@ -69,6 +52,7 @@ const {
   }
   const report = {
     modelId: MODEL,
+    calibrationId: CALIBRATION_ID,
     evaluatorVersion: EVALUATOR_VERSION,
     fixtureSuite: "sop-narrative-v1",
     testedAt: new Date().toISOString(),

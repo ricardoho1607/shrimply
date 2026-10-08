@@ -1,4 +1,4 @@
-const META_MODEL_API_BASE_URL = process.env.META_MODEL_API_BASE_URL || 'https://api.ai.meta.com/v1';
+const META_MODEL_API_BASE_URL = process.env.META_MODEL_API_BASE_URL || 'https://api.meta.ai/v1';
 const META_MODEL_API_MODEL = 'muse-spark-1.3-contributor';
 const getOrsonGenerationSettings = (mode) => mode === 'standard'
   ? { reasoningEffort: 'low', maxOutputTokens: 2500, timeoutMs: 60000 }
@@ -135,6 +135,7 @@ const generateMetaModelResponse = async ({
   onTextDelta,
   tools = [],
   executeTool,
+  responseFormat,
   timeoutMs = 45000,
   signal = AbortSignal.timeout(timeoutMs),
   fetchImpl = fetch,
@@ -160,6 +161,7 @@ const generateMetaModelResponse = async ({
         max_output_tokens: maxOutputTokens,
         reasoning: { effort: reasoningEffort },
         store: false,
+        ...(responseFormat ? { text: { format: responseFormat } } : {}),
         ...((tools.length || useWebLookup) ? { tools: [...tools, ...(useWebLookup ? [{ type: 'web_search' }] : [])] } : {}),
         ...(streaming ? { stream: true } : {}),
       }),

@@ -61,6 +61,20 @@ test('Meta Model API requests use Muse Spark 1.3 Contributor and preserve prompt
   assert.equal(result.outputTokens, 8);
 });
 
+test('structured Responses output forwards its exact schema without changing normal chat requests', async () => {
+  const responseFormat = { type: 'json_schema', name: 'fixture', strict: true, schema: { type: 'object', properties: {}, required: [], additionalProperties: false } };
+  let body;
+  await generateMetaModelResponse({
+    apiKey: 'synthetic-key', prompt: 'Return JSON.', responseFormat,
+    fetchImpl: async (_url, options) => {
+      body = JSON.parse(options.body);
+      return jsonResponse({ status: 'completed', output_text: '{}' });
+    },
+  });
+  assert.deepEqual(body.text, { format: responseFormat });
+  assert.equal(body.tools, undefined);
+});
+
 test('Meta response streaming emits text deltas and keeps web citations', async () => {
   const events = [
     { type: 'response.output_text.delta', delta: 'Check ' },

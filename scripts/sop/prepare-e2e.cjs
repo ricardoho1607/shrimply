@@ -31,10 +31,10 @@ if (!fs.existsSync(modules))
 // No provider request is exercised by browser acceptance. Automatic AI decisions remain off.
 fs.writeFileSync(
   path.join(target, ".secret.local"),
-  "GEMINI_API_KEY=local-emulator-only\n",
+  "MODEL_API_KEY=local-emulator-only\n",
 );
 fs.writeFileSync(
   path.join(target, ".env.local"),
-  "SOP_NARRATIVE_CALIBRATED=false\n",
+  "SOP_NARRATIVE_CALIBRATED=false\nSOP_NARRATIVE_CALIBRATION_ID=\n",
 );
 console.log("Prepared an isolated SOP-only emulator codebase.");
