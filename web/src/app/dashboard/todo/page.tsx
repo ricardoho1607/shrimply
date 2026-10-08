@@ -165,7 +165,7 @@ function TodoPageContent() {
               "waived",
               "cancelled",
             ].map((s) => (
-              <option key={s}>{s}</option>
+              <option key={s} value={s}>{ui(s)}</option>
             ))}
           </select>
         </label>
@@ -207,7 +207,7 @@ function TodoPageContent() {
           <select value={urgency} onChange={(e) => setUrgency(e.target.value)}>
             {["", "low", "warning", "critical"].map((s) => (
               <option key={s} value={s}>
-                {s || "All urgency levels"}
+                {ui(s || "All urgency levels")}
               </option>
             ))}
           </select>
@@ -241,7 +241,7 @@ function TodoPageContent() {
         <article className="sop-card" key={t.id}>
           <div className="sop-toolbar">
             <h2>{t.title}</h2>
-            <span className="sop-status">{t.status.replace(/_/g, " ")}</span>
+            <span className="sop-status">{ui(t.status)}</span>
             {t.dueAt < clock &&
               !["completed", "waived", "cancelled"].includes(t.status) && (
                 <span className="sop-status">{ui("Overdue")}</span>
@@ -250,7 +250,7 @@ function TodoPageContent() {
           <p>
             {t.target.name} ·{" "}
             {w.members.find((m) => m.id === t.assigneeId)?.name ||
-              "Assigned staff"}{" "}
+              ui("Assigned staff")}{" "}
             ·{" "}
             {new Date(t.dueAt).toLocaleString(currentLanguage, {
               timeZone: w.timeZone || "UTC",
@@ -258,7 +258,7 @@ function TodoPageContent() {
           </p>
           <p>{t.instructions}</p>
           <p>
-            {ui("Parameter result:")} {t.result.replace(/_/g, " ")}
+            {ui("Parameter result:")} {ui(t.result)}
           </p>
           {client.pending.includes(t.id) && <p>{c.pending}</p>}
           <div className="sop-toolbar">
@@ -331,9 +331,9 @@ function TodoPageContent() {
               <p>
                 {ui("Evidence:")} {selected.step.check.field} ·{" "}
                 {selected.step.check.unit} ·{" "}
-                {selected.step.check.exactTime
+                {ui(selected.step.check.exactTime
                   ? "Exact observation time required"
-                  : "Recorded date accepted"}
+                  : "Recorded date accepted")}
               </p>
             )}
             <label className="sop-field">
@@ -404,7 +404,7 @@ function TodoPageContent() {
                   setMessage(
                     result.pending
                       ? c.pending
-                      : "Evidence submitted. Source records determine automatic checks.",
+                      : ui("Evidence submitted. Source records determine automatic checks."),
                   );
                   setSelected(null);
                 })
@@ -438,16 +438,16 @@ function TodoPageContent() {
                 }
               >
                 <summary>
-                  {selected.purpose === "recheck" &&
+                  {ui(selected.purpose === "recheck" &&
                   selected.status === "needs_review"
                     ? "Recovery requires manager sign-off"
-                    : "Manager decisions"}
+                    : "Manager decisions")}
                 </summary>
                 {["pass", "fail", "not_applicable"].map((result) => (
                   <button
                     key={result}
                     onClick={() => {
-                      const reason = window.prompt(`Reason for ${result}`);
+                      const reason = window.prompt(`${ui("Reason for")} ${ui(result)}`);
                       if (reason)
                         void run(async () => {
                           await client.command({
@@ -461,19 +461,19 @@ function TodoPageContent() {
                         });
                     }}
                   >
-                    {ui("Review as")} {result.replace(/_/g, " ")}
+                    {ui("Review as")} {ui(result)}
                   </button>
                 ))}
                 {["waive", "cancel", "postpone"].map((action) => (
                   <button
                     key={action}
                     onClick={() => {
-                      const reason = window.prompt(`Reason to ${action}`);
+                      const reason = window.prompt(`${ui("Reason to")} ${ui(action)}`);
                       if (!reason) return;
                       let dueAt: number | undefined;
                       if (action === "postpone") {
                         const value = window.prompt(
-                          "New deadline (ISO date and time)",
+                          ui("New deadline (ISO date and time)"),
                         );
                         if (!value) return;
                         dueAt = Date.parse(value);
@@ -539,7 +539,7 @@ function TodoPageContent() {
                 onChange={(e) => setManualSeverity(e.target.value)}
               >
                 {["low", "warning", "critical"].map((value) => (
-                  <option key={value}>{value}</option>
+                  <option key={value} value={value}>{ui(value)}</option>
                 ))}
               </select>
             </label>
@@ -579,7 +579,7 @@ function TodoPageContent() {
                 }}
               >
                 {["company", "block", "pond"].map((s) => (
-                  <option key={s}>{s}</option>
+                  <option key={s} value={s}>{ui(s)}</option>
                 ))}
               </select>
             </label>

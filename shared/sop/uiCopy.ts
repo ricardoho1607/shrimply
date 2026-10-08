@@ -212,6 +212,61 @@ SOP sections|Bagian SOP|Mục SOP|ส่วน SOP|SOP 分区
 SHRIMPLY • DAILY WORK|SHRIMPLY • TUGAS HARIAN|SHRIMPLY • CÔNG VIỆC HẰNG NGÀY|SHRIMPLY • งานประจำวัน|SHRIMPLY • 日常工作
 SHRIMPLY • FARM WORKFLOWS|SHRIMPLY • ALUR KERJA TAMBAK|SHRIMPLY • QUY TRÌNH TRANG TRẠI|SHRIMPLY • ขั้นตอนฟาร์ม|SHRIMPLY • 农场流程
 
+Edit farm procedure|Edit prosedur tambak|Sửa quy trình trang trại|แก้ไขขั้นตอนของฟาร์ม|编辑农场规程
+All urgency levels|Semua tingkat urgensi|Tất cả mức độ khẩn cấp|ทุกระดับความเร่งด่วน|所有紧急程度
+Assigned staff|Petugas yang ditugaskan|Nhân viên được giao|ผู้รับผิดชอบ|已指派员工
+Evidence submitted for verification.|Bukti dikirim untuk verifikasi.|Đã gửi bằng chứng để xác minh.|ส่งหลักฐานเพื่อการตรวจสอบแล้ว|证据已提交，等待验证。
+Evidence submitted. Source records determine automatic checks.|Bukti dikirim. Pemeriksaan otomatis menggunakan catatan sumber.|Đã gửi bằng chứng. Kiểm tra tự động dựa trên bản ghi nguồn.|ส่งหลักฐานแล้ว การตรวจอัตโนมัติอ้างอิงบันทึกต้นทาง|证据已提交。自动检查以源记录为依据。
+Recovery requires manager sign-off|Pemulihan memerlukan persetujuan manajer|Phục hồi cần quản lý xác nhận|การฟื้นตัวต้องได้รับการยืนยันจากผู้จัดการ|恢复需要经理确认
+Manager decisions|Keputusan manajer|Quyết định của quản lý|การตัดสินใจของผู้จัดการ|经理决策
+Reason for|Alasan untuk|Lý do cho|เหตุผลสำหรับ|理由：
+Reason to|Alasan untuk|Lý do để|เหตุผลในการ|操作理由：
+New deadline (ISO date and time)|Tenggat baru (tanggal dan waktu ISO)|Hạn mới (ngày và giờ ISO)|กำหนดเวลาใหม่ (วันที่และเวลา ISO)|新截止时间（ISO 日期和时间）
+Reason to unlist this community SOP|Alasan menghapus SOP ini dari pustaka komunitas|Lý do ẩn SOP này khỏi thư viện cộng đồng|เหตุผลในการนำ SOP นี้ออกจากคลังชุมชน|取消公开展示此社区 SOP 的理由
+Explain why this publication should be reviewed.|Jelaskan mengapa publikasi ini perlu ditinjau.|Giải thích vì sao cần xem xét tài liệu này.|อธิบายเหตุผลที่ควรตรวจสอบการเผยแพร่นี้|说明此发布内容为何需要审阅。
+Withdrawal reason (your own publication only)|Alasan penarikan (hanya publikasi Anda)|Lý do rút lại (chỉ tài liệu bạn đăng)|เหตุผลในการถอน (เฉพาะสิ่งที่คุณเผยแพร่)|撤回理由（仅限自己的发布内容）
+These totals cover {period} in the farm timezone.|Total ini mencakup {period} dalam zona waktu tambak.|Các tổng số này bao gồm {period} theo múi giờ trang trại.|ยอดรวมเหล่านี้ครอบคลุม {period} ตามเขตเวลาของฟาร์ม|这些汇总涵盖农场时区内的 {period}。
+These totals describe your loaded task history.|Total ini merangkum riwayat tugas yang dimuat.|Các tổng số này mô tả lịch sử công việc đã tải.|ยอดรวมเหล่านี้สรุปประวัติงานที่โหลดไว้|这些汇总基于已加载的任务历史。
+complete|selesai|hoàn thành|เสร็จสิ้น|完成
+configure corrective action|atur tindakan perbaikan|thiết lập hành động khắc phục|กำหนดการแก้ไข|配置纠正措施
+Set your company timezone before activation|Atur zona waktu perusahaan sebelum aktivasi|Đặt múi giờ công ty trước khi kích hoạt|ตั้งเขตเวลาของบริษัทก่อนเปิดใช้งาน|启用前请设置公司时区
+Block technician / manager|Teknisi blok / manajer|Kỹ thuật viên khu / quản lý|ช่างประจำบล็อก / ผู้จัดการ|区块技术员／经理
+waive|kecualikan|miễn|ยกเว้น|豁免
+cancel|batalkan|hủy|ยกเลิก|取消
+postpone|tunda|hoãn|เลื่อน|延期
+Read-only SOP workflow|Alur SOP hanya baca|Sơ đồ SOP chỉ đọc|แผนผัง SOP แบบอ่านอย่างเดียว|只读 SOP 流程图
+Pass|Lulus|Đạt|ผ่าน|通过
+Failure|Gagal|Không đạt|ไม่ผ่าน|未通过
+Requires|Memerlukan|Yêu cầu|ต้องมี|需要
+active|Aktif|Đang hoạt động|ใช้งานอยู่|启用中
+paused|Dijeda|Tạm dừng|พักการใช้งาน|已暂停
+retired|Dihentikan|Ngừng áp dụng|เลิกใช้งาน|已停用
+draft|Draf|Bản nháp|ฉบับร่าง|草稿
+approved|Disetujui|Đã duyệt|อนุมัติแล้ว|已批准
+published|Diterbitkan|Đã đăng|เผยแพร่แล้ว|已发布
+withdrawn|Ditarik|Đã rút lại|ถอนแล้ว|已撤回
+standing|Berkelanjutan|Áp dụng lâu dài|ใช้ต่อเนื่อง|长期采用
+cycle|Siklus saat ini|Vụ hiện tại|รอบปัจจุบัน|当前周期
+· revision|· revisi|· phiên bản|· ฉบับแก้ไข|· 修订版
+targets|sasaran|đối tượng|เป้าหมาย|目标
+targets ·|sasaran ·|đối tượng ·|เป้าหมาย ·|目标 ·
+adopting farms ·|tambak pengguna ·|trang trại áp dụng ·|ฟาร์มที่นำไปใช้ ·|采用农场 ·
+to|hingga|đến|ถึง|至
+Read procedure|Baca prosedur|Đọc quy trình|อ่านขั้นตอน|阅读规程
+unresolved tasks affected. Future updates keep existing rules; migration retains prior history.|tugas terbuka terdampak. Pembaruan mendatang mempertahankan aturan tugas yang ada; migrasi menyimpan riwayat sebelumnya.|công việc chưa xử lý bị ảnh hưởng. Cập nhật cho công việc sau này giữ nguyên quy tắc hiện tại; chuyển đổi vẫn giữ lịch sử trước đó.|งานค้างได้รับผลกระทบ การอัปเดตงานในอนาคตคงกฎของงานเดิมไว้ การย้ายงานเก็บประวัติเดิมไว้|项未解决任务受影响。未来更新保留现有任务的规则；迁移会保留此前历史。
+Older work is available through the task history service; this view is limited to recent work.|Tugas lama tersedia melalui riwayat tugas; tampilan ini hanya memuat tugas terbaru.|Có thể xem công việc cũ trong lịch sử; màn hình này chỉ hiển thị công việc gần đây.|ดูงานเก่าได้จากประวัติงาน หน้านี้แสดงเฉพาะงานล่าสุด|更早的工作可通过任务历史查看；此视图仅显示近期工作。
+→ pass:|→ lulus:|→ đạt:|→ ผ่าน:|→ 通过：
+/ fail:|/ gagal:|/ không đạt:|/ ไม่ผ่าน:|／失败：
+→ recheck after|→ periksa ulang setelah|→ kiểm tra lại sau|→ ตรวจซ้ำหลัง|→ 等待后复检
+min → escalate after|menit → eskalasi setelah|phút → báo cáo nâng cấp sau|นาที → ยกระดับหลัง|分钟 → 等待后升级
+→ corrective action → recheck|→ tindakan perbaikan → periksa ulang|→ khắc phục → kiểm tra lại|→ แก้ไข → ตรวจซ้ำ|→ 纠正措施 → 复检
+min → escalate|menit → eskalasi|phút → báo cáo nâng cấp|นาที → ยกระดับ|分钟 → 升级
+Water-quality monitoring|Pemantauan kualitas air|Theo dõi chất lượng nước|ติดตามคุณภาพน้ำ|水质监测
+Sampling routine|Prosedur sampling|Quy trình lấy mẫu|ขั้นตอนเก็บตัวอย่าง|取样流程
+Equipment inspection|Pemeriksaan peralatan|Kiểm tra thiết bị|ตรวจสอบอุปกรณ์|设备检查
+Set your farm targets, measurement windows, corrective instructions, and escalation timing before approval.|Tetapkan sasaran tambak, jendela pengukuran, instruksi perbaikan, dan waktu eskalasi sebelum persetujuan.|Đặt mục tiêu trang trại, khoảng đo, hướng dẫn khắc phục và thời gian báo cáo nâng cấp trước khi duyệt.|กำหนดเป้าหมายฟาร์ม ช่วงเวลาวัด คำแนะนำแก้ไข และเวลายกระดับก่อนอนุมัติ|批准前请设置农场目标、测量时间窗、纠正说明和升级时间。
+Configure sampling milestones and the measurements your farm requires.|Atur jadwal sampling dan pengukuran yang diperlukan tambak.|Thiết lập các mốc lấy mẫu và phép đo trang trại yêu cầu.|กำหนดช่วงเก็บตัวอย่างและค่าที่ฟาร์มต้องวัด|配置取样节点和农场要求的测量项目。
+Define equipment checks and required photographic or written evidence.|Tentukan pemeriksaan peralatan serta bukti foto atau tertulis yang diperlukan.|Xác định kiểm tra thiết bị và bằng chứng ảnh hoặc văn bản cần có.|กำหนดการตรวจอุปกรณ์และหลักฐานภาพถ่ายหรือข้อความที่ต้องมี|定义设备检查及所需的照片或文字证据。
 `;
 const text: Record<string, string[]> = Object.fromEntries(
   rows

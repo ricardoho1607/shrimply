@@ -308,7 +308,7 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
       attachments,
     });
     setMessage(
-      result.pending ? c.pending : "Evidence submitted for verification.",
+      result.pending ? c.pending : ui("Evidence submitted for verification."),
     );
     setTask(null);
   };
@@ -363,8 +363,8 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
             <Text style={styles.subheading}>{ui("Starter templates")}</Text>
             {SOP_TEMPLATES.map((t) => (
               <View key={t.title} style={styles.card}>
-                <Text style={styles.subheading}>{t.title}</Text>
-                <Text style={styles.text}>{t.description}</Text>
+                <Text style={styles.subheading}>{ui(t.title)}</Text>
+                <Text style={styles.text}>{ui(t.description)}</Text>
                 <Button
                   title={ui("Customize template")}
                   onPress={() => {
@@ -378,7 +378,7 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
               <View style={styles.card} key={s.id}>
                 <Text style={styles.subheading}>{s.title}</Text>
                 <Text style={styles.text}>
-                  {s.status} {ui("· revision")} {s.revision}
+                  {ui(s.status)} {ui("· revision")} {s.revision}
                 </Text>
                 {s.source && (
                   <Text style={styles.text}>
@@ -586,7 +586,7 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
               <View style={styles.card} key={ad.id}>
                 <Text style={styles.subheading}>{ad.title}</Text>
                 <Text style={styles.text}>
-                  {ad.status} · {ad.lifetime} · {ad.targets.length}{" "}
+                  {ui(ad.status)} · {ui(ad.lifetime)} · {ad.targets.length}{" "}
                   {ui("targets")}
                 </Text>
                 <Button
@@ -1318,13 +1318,13 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
                     {(["dependsOn", "onPass", "onFail"] as const).map((k) => (
                       <Choices
                         key={k}
-                        label={
+                        label={ui(
                           k === "dependsOn"
                             ? "Dependencies"
                             : k === "onPass"
                               ? "On pass"
-                              : "On failure"
-                        }
+                              : "On failure",
+                        )}
                         values={definition.steps
                           .filter((t) => t.id !== s.id)
                           .map((t) => ({ id: t.id, title: t.title }))}
@@ -1647,7 +1647,7 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
               <View style={styles.card} key={t.id}>
                 <Text style={styles.subheading}>{t.title}</Text>
                 <Text style={styles.text}>
-                  {t.target.name} · {t.status} · {t.result.replace(/_/g, " ")}
+                  {t.target.name} · {ui(t.status)} · {ui(t.result)}
                 </Text>
                 <Text style={styles.text}>
                   {new Date(t.dueAt).toLocaleString(currentLanguage, {
@@ -1954,7 +1954,13 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
 }
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#f8fafc" },
-  content: { padding: 18, paddingBottom: 70 },
+  content: {
+    width: "100%",
+    maxWidth: 1180,
+    alignSelf: "center",
+    padding: 18,
+    paddingBottom: 70,
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -1963,7 +1969,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: "#dce6ec",
   },
-  heading: { fontSize: 25, fontWeight: "700", color: "#0F4C75" },
+  heading: {
+    flex: 1,
+    flexShrink: 1,
+    paddingHorizontal: 8,
+    textAlign: "center",
+    fontSize: 25,
+    fontWeight: "700",
+    color: "#0F4C75",
+  },
   subheading: {
     fontSize: 19,
     fontWeight: "600",
@@ -1981,6 +1995,8 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   button: {
+    maxWidth: "100%",
+    minHeight: 44,
     borderWidth: 1,
     borderColor: "#cbdde8",
     backgroundColor: "white",
@@ -2001,6 +2017,8 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   choice: {
+    maxWidth: "100%",
+    minHeight: 44,
     borderWidth: 1,
     borderColor: "#cbdde8",
     padding: 9,
@@ -2010,6 +2028,8 @@ const styles = StyleSheet.create({
   selectedText: { color: "white", fontSize: 14 },
   switch: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
     justifyContent: "space-between",
     alignItems: "center",
     marginVertical: 9,

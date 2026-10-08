@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { Language } from '@/translations';
+import { sopCopy } from '../../../shared/sop/copy';
 
 const INDONESIAN_DASHBOARD_COPY: Record<string, string> = {
   'Reports': 'Laporan',
@@ -665,7 +666,17 @@ const interpolate = (text: string, values?: Record<string, string | number>) => 
 export const getDashboardCopy = (language: Language) => (
   englishText: string,
   values?: Record<string, string | number>,
-) => interpolate(language === 'id' ? INDONESIAN_DASHBOARD_COPY[englishText] || englishText : englishText, values);
+) => {
+  const workflows = sopCopy(language);
+  const text = englishText === 'SOPs'
+    ? workflows.sops
+    : englishText === 'To-do'
+      ? workflows.todo
+      : language === 'id'
+        ? INDONESIAN_DASHBOARD_COPY[englishText] || englishText
+        : englishText;
+  return interpolate(text, values);
+};
 
 export const useDashboardCopy = () => {
   const { currentLanguage } = useLanguage();

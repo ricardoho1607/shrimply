@@ -3,14 +3,17 @@ import { ScrollView } from "react-native";
 import Svg, { Rect, Path, Text as SvgText } from "react-native-svg";
 import type { SopDefinition } from "../../shared/sop/contracts";
 import { sopFlow } from "../../shared/sop/flow";
+import { sopText } from "../../shared/sop/uiCopy";
+import { useLanguage } from "../../context/LanguageContext";
 export function SopFlowPreview({ definition }: { definition: SopDefinition }) {
+  const { currentLanguage } = useLanguage();
   const flow = sopFlow(definition);
   return (
     <ScrollView horizontal>
       <Svg
         width={flow.width}
         height={flow.height}
-        accessibilityLabel="Read-only SOP workflow"
+        accessibilityLabel={sopText("Read-only SOP workflow", currentLanguage)}
         viewBox={`0 0 ${flow.width} ${flow.height}`}
       >
         {flow.edges.map((e, i) => {
@@ -32,7 +35,7 @@ export function SopFlowPreview({ definition }: { definition: SopDefinition }) {
                 fill={e.color}
                 fontSize={12}
               >
-                {e.label}
+                {sopText(e.label, currentLanguage)}
               </SvgText>
             </React.Fragment>
           );

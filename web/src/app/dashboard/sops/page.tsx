@@ -186,8 +186,8 @@ function SopsPageContent() {
           </div>
           <p>
             {w.summary
-              ? `These totals cover ${w.summary.period} in the farm timezone.`
-              : "These totals describe your loaded task history."}{" "}
+              ? ui("These totals cover {period} in the farm timezone.").replace("{period}", w.summary.period)
+              : ui("These totals describe your loaded task history.")}{" "}
             {ui("Exemptions do not count as successful checks.")}
           </p>
           {w.truncated && (
@@ -201,7 +201,7 @@ function SopsPageContent() {
             <article className="sop-card" key={ad.id}>
               <h2>{ad.title}</h2>
               <p>
-                {ad.targets.length} {ui("targets ·")} {ad.status}
+                {ad.targets.length} {ui("targets ·")} {ui(ad.status)}
               </p>
               {ad.targets.map((t) => (
                 <p key={t.id}>
@@ -269,8 +269,8 @@ function SopsPageContent() {
           <div className="sop-grid">
             {SOP_TEMPLATES.map((t) => (
               <article className="sop-card" key={t.title}>
-                <h3>{t.title}</h3>
-                <p>{t.description}</p>
+                <h3>{ui(t.title)}</h3>
+                <p>{ui(t.description)}</p>
                 <button
                   onClick={() => {
                     setEditing(null);
@@ -294,7 +294,7 @@ function SopsPageContent() {
             <article className="sop-card" key={s.id}>
               <h3>{s.title}</h3>
               <p>
-                {s.status} {ui("· revision")} {s.revision} ·{" "}
+                {ui(s.status)} {ui("· revision")} {s.revision} ·{" "}
                 {s.definition.steps.length} {ui("steps")}
               </p>
               {s.source && (
@@ -423,7 +423,7 @@ function SopsPageContent() {
                   <button
                     onClick={() => {
                       const reason = window.prompt(
-                        "Reason to unlist this community SOP",
+                        ui("Reason to unlist this community SOP"),
                       );
                       if (reason)
                         void run(() =>
@@ -441,7 +441,7 @@ function SopsPageContent() {
                 <button
                   onClick={() => {
                     const reason = window.prompt(
-                      "Explain why this publication should be reviewed.",
+                      ui("Explain why this publication should be reviewed."),
                     );
                     if (reason)
                       void run(() =>
@@ -459,7 +459,7 @@ function SopsPageContent() {
                   <button
                     onClick={() => {
                       const reason = window.prompt(
-                        "Withdrawal reason (your own publication only)",
+                        ui("Withdrawal reason (your own publication only)"),
                       );
                       if (reason)
                         void run(() =>
@@ -485,10 +485,10 @@ function SopsPageContent() {
             <article className="sop-card" key={ad.id}>
               <h2>{ad.title}</h2>
               <p>
-                {ad.status} ·{" "}
+                {ui(ad.status)} ·{" "}
                 {ad.lifetime === "standing"
-                  ? "Standing procedure"
-                  : "Current cycle"}{" "}
+                  ? ui("Standing procedure")
+                  : ui("Current cycle")}{" "}
                 · {ad.timeZone} · {ad.targets.length} {ui("targets")}
               </p>
               <div className="sop-toolbar">
@@ -651,7 +651,7 @@ function SopsPageContent() {
       {definition && tab === "library" && (
         <section className="sop-editor">
           <div className="sop-toolbar">
-            <h2>{editing ? "Edit farm procedure" : c.create}</h2>
+            <h2>{editing ? ui("Edit farm procedure") : c.create}</h2>
             <button onClick={() => setDefinition(null)}>{c.back}</button>
           </div>
           <div className="sop-grid">
@@ -1191,13 +1191,13 @@ function SopsPageContent() {
                 {(["dependsOn", "onPass", "onFail"] as const).map((k) => (
                   <Field
                     key={k}
-                    label={
+                    label={ui(
                       k === "dependsOn"
                         ? "Dependencies"
                         : k === "onPass"
                           ? "On pass"
-                          : "On failure"
-                    }
+                          : "On failure",
+                    )}
                   >
                     <div className="sop-checkboxes">
                       {definition.steps
@@ -1294,9 +1294,9 @@ function SopsPageContent() {
                     .map(
                       (id) => definition.steps.find((t) => t.id === id)?.title,
                     )
-                    .join(", ") || "complete"}{" "}
+                    .join(", ") || ui("complete")}{" "}
                   {ui("/ fail:")}{" "}
-                  {s.correctiveInstructions || "configure corrective action"}{" "}
+                  {s.correctiveInstructions || ui("configure corrective action")}{" "}
                   {ui("→ recheck after")} {s.recheckMinutes}{" "}
                   {ui("min → escalate after")} {s.escalationMinutes} {ui("min")}
                 </li>
@@ -1455,7 +1455,7 @@ function SopsPageContent() {
             </div>
             <p>
               {ui("Timezone:")}{" "}
-              {w.timeZone || "Set your company timezone before activation"}
+              {w.timeZone || ui("Set your company timezone before activation")}
             </p>
             <button
               onClick={() =>

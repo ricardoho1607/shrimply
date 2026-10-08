@@ -1,13 +1,16 @@
 "use client";
 import type { SopDefinition } from "../../../shared/sop/contracts";
 import { sopFlow } from "../../../shared/sop/flow";
+import { sopText } from "../../../shared/sop/uiCopy";
+import { useLanguage } from "@/contexts/LanguageContext";
 export function SopFlowPreview({ definition }: { definition: SopDefinition }) {
+  const { currentLanguage } = useLanguage();
   const flow = sopFlow(definition);
   return (
     <div style={{ overflowX: "auto" }}>
       <svg
         role="img"
-        aria-label="Read-only SOP workflow: pass, failure, and prerequisite connections"
+        aria-label={sopText("Read-only SOP workflow", currentLanguage)}
         viewBox={`0 0 ${flow.width} ${flow.height}`}
         style={{ minWidth: 580, width: "100%", maxWidth: 720 }}
       >
@@ -39,7 +42,7 @@ export function SopFlowPreview({ definition }: { definition: SopDefinition }) {
                 markerEnd="url(#sop-arrow)"
               />
               <text x={x} y={(a.y + b.y) / 2 + 25} fill={e.color} fontSize="12">
-                {e.label}
+                {sopText(e.label, currentLanguage)}
               </text>
             </g>
           );
