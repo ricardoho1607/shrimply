@@ -23,7 +23,7 @@ fs.writeFileSync(
 );
 fs.writeFileSync(
   path.join(target, "index.js"),
-  `const admin=require(${JSON.stringify(path.join(root, "functions/firebaseAdmin.js"))});admin.initializeApp();Object.assign(exports,require(${JSON.stringify(path.join(root, "functions/sop/index.js"))}));\n`,
+  `require("firebase-admin/app").initializeApp({projectId:"demo-shrimply-agent",storageBucket:"demo-shrimply-agent.firebasestorage.app"});Object.assign(exports,require(${JSON.stringify(path.join(root, "functions/sop/index.js"))}));\n`,
 );
 const modules = path.join(target, "node_modules");
 if (!fs.existsSync(modules))

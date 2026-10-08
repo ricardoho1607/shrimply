@@ -1,5 +1,6 @@
 "use strict";
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8187";
+process.env.FIREBASE_STORAGE_EMULATOR_HOST = "127.0.0.1:9297";
 const { chromium } = require("playwright"),
   assert = require("node:assert/strict");
 const backendRequire = require("node:module").createRequire(
@@ -145,9 +146,77 @@ const wait = async (predicate) => {
     await page
       .getByLabel("Notes", { exact: true })
       .fill("Checked equipment and recorded the farm-approved action.");
+    const performedAt = await page
+      .getByLabel("When performed (ISO time)", { exact: true })
+      .inputValue();
+    const documentText = "Offline equipment inspection acceptance evidence.";
+    const queueKey = `shrimply:sop:sop-browser-owner:${companyId}:queue`;
+    await page.context().setOffline(true);
+    assert.equal(await page.evaluate(() => navigator.onLine), false);
+    await page.getByLabel("Attach evidence", { exact: true }).setInputFiles({
+      name: "offline-inspection.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from(documentText),
+    });
+    await page
+      .getByRole("button", { name: "offline-inspection.txt", exact: true })
+      .waitFor();
     await page
       .getByRole("button", { name: "Submit evidence", exact: true })
       .click();
+    await page
+      .getByText("Pending server verification", { exact: true })
+      .first()
+      .waitFor();
+    const queued = await page.evaluate(
+      (key) => JSON.parse(localStorage.getItem(key) || "[]"),
+      queueKey,
+    );
+    assert.equal(queued.length, 1);
+    assert.equal(queued[0].data.taskId, issue.correctiveTaskId);
+    assert.equal(queued[0].data.observedAt, performedAt);
+    assert.match(queued[0].data.attachments[0].path, /^sop-local:/);
+    assert.equal(
+      (await rows("sopSubmissions")).filter(
+        (s) => s.taskId === issue.correctiveTaskId,
+      ).length,
+      0,
+      "Disconnected evidence must remain pending rather than reaching the server.",
+    );
+    const cachedFiles = async () =>
+      page.evaluate(async () => {
+        const db = await new Promise((resolve, reject) => {
+          const request = indexedDB.open("shrimply-sop-files", 1);
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        const files = await new Promise((resolve, reject) => {
+          const request = db
+            .transaction("files", "readonly")
+            .objectStore("files")
+            .getAll();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        db.close();
+        return Promise.all(
+          files.map(async ({ uid, companyId, file }) => ({
+            uid,
+            companyId,
+            name: file.name,
+            text: await file.text(),
+          })),
+        );
+      });
+    assert.deepEqual(await cachedFiles(), [
+      {
+        uid: "sop-browser-owner",
+        companyId,
+        name: "offline-inspection.txt",
+        text: documentText,
+      },
+    ]);
+    await page.context().setOffline(false);
     await wait(
       async () =>
         (
@@ -155,6 +224,38 @@ const wait = async (predicate) => {
             .doc(`companies/${companyId}/tasks/${issue.correctiveTaskId}`)
             .get()
         ).data().status === "submitted",
+    );
+    await wait(
+      async () =>
+        (await page.evaluate(
+          (key) => JSON.parse(localStorage.getItem(key) || "[]").length,
+          queueKey,
+        )) === 0,
+    );
+    assert.equal(
+      (await cachedFiles()).length,
+      0,
+      "Files are removed only after server acknowledgement.",
+    );
+    // Repeated reconnect notifications must not replay an acknowledged command.
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("online"));
+      window.dispatchEvent(new Event("online"));
+    });
+    const submitted = (await rows("sopSubmissions")).filter(
+      (s) => s.taskId === issue.correctiveTaskId,
+    );
+    assert.equal(submitted.length, 1);
+    assert.equal(submitted[0].observedAt, Date.parse(performedAt));
+    assert.ok(submitted[0].receivedAt >= submitted[0].observedAt);
+    const [uploaded] = await backendRequire("firebase-admin/storage")
+      .getStorage()
+      .bucket("demo-shrimply-agent.firebasestorage.app")
+      .file(submitted[0].attachments[0].path)
+      .download();
+    assert.equal(uploaded.toString("utf8"), documentText);
+    console.log(
+      "Browser offline note/document submission, reconnect, durable cleanup and duplicate prevention verified.",
     );
     await runtime.evaluateTask(companyId, issue.correctiveTaskId);
     const recheck = (
