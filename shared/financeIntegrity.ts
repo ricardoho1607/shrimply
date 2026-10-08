@@ -56,3 +56,8 @@ export function appendSettlement(record: { amount?: unknown; voided?: boolean; s
   }
   return [...entries, payment];
 }
+
+/** Recognize signed stock restorations already written by the feeding workflow. */
+export const isRecordedInventoryReturn = (usage: { quantity?: unknown; type?: string; kind?: string; source?: string; feedRecordId?: string }): boolean =>
+  (monetaryValue(usage.quantity) ?? 0) < 0 && (['return', 'correction'].includes(usage.type || usage.kind || '') ||
+    (usage.source === 'daily_feed_record' && typeof usage.feedRecordId === 'string' && usage.feedRecordId.length > 0));

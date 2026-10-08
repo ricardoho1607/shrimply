@@ -1,4 +1,8 @@
 'use strict';
+const { Buffer } = require('node:buffer');
+const { hasUserPermission } = require('./permissions');
+const { createDecisionReadSession } = require('./orsonDecisionReadSession');
+const { isDecisionMetadata } = require('./orsonDomain/orsonDecisionContract');
 
 const { selectDailyFeedEntries } = require('./orsonDomain/orsonEvidence');
 const { normalizeFarmDateKey } = require('./orsonDomain/farmDate');
@@ -14,7 +18,7 @@ const {
 const { allocateExpenseAcrossCyclePonds } = require('./orsonDomain/financeCycleAllocation');
 const { hasValidExpenseAllocations, requiresProductionAllocation } = require('./orsonDomain/financeExpenseAllocation');
 const { isCycleOperatingExpense } = require('./orsonDomain/reportingIntegrity');
-const { isInventoryTransfer } = require('./orsonDomain/financeIntegrity');
+const { isInventoryTransfer, isRecordedInventoryReturn } = require('./orsonDomain/financeIntegrity');
 
 /**
  * Canonically identifies inventory stock-in purchases to avoid double-counting.
@@ -138,11 +142,11 @@ const usageMatchesPondsInPeriod = (usage, ponds, startDate, endDate, timeZone) =
 
 const hasRecordedUsageCost = (usage) => {
   const totalCost = finite(usage?.totalCost);
-  if (totalCost !== null) return totalCost >= 0;
+  if (totalCost !== null) return totalCost >= 0 || isRecordedInventoryReturn(usage);
   const quantity = finite(usage?.quantity);
   const unitPrice = finite(usage?.unitPrice);
   const calculatedCost = quantity !== null && unitPrice !== null ? quantity * unitPrice : null;
-  return quantity !== null && quantity >= 0 && unitPrice !== null && unitPrice >= 0 && Number.isFinite(calculatedCost);
+  return quantity !== null && (quantity >= 0 || isRecordedInventoryReturn(usage)) && unitPrice !== null && unitPrice >= 0 && Number.isFinite(calculatedCost);
 };
 
 const farmToday = (timeZone) => {
@@ -168,6 +172,30 @@ const belongsToCurrentCycle = (record, pond) => {
   return !recorded.length || recorded.some((value) => current.includes(value));
 };
 
+// Historical decisions must use saved cycle baselines, never current-cycle stock.
+const resolveCyclePond = async (pond, cycleId, context) => {
+  if (!cycleId || cycleId === 'current' || [pond.cycleId, pond.pondCycleId].includes(cycleId)) return { pond, historical: false };
+  const snap = await context.db.collection('companies').doc(context.companyId).collection('cycles').doc(cycleId).get();
+  if (!snap.exists) { if (context.enterpriseScoped) throw new Error('Not permitted'); return null; }
+  const raw = { id: snap.id, ...snap.data() };
+  const cycle = context.scopedData ? await context.scopedData('cycles', raw) : raw;
+  if (!cycle) throw new Error('Not permitted');
+  const baseline = cycle.pondId === pond.id ? cycle : (cycle.ponds || []).find(p => (p.pondId || p.id) === pond.id);
+  if (!baseline || !normalizeFarmDateKey(baseline.cycleStartedAt || baseline.startDate || baseline.docStart, context.timeZone) ||
+    (finite(baseline.initialPopulation ?? baseline.initialStock) ?? 0) <= 0) return null;
+  const records = Array.isArray(baseline.samplings) ? baseline.samplings : pond.samplings || [];
+  return { historical: true, cycle, pond: { ...pond, ...baseline, id: pond.id, cycleId, pondCycleId: cycleId,
+    initialPopulation: baseline.initialPopulation ?? baseline.initialStock,
+    initialStock: baseline.initialPopulation ?? baseline.initialStock,
+    cycleStartedAt: baseline.cycleStartedAt || baseline.startDate || baseline.docStart,
+    docStart: baseline.cycleStartedAt || baseline.startDate || baseline.docStart,
+    cycleEndedAt: baseline.cycleEndedAt || cycle.endDate || cycle.endedAt || null,
+    cycleStatus: baseline.cycleStatus || cycle.status || 'ended',
+    samplings: records.filter(r => [r.cycleId, r.pondCycleId].includes(cycleId)),
+    mortalityRecords: (baseline.mortalityRecords || pond.mortalityRecords || []).filter(r => [r.cycleId, r.pondCycleId].includes(cycleId)),
+  } };
+};
+
 const periodFeedCostTool = {
   type: 'function',
   name: 'summarize_period_feed_and_cost',
@@ -181,6 +209,7 @@ const periodFeedCostTool = {
         description:
           'Optional exact pond ID. If omitted or "all", aggregates across all accessible ponds in the company.',
       },
+      cycleId: { type: 'string', description: 'Optional exact cycle ID; requires one exact pond ID. Historical cycles require a saved baseline.' },
       startDate: {
         type: 'string',
         description:
@@ -221,6 +250,10 @@ const comparePondCyclesTool = {
         type: 'string',
         description: 'Secondary cycle ID (for the second pond or historical cycle of primary pond).',
       },
+      startDate: { type: 'string', description: 'Optional inclusive calendar start YYYY-MM-DD; use with endDate, separately from DOC alignment.' },
+      endDate: { type: 'string', description: 'Optional inclusive calendar end YYYY-MM-DD.' },
+      startDoc: { type: 'integer', minimum: 1, maximum: 200, description: 'Optional inclusive starting DOC; use with endDoc.' },
+      endDoc: { type: 'integer', minimum: 1, maximum: 200, description: 'Optional inclusive ending DOC, aligned separately to each cycle start.' },
       asOfDoc: {
         type: 'integer',
         minimum: 1,
@@ -263,8 +296,12 @@ const inventoryReplenishmentTool = {
         type: 'integer',
         minimum: 1,
         maximum: 90,
-        description: 'Optional planning horizon in days to evaluate safety stock and runway (default: 7).',
+        description: 'Optional demand planning horizon in days, separate from supplier lead time (default: 7).',
       },
+      leadTimeDays: { type: 'integer', minimum: 0, maximum: 90, description: 'User-supplied supplier lead time; separate from the demand horizon. Omitted means unknown.' },
+      safetyStock: { type: 'number', minimum: 0, description: 'Explicit safety stock in the item unit. Defaults to an explicitly disclosed zero allowance.' },
+      incomingQuantity: { type: 'number', minimum: 0, description: 'User-supplied incoming supply in the item unit, a scenario assumption. Omitted means unknown, never zero.' },
+      incomingArrivalDays: { type: 'integer', minimum: 0, maximum: 90, description: 'User-supplied days until incoming supply arrives. Needed for positive incomingQuantity.' },
       lookbackDays: {
         type: 'integer',
         minimum: 3,
@@ -300,6 +337,7 @@ const harvestScenarioTool = {
         type: 'number',
         description: 'Optional target shrimp size count per kg (e.g. 30, 40, 50).',
       },
+      exactDaysFromNow: { type: 'integer', minimum: 1, maximum: 120, description: 'Compare today with harvesting exactly this many days later, e.g. 7. Uses the same cost and price evidence.' },
       daysToHarvest: {
         type: 'integer',
         minimum: 1,
@@ -393,6 +431,7 @@ const summarizePeriodFeedAndCost = async (args = {}, context = {}) => {
       // existing pond outside the caller's scope remains an authorization failure.
       const requestedSnap = await pondsRef.doc(requestedPondId).get();
       if (!requestedSnap.exists) {
+      if (enterpriseScoped) throw new Error('Not permitted');
         return { status: 'not_found', message: `Pond ${requestedPondId} not found.`, writesPerformed: 0 };
       }
       const rawData = requestedSnap.data() || {};
@@ -413,6 +452,28 @@ const summarizePeriodFeedAndCost = async (args = {}, context = {}) => {
     targetPonds.push(requestedPond);
   } else {
     targetPonds.push(...allocationPonds);
+  }
+
+  if (args.cycleId !== undefined) {
+    if (!requestedPondId || !validId(args.cycleId)) throw new Error('Cycle selection requires a valid exact pond ID and cycle ID');
+    const resolved = await resolveCyclePond(targetPonds[0], args.cycleId, context);
+    if (!resolved) return { status: 'insufficient_data', missingEvidence: ['cycle_baseline_unavailable'], writesPerformed: 0 };
+    targetPonds[0] = resolved.pond;
+    const index = allCompanyPonds.findIndex(pond => pond.id === requestedPondId);
+    if (index >= 0) allCompanyPonds[index] = resolved.pond;
+    if (resolved.historical) {
+      // A saved complete cohort is needed for historical shared cost allocation.
+      for (const entry of resolved.cycle.ponds || []) {
+        const id = entry.pondId || entry.id;
+        if (!id || id === requestedPondId) continue;
+        const original = allCompanyPonds.find(p => p.id === id);
+        const historical = { ...original, ...entry, id, cycleId: args.cycleId, pondCycleId: args.cycleId,
+          cycleStartedAt: entry.cycleStartedAt || entry.startDate || entry.docStart, cycleStatus: 'ended' };
+        const index = allCompanyPonds.findIndex(p => p.id === id);
+        if (index >= 0) allCompanyPonds[index] = historical; else allCompanyPonds.push(historical);
+      }
+      if (!Array.isArray(resolved.cycle.ponds) || resolved.cycle.ponds.length === 0) pondsTruncated = true;
+    }
   }
 
   const canViewFinance = Boolean(allowed('viewFinance'));
@@ -490,7 +551,12 @@ const summarizePeriodFeedAndCost = async (args = {}, context = {}) => {
         record?.measuredAt ?? record?.observedAt ?? record?.farmDate ?? record?.date,
         tz,
       );
-      return date && date >= startDate && date <= endDate;
+      if (!(date && date >= startDate && date <= endDate)) return false;
+      if (!args.cycleId) return true;
+      const ids = [record?.pondCycleId, record?.cycleId].filter(Boolean);
+      if (ids.length) return ids.some(id => currentCycleIds.includes(id));
+      const cycleStart = normalizeFarmDateKey(pond.cycleStartedAt || pond.docStart, tz);
+      return pond.cycleStatus === 'active' && cycleStart && date >= cycleStart;
     });
     const historicalCycleRecords = periodRecords.filter((record) => {
       const ids = [record?.pondCycleId, record?.cycleId].filter((value) => typeof value === 'string' && value);
@@ -1212,6 +1278,7 @@ const summarizePeriodFeedAndCost = async (args = {}, context = {}) => {
     scope: {
       companyId,
       pondId: requestedPondId,
+      cycleId: args.cycleId || null,
       boundary: enterpriseScoped ? 'assigned_ponds' : 'company',
       pondsCount: targetPonds.length,
       pondCount: targetPonds.length,
@@ -1294,6 +1361,12 @@ const comparePondCycles = async (args = {}, context = {}) => {
     throw new Error('Invalid asOfDoc: must be an integer between 1 and 200');
   }
 
+  const calendarRange = args.startDate !== undefined || args.endDate !== undefined;
+  const docRange = args.startDoc !== undefined || args.endDoc !== undefined;
+  if (Number(calendarRange) + Number(docRange) + Number(asOfDoc !== null) > 1) throw new Error('Choose calendar dates, a DOC range, or asOfDoc');
+  if (calendarRange && (!validDateKey(args.startDate) || !validDateKey(args.endDate) || args.startDate > args.endDate ||
+    (Date.parse(args.endDate) - Date.parse(args.startDate)) / DAY_MS >= 366)) throw new Error('Invalid calendar range');
+  if (docRange && (!Number.isInteger(args.startDoc) || !Number.isInteger(args.endDoc) || args.startDoc < 1 || args.endDoc > 200 || args.startDoc > args.endDoc)) throw new Error('Invalid DOC range');
   if (!comparePondId && !compareCycleId) {
     throw new Error(
       'Provide either comparePondId (to compare two ponds) or compareCycleId (to compare cycles for the same pond).',
@@ -1306,6 +1379,7 @@ const comparePondCycles = async (args = {}, context = {}) => {
   const pondsRef = db.collection('companies').doc(companyId).collection('ponds');
   const primarySnap = await pondsRef.doc(pondId).get();
   if (!primarySnap.exists) {
+      if (enterpriseScoped) throw new Error('Not permitted');
     return { status: 'not_found', message: `Primary pond ${pondId} not found.` };
   }
   let primaryData = { id: primarySnap.id, ...(primarySnap.data() || {}) };
@@ -1319,6 +1393,7 @@ const comparePondCycles = async (args = {}, context = {}) => {
   if (isCrossPond) {
     const secondarySnap = await pondsRef.doc(secondaryPondId).get();
     if (!secondarySnap.exists) {
+      if (enterpriseScoped) throw new Error('Not permitted');
       return { status: 'not_found', message: `Compare pond ${secondaryPondId} not found.` };
     }
     secondaryData = { id: secondarySnap.id, ...(secondarySnap.data() || {}) };
@@ -1336,6 +1411,7 @@ const comparePondCycles = async (args = {}, context = {}) => {
   if (cycleId && cycleId !== 'current' && cycleId !== primaryData.pondCycleId && cycleId !== primaryData.cycleId) {
     const cSnap = await db.collection('companies').doc(companyId).collection('cycles').doc(cycleId).get();
     if (!cSnap.exists) {
+      if (enterpriseScoped) throw new Error('Not permitted');
       return { status: 'not_found', message: `Requested cycle ${cycleId} not found.` };
     }
     let cData = { id: cSnap.id, ...(cSnap.data() || {}) };
@@ -1355,6 +1431,7 @@ const comparePondCycles = async (args = {}, context = {}) => {
   if (compareCycleId && compareCycleId !== 'current' && compareCycleId !== secondaryData.pondCycleId && compareCycleId !== secondaryData.cycleId) {
     const cSnap = await db.collection('companies').doc(companyId).collection('cycles').doc(compareCycleId).get();
     if (!cSnap.exists) {
+      if (enterpriseScoped) throw new Error('Not permitted');
       return { status: 'not_found', message: `Requested compare cycle ${compareCycleId} not found.` };
     }
     let cData = { id: cSnap.id, ...(cSnap.data() || {}) };
@@ -1396,7 +1473,7 @@ const comparePondCycles = async (args = {}, context = {}) => {
     const cycleSnapshot = cyclePondEntry || (cycleDoc?.pondId === pondData.id ? cycleDoc : null);
     const cycleStart = isHistorical
       ? cycleSnapshot?.cycleStartedAt || cycleSnapshot?.startDate || cycleSnapshot?.docStart
-      : pondData.cycleStartedAt || pondData.docStart;
+      : pondData.cycleStartedAt || pondData.docStart || (!docRange && alignDoc === null ? samplings.map(record => normalizeFarmDateKey(record.date, tz)).filter(Boolean).sort()[0] : null);
     const initialPop = isHistorical
       ? cycleSnapshot?.initialPopulation ?? cycleSnapshot?.initialStock ?? null
       : pondData.initialPopulation || pondData.initialStock;
@@ -1413,15 +1490,26 @@ const comparePondCycles = async (args = {}, context = {}) => {
     if (isHistorical && (!cycleStart || finite(initialPop) === null || finite(initialPop) <= 0)) return null;
     if (alignDoc !== null && !cycleStart) return null;
 
+    if (isHistorical && Array.isArray(cycleSnapshot?.samplings)) samplings = cycleSnapshot.samplings;
+    if (isHistorical && Array.isArray(cycleSnapshot?.mortalityRecords)) mortalityRecords = cycleSnapshot.mortalityRecords;
     let filteredSamplings = samplings;
     let filteredMortality = mortalityRecords;
     let filteredHarvests = Array.isArray(harvestRecords) ? harvestRecords : [];
     let cutoffDate = null;
 
-    if (alignDoc !== null && cycleStart) {
+    const cycleStartKey = normalizeFarmDateKey(cycleStart, tz);
+    const periodEnd = calendarRange ? args.endDate : docRange && cycleStartKey ? shiftDate(cycleStartKey, args.endDoc - 1)
+      : alignDoc !== null && cycleStartKey ? shiftDate(cycleStartKey, alignDoc - 1)
+      : normalizeFarmDateKey(cycleSnapshot?.cycleEndedAt || (isHistorical ? cycleDoc?.endDate : pondData.cycleEndedAt), tz) || farmToday(tz);
+    const periodStart = calendarRange ? args.startDate : docRange && cycleStartKey ? shiftDate(cycleStartKey, args.startDoc - 1) : cycleStartKey;
+    if (!periodStart || !periodEnd || periodStart > periodEnd || (Date.parse(periodEnd) - Date.parse(periodStart)) / DAY_MS >= 366) return null;
+    if (periodEnd > farmToday(tz)) return null;
+    // Keep earlier observations/harvests for cumulative biology; the selected
+    // period below independently bounds feed and financial comparisons.
+    if (cycleStart) {
       const cycleStartKey = normalizeFarmDateKey(cycleStart, tz);
       if (!cycleStartKey) return null;
-      cutoffDate = shiftDate(cycleStartKey, alignDoc - 1);
+      cutoffDate = periodEnd;
       filteredSamplings = samplings.filter((s) => {
         const d = normalizeFarmDateKey(s.date, tz);
         return Boolean(d && d >= cycleStartKey && d <= cutoffDate);
@@ -1474,22 +1562,30 @@ const comparePondCycles = async (args = {}, context = {}) => {
       mortalityRecords: filteredMortality,
     };
 
-    const calcOptions = {};
-    if (alignDoc !== null) {
-      calcOptions.currentDoc = alignDoc;
-      if (cutoffDate) {
-        calcOptions.currentDateKey = cutoffDate;
-      }
-    }
+    const calcOptions = { currentDateKey: cutoffDate || periodEnd };
+    if (alignDoc !== null) calcOptions.currentDoc = alignDoc;
 
     const metrics = calculatePondMetricsWithHarvest(effectivePond, tz, calcOptions);
 
     const validMbwCount = filteredSamplings.filter((s) => Number(s.mbw ?? s.abw) > 0).length;
-    const completeness =
-      validMbwCount >= 3 ? 'complete' : validMbwCount >= 1 ? 'partial' : 'sparse';
+    const dailyFeed = selectDailyFeedEntries(filteredSamplings, { allowSamplingEstimate: false, asOfDate: periodEnd, timeZone: tz })
+      .filter(entry => entry.farmDate >= periodStart && entry.farmDate <= periodEnd);
+    const expectedDays = (Date.parse(periodEnd) - Date.parse(periodStart)) / DAY_MS + 1;
+    const measured = filteredSamplings.filter(record => finite(record.mbw ?? record.abw) > 0)
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const completeness = validMbwCount >= 3 && dailyFeed.length === expectedDays && filteredMortality.length > 0 ? 'complete' : validMbwCount >= 1 ? 'partial' : 'sparse';
 
     return {
+      effectivePond,
+      period: { startDate: periodStart, endDate: periodEnd, timeZone: tz },
+      cycleStatus: effectivePond.cycleStatus || 'unknown',
       metrics: {
+        mbwMeasuredAt: measured.at(-1)?.measuredAt || measured.at(-1)?.date || null,
+        mbwBasis: measured.length ? 'recorded_observation' : 'stocking_fallback',
+        populationBasis: metrics.biomassEstimate?.method || 'biological_estimate',
+        biomassBasis: 'derived_from_estimated_population_and_mbw',
+        mortalityBasis: filteredMortality.length ? 'recorded_observations_with_biological_fallback' : 'biological_fallback_no_observations',
+        periodFeedAllocatedKg: dailyFeed.length ? round(dailyFeed.reduce((sum, entry) => sum + entry.feedKg, 0)) : null,
         doc: metrics.doc,
         latestMbw: round(metrics.latestMbw, 2),
         size: metrics.size,
@@ -1506,14 +1602,17 @@ const comparePondCycles = async (args = {}, context = {}) => {
         samplingsCount: filteredSamplings.length,
         validMbwObservations: validMbwCount,
         mortalityRecordsCount: filteredMortality.length,
+        recordedFeedDays: dailyFeed.length,
+        expectedFeedDays: expectedDays,
+        warnings: metrics.biomassEstimate?.warnings || [],
         completeness,
       },
       feedCost: effectivePond.feedCost,
     };
   };
 
-  const primaryResult = calculateTargetMetrics(primaryData, primaryCycleDoc, primarySamplings, primaryMortality, asOfDoc);
-  const secondaryResult = calculateTargetMetrics(secondaryData, secondaryCycleDoc, secondarySamplings, secondaryMortality, asOfDoc);
+  const primaryResult = calculateTargetMetrics(primaryData, primaryCycleDoc, primarySamplings, primaryMortality, docRange ? args.endDoc : asOfDoc);
+  const secondaryResult = calculateTargetMetrics(secondaryData, secondaryCycleDoc, secondarySamplings, secondaryMortality, docRange ? args.endDoc : asOfDoc);
 
   if (!primaryResult || !secondaryResult) {
     return {
@@ -1550,22 +1649,26 @@ const comparePondCycles = async (args = {}, context = {}) => {
   const labelA = `${primaryData.pondName || pondId} (${primaryPondCycle})`;
   const labelB = `${secondaryData.pondName || secondaryPondId} (${secondaryPondCycle})`;
 
+  const comparable = (asOfDoc !== null || docRange || calendarRange) &&
+    primaryResult.cycleStatus === secondaryResult.cycleStatus && pM.doc === sM.doc &&
+    pM.mbwMeasuredAt === primaryResult.period.endDate && sM.mbwMeasuredAt === secondaryResult.period.endDate &&
+    primaryResult.coverage.completeness === 'complete' && secondaryResult.coverage.completeness === 'complete';
   const insights = [];
-  if (deltas.mbwDiffG !== null && Math.abs(deltas.mbwDiffG) > 0.05) {
+  if (comparable && deltas.mbwDiffG !== null && Math.abs(deltas.mbwDiffG) > 0.05) {
     insights.push(
       deltas.mbwDiffG > 0
         ? `${labelB} has higher MBW (+${deltas.mbwDiffG}g) than ${labelA} (${sM.latestMbw}g vs ${pM.latestMbw}g).`
         : `${labelA} has higher MBW (+${Math.abs(deltas.mbwDiffG)}g) than ${labelB} (${pM.latestMbw}g vs ${sM.latestMbw}g).`,
     );
   }
-  if (deltas.fcrDiff !== null && Math.abs(deltas.fcrDiff) > 0.05) {
+  if (comparable && deltas.fcrDiff !== null && Math.abs(deltas.fcrDiff) > 0.05) {
     insights.push(
       deltas.fcrDiff < 0
         ? `${labelB} has better feed conversion efficiency with lower FCR (${sM.fcr} vs ${pM.fcr}).`
         : `${labelA} has better feed conversion efficiency with lower FCR (${pM.fcr} vs ${sM.fcr}).`,
     );
   }
-  if (deltas.survivalRateDiffPercent !== null && Math.abs(deltas.survivalRateDiffPercent) >= 1.0) {
+  if (comparable && deltas.survivalRateDiffPercent !== null && Math.abs(deltas.survivalRateDiffPercent) >= 1.0) {
     insights.push(
       deltas.survivalRateDiffPercent > 0
         ? `${labelB} has higher survival rate (+${deltas.survivalRateDiffPercent}%) than ${labelA} (${sM.survivalRatePercent}% vs ${pM.survivalRatePercent}%).`
@@ -1581,16 +1684,24 @@ const comparePondCycles = async (args = {}, context = {}) => {
   };
 
   if (canViewFinance) {
-    const primaryFeedCost = finite(primaryResult.feedCost);
-    const secondaryFeedCost = finite(secondaryResult.feedCost);
+    const summaries = [];
+    for (const [id, requestedCycle, result] of [[pondId, cycleId, primaryResult], [secondaryPondId, compareCycleId, secondaryResult]]) {
+      summaries.push(await summarizePeriodFeedAndCost({ pondId: id, cycleId: requestedCycle || 'current', startDate: result.period.startDate, endDate: result.period.endDate }, context));
+    }
+    const [primarySummary, secondarySummary] = summaries;
+    const primaryFeedCost = primarySummary.finance?.consumedFeedCost ?? null;
+    const secondaryFeedCost = secondarySummary.finance?.consumedFeedCost ?? null;
+    const sameCurrency = primarySummary.finance?.currency === secondarySummary.finance?.currency;
     financeComparison = {
       financeAllowed: true,
-      primaryFeedCost: primaryFeedCost !== null ? round(primaryFeedCost, 2) : null,
-      secondaryFeedCost: secondaryFeedCost !== null ? round(secondaryFeedCost, 2) : null,
-      feedCostDiff:
-        primaryFeedCost !== null && secondaryFeedCost !== null
-          ? round(secondaryFeedCost - primaryFeedCost, 2)
-          : null,
+      basis: 'recorded_consumption_in_selected_period',
+      currency: primarySummary.finance?.currency || null,
+      primaryFeedCost,
+      secondaryFeedCost,
+      feedCostDiff: sameCurrency && primaryFeedCost !== null && secondaryFeedCost !== null ? round(secondaryFeedCost - primaryFeedCost) : null,
+      primary: primarySummary.ponds?.[0]?.finance || null,
+      secondary: secondarySummary.ponds?.[0]?.finance || null,
+      completeness: primarySummary.finance?.completeness === 'complete' && secondarySummary.finance?.completeness === 'complete' ? 'complete' : 'partial',
     };
   }
 
@@ -1599,13 +1710,16 @@ const comparePondCycles = async (args = {}, context = {}) => {
     comparisonType: isCrossPond ? 'pond_to_pond' : 'cycle_to_cycle',
     scope: {
       companyId,
-      alignedAtDoc: asOfDoc,
+      alignedAtDoc: docRange ? args.endDoc : asOfDoc,
+      alignment: docRange ? 'doc_range' : calendarRange ? 'calendar_period' : asOfDoc ? 'doc_cutoff' : 'unaligned_cycle_totals',
       enterpriseScoped: Boolean(enterpriseScoped),
     },
     primary: {
       pondId,
       pondName: String(primaryData.pondName || primaryData.name || pondId).slice(0, 160),
       cycleId: primaryPondCycle,
+      period: primaryResult.period,
+      cycleStatus: primaryResult.cycleStatus,
       metrics: primaryResult.metrics,
       coverage: primaryResult.coverage,
     },
@@ -1613,9 +1727,13 @@ const comparePondCycles = async (args = {}, context = {}) => {
       pondId: secondaryPondId,
       pondName: String(secondaryData.pondName || secondaryData.name || secondaryPondId).slice(0, 160),
       cycleId: secondaryPondCycle,
+      period: secondaryResult.period,
+      cycleStatus: secondaryResult.cycleStatus,
       metrics: secondaryResult.metrics,
       coverage: secondaryResult.coverage,
     },
+    comparable,
+    warnings: comparable ? [] : ['Coverage, lifecycle, or age alignment is insufficient for a performance ranking; deltas are descriptive only.'],
     deltas,
     insights,
     finance: financeComparison,
@@ -1648,6 +1766,13 @@ const evaluateInventoryReplenishment = async (args = {}, context = {}) => {
 
   if (itemId && !validId(itemId)) throw new Error('Invalid item ID');
 
+  for (const key of ['requiredQuantity', 'safetyStock', 'incomingQuantity']) {
+    if (args[key] !== undefined && (finite(args[key]) === null || finite(args[key]) < 0)) throw new Error(`Invalid ${key}`);
+  }
+  for (const key of ['leadTimeDays', 'incomingArrivalDays']) {
+    if (args[key] !== undefined && (!Number.isInteger(args[key]) || args[key] < 0 || args[key] > 90)) throw new Error(`Invalid ${key}`);
+  }
+  if (args.incomingQuantity > 0 && args.incomingArrivalDays === undefined) throw new Error('Positive incoming supply requires an arrival day');
   const baseRef = db.collection('companies').doc(companyId);
   const itemsToEvaluate = [];
   let inventoryTruncated = false;
@@ -1665,9 +1790,9 @@ const evaluateInventoryReplenishment = async (args = {}, context = {}) => {
   };
 
   const readCollection = async (collName, defaultType) => {
-    const snap = await baseRef.collection(collName).limit(201).get();
-    inventoryTruncated ||= (snap.docs || []).length > 200;
-    return (snap.docs || []).slice(0, 200).map((doc) => ({
+    const snap = await readBoundedCollection(baseRef.collection(collName));
+    inventoryTruncated ||= snap.truncated;
+    return snap.docs.map((doc) => ({
       id: doc.id,
       itemType: defaultType,
       ...doc.data(),
@@ -1731,6 +1856,10 @@ const evaluateInventoryReplenishment = async (args = {}, context = {}) => {
       requiredUnit,
       plannedDays,
       lookbackDays,
+      leadTimeDays: args.leadTimeDays,
+      safetyStock: args.safetyStock,
+      incomingQuantity: args.incomingQuantity,
+      incomingArrivalDays: args.incomingArrivalDays,
       todayKey: farmToday(timeZone || company?.timeZone || 'UTC'),
       timeZone: timeZone || company?.timeZone || 'UTC',
     });
@@ -1742,11 +1871,14 @@ const evaluateInventoryReplenishment = async (args = {}, context = {}) => {
     };
 
     if (canViewFinance) {
-      const unitCost = finite(item.costPerUnit || item.price || item.averageCost);
+      const unitCost = finite(item.costPerUnit ?? item.price ?? item.averageCost);
       const reorderQty = evaluation.reorderAssessment.recommendedReorderQuantity;
       financeAssessment = {
         financeAllowed: true,
+        currency: company?.currency || company?.currencyCode || null,
+        basis: 'scenario_at_current_inventory_price',
         unitCost: unitCost !== null ? round(unitCost, 2) : null,
+        estimateBasis: evaluation.planningNeed.purchaseQuantity === null ? 'gross_requirement_before_unknown_incoming_supply' : 'net_scenario_purchase_quantity',
         estimatedReplenishmentCost:
           unitCost !== null && reorderQty !== null ? round(unitCost * reorderQty, 2) : null,
       };
@@ -1820,9 +1952,19 @@ const evaluateHarvestScenario = async (args = {}, context = {}) => {
         .sort((a, b) => b.sizeCountPerKg - a.sizeCountPerKg)
     : null;
 
+  if (cycleId && !validId(cycleId)) throw new Error('Invalid cycle ID');
+  for (const key of ['targetMbwG', 'targetSizeCountPerKg', 'pricePerKg']) {
+    if (args[key] !== undefined && (finite(args[key]) === null || finite(args[key]) <= 0)) throw new Error(`Invalid ${key}`);
+  }
+  for (const key of ['daysToHarvest', 'exactDaysFromNow']) {
+    if (args[key] !== undefined && (!Number.isInteger(args[key]) || args[key] < 1 || args[key] > 120)) throw new Error(`Invalid ${key}`);
+  }
+  if (args.exactDaysFromNow && requestedDays && args.exactDaysFromNow > requestedDays) throw new Error('Exact horizon exceeds projection cap');
+  if (args.priceLadder !== undefined && (!Array.isArray(args.priceLadder) || args.priceLadder.length > 30 || customPriceLadder.length !== args.priceLadder.length)) throw new Error('Invalid price ladder');
   const baseRef = db.collection('companies').doc(companyId);
   const pondSnap = await baseRef.collection('ponds').doc(pondId).get();
   if (!pondSnap.exists) {
+      if (enterpriseScoped) throw new Error('Not permitted');
     return { status: 'not_found', message: `Pond ${pondId} not found.` };
   }
 
@@ -1862,25 +2004,21 @@ const evaluateHarvestScenario = async (args = {}, context = {}) => {
   const canViewFinance = Boolean(allowed('viewFinance'));
 
   // Load full pond cohort across company for equitable shared cycle expense allocation
-  const pondsSnap = await baseRef.collection('ponds').limit(101).get();
-  const pondsTruncated = (pondsSnap.docs || []).length > 100;
+  const pondsSnap = await readBoundedCollection(baseRef.collection('ponds'));
+  const pondsTruncated = pondsSnap.truncated;
   const cohortPonds = [];
-  for (const doc of (pondsSnap.docs || []).slice(0, 100)) {
+  for (const doc of pondsSnap.docs) {
     let p = { id: doc.id, ...doc.data() };
-    if (scopedData) {
-      p = await scopedData('ponds', p);
-      if (!p) continue;
-    }
     cohortPonds.push(p);
   }
   const allCycleCohortPonds = cohortPonds.filter((p) => p.id !== scopedPond.id).concat([scopedPond]);
 
   // Fetch feeds and additives for biological and nutritional projections
-  const feedsSnap = await baseRef.collection('feeds').limit(201).get();
-  const feedsTruncated = (feedsSnap.docs || []).length > 200;
+  const feedsSnap = await readBoundedCollection(baseRef.collection('feeds'));
+  const feedsTruncated = feedsSnap.truncated;
   const feeds = [];
   let usageHistoryTruncated = false;
-  for (const doc of (feedsSnap.docs || []).slice(0, 200)) {
+  for (const doc of feedsSnap.docs) {
     let f = { id: doc.id, ...doc.data() };
     if (scopedData) {
       f = await scopedData('feeds', f);
@@ -1888,7 +2026,7 @@ const evaluateHarvestScenario = async (args = {}, context = {}) => {
     }
     if (Array.isArray(f.usageHistory) && f.usageHistory.length > 1000) {
       usageHistoryTruncated = true;
-      f = { ...f, usageHistory: f.usageHistory.slice(-1000) };
+      f = { ...f, usageHistory: f.usageHistory.slice().sort((a,b) => String(a.date || '').localeCompare(String(b.date || ''))).slice(-1000) };
     }
     if (!canViewFinance) {
       const { costPerUnit, averageCost, price, ...safeFeed } = f;
@@ -1900,10 +2038,10 @@ const evaluateHarvestScenario = async (args = {}, context = {}) => {
     feeds.push(f);
   }
 
-  const additivesSnap = await baseRef.collection('additives').limit(201).get();
-  const additivesTruncated = (additivesSnap.docs || []).length > 200;
+  const additivesSnap = await readBoundedCollection(baseRef.collection('additives'));
+  const additivesTruncated = additivesSnap.truncated;
   const additives = [];
-  for (const doc of (additivesSnap.docs || []).slice(0, 200)) {
+  for (const doc of additivesSnap.docs) {
     let a = { id: doc.id, ...doc.data() };
     if (scopedData) {
       a = await scopedData('additives', a);
@@ -1911,7 +2049,7 @@ const evaluateHarvestScenario = async (args = {}, context = {}) => {
     }
     if (Array.isArray(a.usageHistory) && a.usageHistory.length > 1000) {
       usageHistoryTruncated = true;
-      a = { ...a, usageHistory: a.usageHistory.slice(-1000) };
+      a = { ...a, usageHistory: a.usageHistory.slice().sort((a,b) => String(a.date || '').localeCompare(String(b.date || ''))).slice(-1000) };
     }
     if (!canViewFinance) {
       const { costPerUnit, averageCost, price, ...safeAdditive } = a;
@@ -1929,9 +2067,10 @@ const evaluateHarvestScenario = async (args = {}, context = {}) => {
   let expenseReadFailed = false;
   if (canViewFinance) {
     try {
-      const expSnap = await baseRef.collection('expenses').limit(501).get();
-      expensesTruncated = (expSnap.docs || []).length > 500;
-      for (const doc of (expSnap.docs || []).slice(0, 500)) {
+      const expSnap = await readBoundedCollection(baseRef.collection('expenses'));
+      expensesTruncated = expSnap.truncated;
+      expenseReadFailed = expSnap.failed;
+      for (const doc of expSnap.docs) {
         const exp = { id: doc.id, ...doc.data() };
         if (exp.voided === true || exp.isVoid === true) continue;
         expenses.push(exp);
@@ -1940,6 +2079,18 @@ const evaluateHarvestScenario = async (args = {}, context = {}) => {
       expenseReadFailed = true;
     }
   }
+
+  const configuredCurrency = String(company?.currency || company?.currencyCode || '').trim().toUpperCase() || null;
+  const relevantCostRows = [
+    ...feeds.concat(additives).flatMap(item => (item.usageHistory || []).filter(row =>
+      usageMatchesPondsInPeriod(row, [scopedPond], normalizeFarmDateKey(scopedPond.cycleStartedAt || scopedPond.docStart, timeZone) || farmToday(timeZone), farmToday(timeZone), timeZone))),
+    ...expenses.filter(row => !row.pondId || row.pondId === pondId),
+  ];
+  const explicitCurrencies = new Set(relevantCostRows.map(row => String(row.currency || row.currencyCode || '').trim().toUpperCase()).filter(Boolean));
+  const currencyConflict = configuredCurrency ? [...explicitCurrencies].some(code => code !== configuredCurrency)
+    : explicitCurrencies.size > 1 || (explicitCurrencies.size > 0 && relevantCostRows.some(row => !row.currency && !row.currencyCode));
+  const feedUnitConflict = feeds.some(item => (item.usageHistory || []).some(row => row.pondId === pondId &&
+    String(row.unit || item.unit || 'kg').trim().toLowerCase() !== 'kg'));
 
   const financeRetrievalComplete = !pondsTruncated && !feedsTruncated && !additivesTruncated &&
     !usageHistoryTruncated && !expensesTruncated && !expenseReadFailed;
@@ -1966,6 +2117,7 @@ const evaluateHarvestScenario = async (args = {}, context = {}) => {
       targetMbwG,
       targetSizeCountPerKg,
       daysToHarvest: requestedDays,
+      exactDaysFromNow: args.exactDaysFromNow,
       pricePerKg: expectedPricePerKg,
       // The supported expense ledger below includes other operating expenses;
       // this separate bucket would double count them.
@@ -1981,7 +2133,11 @@ const evaluateHarvestScenario = async (args = {}, context = {}) => {
 
   if (!canViewFinance) {
     // Non-finance callers receive operational recommendations based on biological growth
-    if (harvestEval.metrics.adg > 0 && harvestEval.result.targets.length > 0) {
+    if (harvestEval.missingEvidence.includes('missing_valid_sampling_mbw') || harvestEval.metrics.currentPopulation <= 0) {
+      decision = 'review_data';
+      decisionReason = 'Valid MBW observations and a population baseline are required for an operational recommendation.';
+      bestScenario = harvestEval.result.today;
+    } else if (harvestEval.metrics.adg > 0 && harvestEval.result.targets.length > 0) {
       decision = 'keep_growing';
       decisionReason = `Pond exhibits positive growth (ADG ${harvestEval.metrics.adg}g/day). Target size reachable within projection window.`;
       bestScenario = harvestEval.result.targets[0];
@@ -1996,10 +2152,10 @@ const evaluateHarvestScenario = async (args = {}, context = {}) => {
     }
   }
 
-  const canExposeFinance = canViewFinance && financeRetrievalComplete;
-  if (canViewFinance && !financeRetrievalComplete) {
+  const canExposeFinance = canViewFinance && financeRetrievalComplete && !currencyConflict && !feedUnitConflict;
+  if (canViewFinance && (!financeRetrievalComplete || currencyConflict || feedUnitConflict)) {
     decision = 'review_data';
-    decisionReason = 'Financial source reads were incomplete, so the financial comparison is withheld.';
+    decisionReason = 'Financial reads, currencies, or feed units are incompatible; the financial comparison is withheld.';
     bestScenario = harvestEval.result.today;
   }
 
@@ -2069,7 +2225,7 @@ const evaluateHarvestScenario = async (args = {}, context = {}) => {
       enterpriseScoped: Boolean(enterpriseScoped),
     },
     assumptions: sanitizedAssumptions,
-    missingEvidence: harvestEval.missingEvidence,
+    missingEvidence: harvestEval.missingEvidence.filter(field => canViewFinance || !/cost|price/i.test(field)),
     marginBasis: canExposeFinance
       ? harvestEval.marginBasis
       : canViewFinance ? 'finance_unavailable' : 'none_finance_withheld',
@@ -2079,6 +2235,9 @@ const evaluateHarvestScenario = async (args = {}, context = {}) => {
     finance: canExposeFinance
       ? {
           financeAllowed: true,
+          currency: configuredCurrency,
+          recordedFeedCostSubtotal: harvestEval.costSnapshot.recordedFeedCostSubtotal,
+          feedCostCompleteness: harvestEval.costSnapshot.feedCostCompleteness,
           incurredCostsToDate: harvestEval.costSnapshot.costsToDate,
           feedUnitCostPerKg: harvestEval.costSnapshot.feedUnitCostPerKg,
           marginBasis: 'operating_profit_after_recorded_incurred_and_supported_projected_costs',
@@ -2095,8 +2254,10 @@ const evaluateHarvestScenario = async (args = {}, context = {}) => {
           marginBasis: 'none_finance_withheld',
         },
     warnings: Array.from(new Set([
-      ...harvestEval.costSnapshot.warnings,
-      ...harvestEval.result.warnings,
+      ...(canViewFinance ? harvestEval.costSnapshot.warnings : []),
+      ...harvestEval.result.warnings.filter(warning => canViewFinance || !/cost|price|profit|financial/i.test(warning)),
+      ...(currencyConflict && canViewFinance ? ['Cost currencies are incompatible; financial amounts are withheld.'] : []),
+      ...(feedUnitConflict ? ['Feed units are incompatible with kg; feed cost and financial comparison are withheld.'] : []),
       ...(canViewFinance && !financeRetrievalComplete ? ['Financial source reads were incomplete; no full financial result is available.'] : []),
     ])),
     retrieval: {
@@ -2115,20 +2276,78 @@ const evaluateHarvestScenario = async (args = {}, context = {}) => {
 /**
  * Router for executing decision tools by name.
  */
-const executeDecisionTool = async (name, args, context) => {
-  if (name === periodFeedCostTool.name) {
-    return summarizePeriodFeedAndCost(args, context);
+const executeDecisionTool = async (name, args = {}, context = {}) => {
+  const schema = decisionToolSchemas.find(tool => tool.name === name);
+  if (!schema) throw new Error(`Unknown decision tool: ${name}`);
+  if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('Invalid decision inputs');
+  for (const key of schema.parameters.required || []) if (args[key] === undefined) throw new Error(`Missing ${key}`);
+  for (const [key, value] of Object.entries(args)) {
+    const property = schema.parameters.properties[key];
+    if (!property) throw new Error(`Unexpected ${key}`);
+    const validType = property.type === 'integer' ? Number.isInteger(value)
+      : property.type === 'array' ? Array.isArray(value) : typeof value === property.type;
+    if (!validType || (typeof value === 'number' && !Number.isFinite(value)) ||
+      (property.minimum !== undefined && value < property.minimum) || (property.maximum !== undefined && value > property.maximum) ||
+      (property.enum && !property.enum.includes(value))) throw new Error(`Invalid ${key}`);
   }
-  if (name === comparePondCyclesTool.name) {
-    return comparePondCycles(args, context);
+  const handlers = { summarize_period_feed_and_cost: summarizePeriodFeedAndCost, compare_pond_cycles: comparePondCycles,
+    evaluate_inventory_replenishment: evaluateInventoryReplenishment, evaluate_harvest_scenario: evaluateHarvestScenario };
+  const kinds = { summarize_period_feed_and_cost: 'period_totals', compare_pond_cycles: 'comparison',
+    evaluate_inventory_replenishment: 'replenishment', evaluate_harvest_scenario: 'harvest_scenarios' };
+  const session = createDecisionReadSession(context.db, context.decisionBudget);
+  let result;
+  let evidence = { asOf: new Date().toISOString(), sourceDigest: null, consistency: 'source_verification_unavailable' };
+  try {
+    if (context.uid && context.user) {
+      const [companySnap, userSnap] = await Promise.all([session.db.collection('companies').doc(context.companyId).get(), session.db.collection('users').doc(context.uid).get()]);
+      const currentCompany = { id: context.companyId, ...companySnap.data() };
+      const currentUser = userSnap.data();
+      if (!companySnap.exists || !userSnap.exists || currentUser.founderAccessSuspended || currentUser.role !== context.user.role ||
+        currentCompany.businessSize !== context.company.businessSize ||
+        !hasUserPermission({ company: currentCompany, user: currentUser, uid: context.uid, permission: 'useOrson' }) ||
+        ['viewFarm', 'viewFinance', 'manageFeedInventory'].some(permission =>
+          context.allowed(permission) && !hasUserPermission({ company: currentCompany, user: currentUser, uid: context.uid, permission }))) throw new Error('Not permitted');
+    }
+    result = await handlers[name](args, { ...context, db: session.db });
+    if (context.verifyScope && !(await context.verifyScope(session.db))) result = { status: 'insufficient_data', missingEvidence: ['authorization_scope_changed'], warnings: ['Authorized pond assignments changed. Request a fresh evaluation.'] };
+    evidence = await session.verify();
+    if (evidence.changed) result = { status: 'insufficient_data', missingEvidence: ['sources_changed_during_read'],
+      warnings: ['Source records changed during analysis. Request a fresh evaluation; totals and recommendations were withheld.'] };
+  } catch (error) {
+    if (!/^decision_(read_budget|deadline)_exceeded$/.test(error.message)) throw error;
+    result = { status: 'insufficient_data', missingEvidence: [error.message], warnings: ['Analysis exceeded its bounded read or time budget. Narrow the request.'] };
   }
-  if (name === inventoryReplenishmentTool.name) {
-    return evaluateInventoryReplenishment(args, context);
+  if (context.enterpriseScoped && result.retrieval?.recordsRead) {
+    const { recordsRead, ...retrieval } = result.retrieval;
+    void recordsRead;
+    result = { ...result, retrieval }; // Company enumeration counts are internal allocation evidence.
   }
-  if (name === harvestScenarioTool.name) {
-    return evaluateHarvestScenario(args, context);
+  const partial = result.retrieval?.complete === false || result.finance?.completeness === 'partial' || result.finance?.status === 'incomplete' || result.status === 'partial' || result.decision === 'review_data' ||
+    (result.primary && (result.primary.coverage.completeness !== 'complete' || result.secondary.coverage.completeness !== 'complete')) ||
+    result.items?.some(item => item.burnRate.completeness !== 'complete' || item.stockStatus.availableStock === null || item.planningNeed.incomingSupplyStatus === 'unknown' || item.planningNeed.leadTimeDays === null || item.stockAsOf === null);
+  const expectedObservationDays = result.coverage?.expectedPondDays ??
+    (result.items ? result.items.length * (args.lookbackDays || 14) : result.primary ? result.primary.coverage.expectedFeedDays + result.secondary.coverage.expectedFeedDays : null);
+  const recordedObservationDays = result.coverage?.recordedPondDays ??
+    (result.items ? result.items.reduce((sum, item) => sum + (item.burnRate.recordedObservationDays || 0), 0) : result.primary ? result.primary.coverage.recordedFeedDays + result.secondary.coverage.recordedFeedDays : null);
+  const coverage = { ...result.coverage, retrievalComplete: Boolean(evidence.sourceDigest) && !evidence.changed && result.retrieval?.complete !== false,
+    expectedObservationDays, recordedObservationDays, missingFields: result.missingEvidence || [],
+    excludedRecordCount: result.items ? result.items.reduce((sum, item) => sum + item.burnRate.excludedRows, 0) : null };
+  const metadata = { version: 1, kind: kinds[name], resultStatus: ['insufficient_data', 'not_found', 'unavailable'].includes(result.status)
+    ? 'insufficient_data' : partial ? 'partial' : 'complete', writesPerformed: 0, coverage, formulaVersion: 'orson-decision-v2', ...evidence };
+  if (!isDecisionMetadata(metadata)) throw new Error('Invalid decision result metadata');
+  const stats = context.enterpriseScoped ? { elapsedMs: session.stats().elapsedMs } : session.stats();
+  const measuredOutput = output => {
+    output.performance.outputBytes = 0;
+    for (let iteration = 0; iteration < 3; iteration += 1) output.performance.outputBytes = Buffer.byteLength(JSON.stringify(output));
+    return output;
+  };
+  let output = measuredOutput({ ...result, ...metadata, scope: { ...result.scope, boundary: context.enterpriseScoped ? 'assigned_ponds' : 'company' },
+    performance: stats, warnings: result.warnings || [], units: { feed: 'kg', biomass: 'kg', mbw: 'g', currency: context.allowed?.('viewFinance') ? context.company?.currency || context.company?.currencyCode || null : null } });
+  if (Buffer.byteLength(JSON.stringify(output)) > session.budget.limits.maxOutputBytes) {
+    output = measuredOutput({ ...metadata, status: 'insufficient_data', resultStatus: 'insufficient_data', performance: stats,
+      missingEvidence: ['decision_output_budget_exceeded'], warnings: ['Result is too large. Request one pond/item or a shorter period; totals and recommendations were withheld.'] });
   }
-  throw new Error(`Unknown decision tool: ${name}`);
+  return output;
 };
 
 module.exports = {

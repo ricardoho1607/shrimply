@@ -1,4 +1,5 @@
 'use strict';
+const { createDecisionBudget } = require('./orsonDecisionReadSession');
 const { Buffer } = require('node:buffer');
 const { hasUserPermission } = require('./permissions');
 const { selectDailyFeedEntries } = require('./orsonDomain/orsonEvidence');
@@ -369,6 +370,7 @@ const createOrsonAppDataReader = ({ db, company, user, uid, companyId }) => {
   const allowed = permission => hasUserPermission({ company: { ...company, id: companyId }, user, uid, permission });
   const canViewFinance = allowed('viewFinance');
   const enterpriseScoped = company.businessSize === 'enterprise' && user?.role === 'technician' && company.ownerId !== uid;
+  const decisionBudget = createDecisionBudget();
   let scopePromise;
   const scopedData = async (dataset, record) => {
     if (!enterpriseScoped) return record;
@@ -388,7 +390,7 @@ const createOrsonAppDataReader = ({ db, company, user, uid, companyId }) => {
     if (['ponds', 'physicalPonds'].includes(dataset)) return blockIds.has(record.blockId) ? record : null;
     if (dataset === 'blocks') return record.assignedTechnicianId === uid ? record : null;
     if (dataset === 'cycles') return (record.blockIds || [record.blockId]).some(id => blockIds.has(id)) ? { ...record, blockIds: (record.blockIds || []).filter(id => blockIds.has(id)), plannedPondIds: undefined } : null;
-    if (['feeds', 'additives'].includes(dataset)) return { ...record, usageHistory: (record.usageHistory || []).filter(row => pondIds.has(row.pondId)) };
+    if (['feeds', 'additives'].includes(dataset)) return { ...record, stockScope: 'company', usageScope: 'assigned_ponds', usageHistory: (record.usageHistory || []).filter(row => pondIds.has(row.pondId)) };
     if (dataset === 'expenses' && record.pondAllocations?.length) {
       if (!hasValidExpenseAllocations(record)) return null;
       const pondAllocations = record.pondAllocations.filter(row => pondIds.has(row.pondId)).map(row => {
@@ -412,6 +414,18 @@ const createOrsonAppDataReader = ({ db, company, user, uid, companyId }) => {
     return null;
   };
 
+  const verifyScope = async readDb => {
+    if (!enterpriseScoped || !scopePromise) return true;
+    const previous = await scopePromise;
+    const base = readDb.collection('companies').doc(companyId);
+    const blocks = await base.collection('blocks').where('assignedTechnicianId', '==', uid).limit(MAX_SCOPED_BLOCKS + 1).get();
+    const ponds = await base.collection('ponds').limit(MAX_SCOPED_PONDS + 1).get();
+    if (blocks.docs.length > MAX_SCOPED_BLOCKS || ponds.docs.length > MAX_SCOPED_PONDS) return false;
+    const blockIds = new Set(blocks.docs.map(doc => doc.id));
+    const pondIds = new Set(ponds.docs.filter(doc => blockIds.has(doc.data().blockId)).map(doc => doc.id));
+    const equal = (a, b) => a.size === b.size && [...a].every(id => b.has(id));
+    return equal(previous.blockIds, blockIds) && equal(previous.pondIds, pondIds);
+  };
   const execute = async (name, args) => {
     if (name === timelineTool.name) {
       if (!args || !allowed('viewFarm') || !validId(args.pondId)) throw new Error('Not permitted');
@@ -439,6 +453,8 @@ const createOrsonAppDataReader = ({ db, company, user, uid, companyId }) => {
         enterpriseScoped,
         scopedData,
         timeZone: company.timeZone,
+        decisionBudget,
+        verifyScope,
       });
     }
     if (name !== recordTool.name || !args || !Object.hasOwn(DATASETS, args.dataset) || !allowed(DATASETS[args.dataset])) throw new Error('Not permitted');

@@ -1,15 +1,18 @@
 # Orson Decision Tools & Authorized Read Paths Capability Matrix
 
-> **Document Version:** 2.0.0 — Final Implemented Decision Tools Architecture  
-> **Status:** All Steps 01–07 Completed & Grounded  
+> **Document Version:** 2.1.0 — Decision Tool Reliability and Scenario Extensions
+> **Status:** Local implementation verified; Firebase deployed and localhost smoke passed; emulator and targeted live decision-tool validation pending
 > **Date:** October 2026  
 > **Scope:** Cloud Functions (`functions/`), Shared Calculation Engines (`shared/`, `functions/shared/`), and Integration APIs
+
+
+The October 8 follow-up fixes the v4 audit findings. See [verification and limits](orson-decision-tools-fix-verification.md) for measured fixture results and outstanding environment checks. The plan and handover are requirements, not evidence that every acceptance gate has passed.
 
 ---
 
 ## 1. Executive Summary & Purpose
 
-This capability matrix defines the complete production architecture, authorized read paths, and decision scenario tools across Shrimply's Orson AI assistant and farm data integration surfaces.
+This capability matrix describes the implemented architecture, authorized read paths, and decision scenario tools across Shrimply's Orson AI assistant and farm data integration surfaces.
 
 It establishes:
 1. **Implemented Read Paths & Decision Tools:** How authorized users, Orson conversational agents, and external integrations retrieve live aquaculture data and evaluate advisory scenarios.
@@ -97,6 +100,7 @@ All decision scenario tools are strictly read-only, execute deterministically be
   - `startDate` (string YYYY-MM-DD, optional; defaults to 29 calendar days before `endDate`)
   - `endDate` (string YYYY-MM-DD, optional; defaults to farm-local today and is returned as the captured as-of date)
   - `pondId` (string, optional; aggregates all accessible ponds if omitted or `all`)
+  - `cycleId` (optional; requires an exact pond; historical cycles require saved baselines)
 - **Output Model:**
   - `status`: `complete`, `partial`, or `unavailable`; `writesPerformed: 0`.
   - `scope`: company or assigned-pond boundary and returned pond count; `period`: inclusive farm-local dates, timezone, and captured as-of date.
@@ -119,15 +123,18 @@ All decision scenario tools are strictly read-only, execute deterministically be
   - `cycleId` (string, optional; defaults to active cycle)
   - `compareCycleId` (string, optional; for historical cycle comparison)
   - `asOfDoc` (integer 1–200, optional Day of Culture cutoff)
+  - `startDate` / `endDate` (inclusive calendar period)
+  - `startDoc` / `endDoc` (inclusive DOC range, separately aligned to each cycle start)
+  - Calendar dates, DOC ranges, and DOC cutoffs are mutually exclusive. Period feed and costs share the selected bounds; cumulative biology retains earlier mortality and partial harvests.
 - **Sanitized Public Output Model:**
   - `primary`: `{ pondId, pondName, cycleId, metrics, coverage }` (internal `effectivePond` strictly omitted)
   - `secondary`: `{ pondId, pondName, cycleId, metrics, coverage }` (internal `effectivePond` strictly omitted)
   - `deltas`: Exact differences (`mbwDiffG`, `adgDiffGPerDay`, `survivalRateDiffPercent`, `fcrDiff`, `biomassDiff`, `biomassDiffKg`, `feedConsumedDiffKg`)
-  - `insights`: Actionable comparative takeaways
+  - `insights`: Performance ranking is withheld when observation coverage, sampling dates, age, or lifecycle differ. Deltas remain descriptive.
   - `finance`: `{ financeAllowed, primaryFeedCost, secondaryFeedCost, feedCostDiff }` (withheld if `!viewFinance`)
 - **Deterministic Historical Cycle Resolution:**
   - Explicit cycle document lookup verifies company membership and pond association.
-  - Missing cycles return `{ status: 'not_found' }` rather than silently falling back to the active pond.
+  - Restricted callers receive the same generic denial for missing and inaccessible pond/cycle IDs. Missing historical baselines withhold the comparison.
 - **DOC Cutoff Invariant:**
   - When `asOfDoc` is provided, samplings, daily mortalities, and harvest records occurring after the cutoff DOC are filtered out.
   - Historical harvests on or before the cutoff are aggregated into `totalHarvestedPopulation` and `totalHarvestedBiomass` to maintain post-harvest population integrity.
@@ -143,6 +150,9 @@ All decision scenario tools are strictly read-only, execute deterministically be
   - `itemType` (string: `'feed'`, `'additive'`, or `'all'`, default `'all'`)
   - `lookbackDays` (integer 3–60, default 14, server-capped)
   - `plannedDays` (integer 1–90, default 7, server-capped)
+  - `leadTimeDays` (0–90, optional; omitted means unknown)
+  - `safetyStock` (non-negative quantity in item units; a default zero allowance is disclosed)
+  - `incomingQuantity` / `incomingArrivalDays` (explicit user scenario assumptions; omitted supply remains unknown)
   - `requiredQuantity` (number, optional maintenance or dosing requirement)
   - `unit` (string, optional unit for verification)
 - **Output Model:**
@@ -158,7 +168,11 @@ All decision scenario tools are strictly read-only, execute deterministically be
 - **Strict Farm-Calendar Bounding & Unit Invariants:**
   - Burn rate lookback is strictly bounded between `windowStartKey <= dateKey <= todayKey`.
   - Undated, stale (`< windowStartKey`), and future (`> todayKey`) records are excluded.
-  - Usage rows with unverified or incompatible units are excluded; items with unknown units never default to `'kg'`.
+  - Incompatible usage units withhold demand and runway until conversion evidence exists; items with unknown units never default to `'kg'`.
+  - Coverage reports recorded and missing observation days. The recorded-day mean is conditional, and sparse observations cannot produce an adequate/stable runway conclusion. Stock timestamps remain unknown if not saved.
+  - Shared company stock remains accessible according to permissions. Assigned-pond usage cannot establish company demand or a company replenishment recommendation.
+  - Net purchase quantity is `max(0, horizon demand + safety stock - usable stock - qualifying incoming)`. Supply beyond the horizon is excluded; shortages before arrival are disclosed. Unknown supply yields a provisional gross requirement and no net purchase quantity.
+  - Recorded feeding restorations and explicit returns/corrections adjust usage; unidentified negative rows are excluded and counted.
   - Empty history produces `burnRate: null` (`isUnknown: true`), distinctly separated from verified zero usage (`burnRate: 0`).
 - **Strict Read-Only Guarantee:**
   - Purely advisory evaluation. Guaranteed zero procurement actions executed (`noProcurementExecuted: true`). No Firestore writes, no purchase orders created, no inventory deducted.
@@ -174,12 +188,13 @@ All decision scenario tools are strictly read-only, execute deterministically be
   - `cycleId` (string, optional, defaults to active cycle)
   - `targetMbwG` (number, optional target MBW)
   - `targetSizeCountPerKg` (number, optional target shrimp size count)
-  - `daysToHarvest` (integer 1–120, optional grow-out horizon, server-capped)
+  - `daysToHarvest` (integer 1–120, optional cap on reachable size-tier projections)
+  - `exactDaysFromNow` (integer 1–120, optional exact harvest date offset)
   - `pricePerKg` (number, optional flat price in farm currency)
   - `priceLadder` (array of `{ sizeCountPerKg, pricePerKg }`, optional tiered market ladder)
 - **Output Model:**
   - `today`: Current DOC, MBW, population, survival rate, projected biomass (kg), and financial revenue/operating profit (if authorized).
-  - `targets`: Array of reachable target sizes with projected DOC, MBW (via von Bertalanffy growth taper), surviving population, projected biomass, incremental feed required, and operating profit.
+  - `targets`: Reachable size targets plus an exact-day scenario when requested, with projected MBW (via von Bertalanffy growth taper), surviving population, projected biomass, incremental feed required, and operating profit.
   - `bestScenario`: The scenario yielding maximum operating profit (or operational recommendation for non-finance callers).
   - `assumptions`: Modeling parameters (`growthModel`, `assumedAdgGPerDay`, `mortalityBasis`, `mortalityDailyRatePercent`, `feedCostUnitPerKg` [stripped for non-finance callers], `maxProjectionDays`).
   - `missingEvidence`: Array of missing parameter names (e.g., `missing_historical_feed_unit_cost`, `missing_market_price`).
@@ -241,9 +256,9 @@ All decision scenario tools are strictly read-only, execute deterministically be
 | Constraint | Limit | Enforced At | Behavior When Exceeded |
 | :--- | :--- | :--- | :--- |
 | **Pond Timeline Window** | Min 7 days, Max 90 days (default 30) | `orsonAppData.js#L390` | Throws `Error('Invalid days')` |
-| **Period Feed Summary Window** | Min 1 day, Max 365 days | `orsonDecisionTools.js#L254` | Throws `Error('Date range exceeds 365 days')` |
+| **Period Feed Summary Window** | Min 1 day, Max 366 inclusive days | `orsonDecisionTools.js` | Rejects invalid or oversized windows |
 | **Harvest Horizon** | Min 1 day, Max 120 days | `orsonDecisionTools.js#L202` | Clamped / Rejected if out of bounds |
-| **Inventory Planning Horizon** | Min 1 day, Max 90 days | `orsonInventoryPolicy.js#L72` | Defaults to 14 days |
+| **Inventory Planning Horizon** | Min 1 day, Max 90 days | `orsonInventoryPolicy.js` | Defaults to 7 days; usage lookback defaults to 14 |
 | **Array Page Byte Limit** | 24,000 bytes (24 KB) | `orsonAppData.js#L21` | Splits array; returns `nextOffset` |
 | **Array Page Item Count** | Max 30 items per request | `orsonAppData.js#L22` | Returns first 30 items; supplies `nextOffset` |
 | **List Page Size** | Max 10 docs (queries 11 for hasMore) | `orsonAppData.js#L449` | Returns 10 items; supplies `nextCursor` |
@@ -254,6 +269,10 @@ All decision scenario tools are strictly read-only, execute deterministically be
 | **Operation Draft Expiration**| 2 hours | `orsonOperations.js#L201` | Operation transitions to expired; rejected on confirm |
 
 ---
+
+All four production tools route through the app-data reader and return common runtime-validated metadata: `version`, `kind`, `resultStatus`, `writesPerformed`, observation/retrieval coverage, `asOf`, formula version, and source digest. Legacy payload statuses are retained; callers should use `resultStatus` for common completeness.
+
+Decision source reads share request limits of 12,000 returned documents, 160 reads, four concurrent reads, and 16 MiB of read data. Each evaluation has a 20-second deadline and 64 KiB output cap. Assigned-scope discovery has its existing separate bounded block/pond limits. Source pages are re-read before delivery; changed evidence withholds all amounts and recommendations. This is a bounded consistency check, not a transactional Firestore snapshot. A fresh evaluation never reuses a prior evaluation's data cache.
 
 ### 4.4 Read-Only Safety & Mutation Insulation
 

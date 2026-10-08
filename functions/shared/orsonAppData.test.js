@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { Buffer } = require('node:buffer');
 const assert = require('node:assert/strict');
 const { createOrsonAppDataReader } = require('./orsonAppData');
 const {
@@ -15,7 +16,8 @@ const fixture = (role = 'technician', data = {}, more = false, timeZone = 'UTC')
     limit: () => makeRef(path + '/list'),
     get: async () => {
       paths.push(path);
-      const doc = id => ({ id, exists: true, data: () => data });
+      const doc = id => ({ id, exists: true, data: () => path === 'companies/company' ? { ownerId: 'owner', teamMembers: ['member'], timeZone }
+        : path.startsWith('users/') ? { role, companyId: 'company' } : data });
       return path.endsWith('/list') ? { docs: Array.from({ length: more ? 11 : 1 }, (_, i) => doc(`record-${i}`)) } : doc('record');
     },
   });

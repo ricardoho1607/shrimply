@@ -2,13 +2,14 @@ import { isCycleOperatingExpense } from './reportingIntegrity';
 import { differenceInFarmCalendarDays, normalizeFarmDateKey } from './farmDate';
 import {
   daysToTargetMbwWithTapering,
+  projectMbwWithTapering,
   calculatePondMetricsWithHarvest,
   getSamplingMbw,
   isBaselineSampling,
   type SharedPond,
   type PondMetricsWithHarvest,
 } from './pondCalculations';
-import { isInventoryTransfer, monetaryValue } from './financeIntegrity';
+import { isInventoryTransfer, isRecordedInventoryReturn, monetaryValue } from './financeIntegrity';
 import { hasValidExpenseAllocations, normalizeProductionExpenseCategory, requiresProductionAllocation, type ExpenseAllocationLink } from './financeExpenseAllocation';
 
 export type HarvestDecision = 'harvest_now' | 'keep_growing' | 'review_data';
@@ -38,6 +39,7 @@ export interface AllocatableCostRecord {
 
 export interface ExpenseCostLike {
   voided?: boolean;
+  isVoid?: boolean;
   id: string;
   date?: string | null;
   amount?: number | string | null;
@@ -53,6 +55,9 @@ export interface ExpenseCostLike {
 
 export interface InventoryUsageCostLike {
   source?: string;
+  type?: string;
+  kind?: string;
+  feedRecordId?: string;
   id?: string | null;
   date?: string | null;
   quantity?: number | string | null;
@@ -84,6 +89,8 @@ export interface MortalityRateRecordLike {
 }
 
 export interface PondProfitabilityCostSnapshot {
+  recordedFeedCostSubtotal: number | null;
+  feedCostCompleteness: 'complete' | 'partial' | 'unavailable';
   costsToDate: HarvestCostTotals;
   feedUnitCostPerKg: number | null;
   projectedDailyAdditiveCost: number | null;
@@ -110,7 +117,7 @@ export interface HarvestCostTotals {
 }
 
 export interface HarvestProfitabilityScenario {
-  kind: 'today' | 'target';
+  kind: 'today' | 'target' | 'horizon';
   targetSizeCountPerKg: number;
   targetMbwG: number;
   daysFromNow: number;
@@ -138,6 +145,7 @@ export interface HarvestProfitabilityInput {
   fallbackDailyMortalityRatePercent?: number | null;
   recentDailyFeedTotals: DailyFeedTotal[];
   feedUnitCostPerKg: number | null;
+  flatPricePerKg?: number | null;
   priceLadder: PriceTier[];
   costsToDate: HarvestCostTotals;
   projectedDailyAdditiveCost: number | null;
@@ -146,6 +154,7 @@ export interface HarvestProfitabilityInput {
   targetMbwG?: number | null;
   targetSizeCountPerKg?: number | null;
   hasValidSamplingMbw?: boolean;
+  exactDaysFromNow?: number | null;
   maxProjectionDays?: number;
   timeZone?: string;
   now?: Date;
@@ -199,10 +208,10 @@ export const isInventoryPurchaseExpense = (expense: ExpenseCostLike): boolean =>
   );
 
 export const expenseToCostRecord = (expense: ExpenseCostLike, timeZone?: string): AllocatableCostRecord | null => {
-  if (expense.voided === true || isInventoryPurchaseExpense(expense) || !isCycleOperatingExpense(expense)) return null;
+  if (expense.voided === true || expense.isVoid === true || isInventoryPurchaseExpense(expense) || !isCycleOperatingExpense(expense)) return null;
   const date = validDate(expense.date, timeZone);
   const amount = finite(expense.amount);
-  if (!date || amount === null || amount <= 0) return null;
+  if (!date || amount === null || amount < 0) return null;
 
   return {
     id: expense.id,
@@ -233,7 +242,7 @@ export const inventoryUsageToCostRecord = (
     : quantity !== null && unitPrice !== null
       ? quantity * unitPrice
       : null;
-  if (!date || amount === null || amount < 0) return null;
+  if (!date || amount === null || (amount < 0 && !isRecordedInventoryReturn(usage))) return null;
 
   return {
     id: usage.id || fallbackId,
@@ -398,7 +407,7 @@ export const buildPondProfitabilityCostSnapshot = ({
       if (isInventoryTransfer(usage) || (usage as any).voided === true || (usage as any).isVoid === true) return records;
       const date = validDate(usage.date, timeZone);
       const quantity = finite(usage.quantity);
-      if (!date || quantity === null || quantity === 0) return records;
+      if (!date || quantity === null || quantity === 0 || (quantity < 0 && !isRecordedInventoryReturn(usage))) return records;
       records.push({
         id: usage.id || `${item.id}:quantity:${index}`,
         date,
@@ -427,14 +436,42 @@ export const buildPondProfitabilityCostSnapshot = ({
     warnings.push('Inventory stock-in purchases were excluded; only consumed feed and additive usage is counted.');
   }
 
+  // Allocate missing valuations with the same cycle/pond rules as priced rows.
+  // A known subtotal is evidence, never a complete cost or unit-price denominator.
+  const allocatedUsageGap = (items: InventoryItemWithUsage[], source: 'feed_usage' | 'additive_usage', missingQuantity = false) =>
+    allocateCostsToPond({ ...allocationInput, records: items.flatMap(item =>
+      (item.usageHistory || []).flatMap((usage, index): AllocatableCostRecord[] => {
+        if (isInventoryTransfer(usage) || (usage as any).voided || (usage as any).isVoid) return [];
+        const priced = inventoryUsageToCostRecord(usage, source, `${item.id}:${index}`, timeZone);
+        const quantity = finite(usage.quantity);
+        const hasQuantity = quantity !== null && (quantity > 0 || (quantity < 0 && isRecordedInventoryReturn(usage)));
+        if (missingQuantity ? !priced || hasQuantity || priced.amount === 0 : quantity === 0 || priced) return [];
+        const date = validDate(usage.date, timeZone);
+        return date ? [{ id: `${item.id}:gap:${index}`, date, amount: 1, pondId: usage.pondId,
+          pondCycleId: usage.pondCycleId, cycleId: usage.cycleId, source }] : [];
+      })) }).allocatedAmount > 0;
+  const feedHasUnpricedUsage = allocatedUsageGap(feeds, 'feed_usage');
+  const additiveHasUnpricedUsage = allocatedUsageGap(additives, 'additive_usage');
+  if (feedHasUnpricedUsage) warnings.push('Consumed feed includes unpriced usage; complete feed cost and unit cost are unavailable.');
+  if (additiveHasUnpricedUsage) warnings.push('Consumed additives include unpriced usage; complete additive cost is unavailable.');
+
+  const feedHasMissingQuantity = allocatedUsageGap(feeds, 'feed_usage', true);
+  if (feedHasMissingQuantity) warnings.push('Some priced feed usage has no quantity; unit cost is unavailable.');
+  const missingExpenseAmountRecords = expenses.filter(expense => !isInventoryPurchaseExpense(expense) &&
+    !expense.voided && !expense.isVoid && isCycleOperatingExpense(expense) &&
+    (finite(expense.amount) === null || (finite(expense.amount) ?? 0) < 0))
+    .map(expense => expenseToCostRecord({ ...expense, amount: 1, pondAllocations: undefined, allocationMethod: undefined }, timeZone))
+    .filter((record): record is AllocatableCostRecord => record !== null);
+  const hasMissingExpenseAmounts = allocateCostsToPond({ ...allocationInput, records: missingExpenseAmountRecords }).allocatedAmount > 0;
+  if (hasMissingExpenseAmounts) warnings.push('Some operating-expense amounts are missing; complete operating cost is unavailable.');
   const hasRecordedFeedCost = feedAllocation.includedRecordIds.length > 0;
-  const calculatedFeedUnitCost = feedQuantityAllocation.allocatedAmount > 0 && hasRecordedFeedCost
+  const calculatedFeedUnitCost = feedQuantityAllocation.allocatedAmount > 0 && hasRecordedFeedCost && !feedHasUnpricedUsage && !feedHasMissingQuantity
     ? round(feedAllocation.allocatedAmount / feedQuantityAllocation.allocatedAmount, 4)
     : null;
 
-  const incurredFeedCost = hasRecordedFeedCost ? feedAllocation.allocatedAmount : null;
-  const incurredAdditiveCost = additiveAllocation.includedRecordIds.length > 0 ? additiveAllocation.allocatedAmount : null;
-  const incurredGeneralExpense = expenseAllocation.allocatedAmount > 0 ? expenseAllocation.allocatedAmount : null;
+  const incurredFeedCost = hasRecordedFeedCost && !feedHasUnpricedUsage ? feedAllocation.allocatedAmount : null;
+  const incurredAdditiveCost = additiveAllocation.includedRecordIds.length > 0 && !additiveHasUnpricedUsage ? additiveAllocation.allocatedAmount : null;
+  const incurredGeneralExpense = expenseAllocation.includedRecordIds.length > 0 && !hasMissingExpenseAmounts ? expenseAllocation.allocatedAmount : null;
   if (incurredAdditiveCost === null) warnings.push('Recorded additive costs are unavailable for this pond and period.');
   if (incurredGeneralExpense === null) warnings.push('Recorded operating expenses are unavailable for this pond and period.');
   if (feedQuantityAllocation.allocatedAmount > 0 && !hasRecordedFeedCost) {
@@ -449,6 +486,8 @@ export const buildPondProfitabilityCostSnapshot = ({
       // Seed is incurred once at stocking, rather than extrapolated as a daily operating cost.
       other: plAllocation.allocatedAmount,
     },
+    recordedFeedCostSubtotal: hasRecordedFeedCost ? feedAllocation.allocatedAmount : null,
+    feedCostCompleteness: feedHasUnpricedUsage ? 'partial' : hasRecordedFeedCost ? 'complete' : 'unavailable',
     feedUnitCostPerKg: calculatedFeedUnitCost,
     projectedDailyAdditiveCost: incurredAdditiveCost === null ? null : round(incurredAdditiveCost / elapsedDays),
     projectedDailyGeneralExpense: incurredGeneralExpense === null ? null : round(incurredGeneralExpense / elapsedDays),
@@ -504,7 +543,7 @@ export const buildDailyFeedTotalsForPond = (
     (feed.usageHistory || []).forEach((usage) => {
       if (usage.pondId !== pondId) return;
       if (isInventoryTransfer(usage)) return;
-      if ((usage as any).voided === true) return;
+      if ((usage as any).voided === true || (usage as any).isVoid === true) return;
       const date = validDate(usage.date, timeZone);
       const quantity = finite(usage.quantity);
       if (!date || quantity === null || quantity === 0) return;
@@ -601,7 +640,7 @@ const buildScenario = ({
   pricePerKg,
   todayProfit,
 }: {
-  kind: 'today' | 'target';
+  kind: 'today' | 'target' | 'horizon';
   targetSizeCountPerKg: number;
   daysFromNow: number;
   input: HarvestProfitabilityInput;
@@ -680,7 +719,8 @@ export const calculateHarvestProfitability = (
   const currentPopulation = nonNegative(input.currentPopulation);
   const currentMbwG = nonNegative(input.currentMbwG);
   const currentSizeCountPerKg = currentMbwG > 0 ? 1000 / currentMbwG : 0;
-  const currentPricePerKg = resolvePriceForSize(currentSizeCountPerKg, priceLadder);
+  const flatPrice = finite(input.flatPricePerKg);
+  const currentPricePerKg = flatPrice !== null && flatPrice > 0 ? flatPrice : resolvePriceForSize(currentSizeCountPerKg, priceLadder);
   const now = input.now ?? new Date();
   const todayDateKey = normalizeFarmDateKey(now, input.timeZone);
   const dailyFeedRate = calculateDailyFeedIncreaseRate(input.recentDailyFeedTotals, input.timeZone, now);
@@ -752,7 +792,7 @@ export const calculateHarvestProfitability = (
         dailyFeedRate,
         startingDailyFeedKg,
         mortalityRate,
-        pricePerKg: tier.pricePerKg,
+        pricePerKg: flatPrice ?? tier.pricePerKg,
         todayProfit: today.operatingProfit,
       }))
     : [];
@@ -771,7 +811,7 @@ export const calculateHarvestProfitability = (
       Math.max(50, targetMbwG * 1.15),
     )));
     if (daysFromNow <= maxProjectionDays && !targets.some((t) => Math.abs(t.targetSizeCountPerKg - explicitTargetCount) < 1)) {
-      const explicitPrice = resolvePriceForSize(explicitTargetCount, priceLadder);
+      const explicitPrice = flatPrice ?? resolvePriceForSize(explicitTargetCount, priceLadder);
       targets.push(buildScenario({
         kind: 'target',
         targetSizeCountPerKg: explicitTargetCount,
@@ -785,6 +825,14 @@ export const calculateHarvestProfitability = (
       }));
       targets.sort((a, b) => a.daysFromNow - b.daysFromNow);
     }
+  }
+
+  if (input.exactDaysFromNow && Number.isInteger(input.exactDaysFromNow) && input.exactDaysFromNow <= maxProjectionDays && input.currentMbwG > 0 && input.hasValidSamplingMbw !== false) {
+    const projectedMbwG = projectMbwWithTapering(currentMbwG, input.adgGPerDay, input.exactDaysFromNow, 50);
+    if (projectedMbwG > 0) targets.push(buildScenario({ kind: 'horizon', targetSizeCountPerKg: 1000 / projectedMbwG,
+      daysFromNow: input.exactDaysFromNow, input: { ...input, currentPopulation, currentMbwG },
+      dailyFeedRate, startingDailyFeedKg, mortalityRate,
+      pricePerKg: flatPrice ?? resolvePriceForSize(1000 / projectedMbwG, priceLadder), todayProfit: today.operatingProfit }));
   }
 
   const hasFeedProjectionBasis = startingDailyFeedKg > 0 || (input.historicalFcr !== null && input.historicalFcr !== undefined && input.historicalFcr > 0);
@@ -825,7 +873,7 @@ export const calculateHarvestProfitability = (
   const decision: HarvestDecision = (!hasCriticalData || !hasCriticalFinanceData || !canProjectGrowthSafely)
     ? 'review_data'
     : bestScenario.operatingProfit !== null && today.operatingProfit !== null &&
-      bestScenario.kind === 'target' && bestScenario.operatingProfit > today.operatingProfit && bestScenario.operatingProfit > 0
+      bestScenario.kind !== 'today' && bestScenario.operatingProfit > today.operatingProfit && bestScenario.operatingProfit > 0
       ? 'keep_growing'
       : 'harvest_now';
   const decisionReason = !hasCriticalData
@@ -864,6 +912,7 @@ export interface EvaluatePondHarvestDecisionOptions {
   targetMbwG?: number | null;
   targetSizeCountPerKg?: number | null;
   daysToHarvest?: number | null;
+  exactDaysFromNow?: number | null;
   maxProjectionDays?: number;
   startDate?: string | null;
   endDate?: string | null;
@@ -953,7 +1002,14 @@ export const evaluateHarvestDecisionForPond = ({
     timeZone,
   });
 
-  const recentDailyFeedTotals = buildDailyFeedTotalsForPond(feeds, pond.id, timeZone);
+  const activeCycleIds = [pond.cycleId, pond.pondCycleId].filter(Boolean);
+  const currentCycleFeeds = feeds.map(item => ({ ...item, usageHistory: (item.usageHistory || []).filter(usage => {
+    const ids = [usage.cycleId, usage.pondCycleId].filter(Boolean);
+    const date = validDate(usage.date, timeZone);
+    return date && date >= (validDate(cycleStart, timeZone) || todayKey) && date <= todayKey &&
+      (!ids.length || !activeCycleIds.length || ids.some(id => activeCycleIds.includes(id)));
+  }) }));
+  const recentDailyFeedTotals = buildDailyFeedTotalsForPond(currentCycleFeeds, pond.id, timeZone);
   const priceLadder = [...(options.priceLadder || [])];
   const explicitCurrentPrice = finite(options.pricePerKg);
   if (explicitCurrentPrice !== null && explicitCurrentPrice > 0 && metrics.latestMbw > 0) {
@@ -978,6 +1034,7 @@ export const evaluateHarvestDecisionForPond = ({
     recentDailyFeedTotals,
     feedUnitCostPerKg: costSnapshot.feedUnitCostPerKg,
     priceLadder,
+    flatPricePerKg: explicitCurrentPrice,
     costsToDate: costSnapshot.costsToDate,
     projectedDailyAdditiveCost: costSnapshot.projectedDailyAdditiveCost,
     projectedDailyGeneralExpense: costSnapshot.projectedDailyGeneralExpense,
@@ -985,6 +1042,7 @@ export const evaluateHarvestDecisionForPond = ({
     targetMbwG: options.targetMbwG,
     targetSizeCountPerKg: options.targetSizeCountPerKg,
     hasValidSamplingMbw,
+    exactDaysFromNow: options.exactDaysFromNow,
     maxProjectionDays: options.daysToHarvest ?? options.maxProjectionDays,
     timeZone,
     now,
@@ -1035,7 +1093,7 @@ export const evaluateHarvestDecisionForPond = ({
       mortalityBasis,
       mortalityDailyRatePercent: result.dailyMortalityRatePercent,
       feedCostUnitPerKg: costSnapshot.feedUnitCostPerKg,
-      maxProjectionDays: options.maxProjectionDays ?? 120,
+      maxProjectionDays: options.daysToHarvest ?? options.maxProjectionDays ?? 120,
     },
     missingEvidence,
     marginBasis: 'operating_profit_after_recorded_incurred_and_supported_projected_costs',

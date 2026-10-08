@@ -188,7 +188,7 @@ test('evaluateReplenishmentScenario: comprehensive evaluation of missing, partia
   assert.equal(zeroUsage.burnRate.kgPerDay, 0);
   assert.equal(zeroUsage.burnRate.isZeroUsage, true);
   assert.equal(zeroUsage.burnRate.isUnknown, false);
-  assert.equal(zeroUsage.runway.runwayStatus, 'stable_zero_consumption');
+  assert.equal(zeroUsage.runway.runwayStatus, 'unknown'); // One zero-use observation does not cover all missing days.
   assert.equal(zeroUsage.runway.daysOfSupply, null);
   assert.equal(zeroUsage.reorderAssessment.isReorderNeeded, false);
 
@@ -213,7 +213,8 @@ test('evaluateReplenishmentScenario: comprehensive evaluation of missing, partia
     timeZone: 'UTC',
   });
   // Day 1 (Sep 1): 20kg, Day 2 (Sep 2): 20kg -> average 20kg/day
-  assert.equal(filteredUsage.burnRate.kgPerDay, 20);
+  assert.equal(filteredUsage.burnRate.kgPerDay, null); // Mixed units require conversion evidence.
+  assert.equal(filteredUsage.runway.runwayStatus, 'unknown');
 
   // 3d. Strictly bounded window: excludes undated, future (> todayKey), and stale (< windowStartKey) rows
   const boundedWindowUsage = evaluateReplenishmentScenario({
@@ -295,4 +296,40 @@ test('existing inventory policy rules: adheres to INVENTORY_DOSING_RULES standar
   assert.ok(INVENTORY_DOSING_RULES.some((r) => r.includes('unknown stock is not zero')));
   // Rule 7 checks compatible verified units
   assert.ok(INVENTORY_DOSING_RULES.some((r) => r.includes('compatible verified units')));
+});
+
+test('sparse replenishment history discloses missing days and cannot claim adequate runway', () => {
+  const result = evaluateReplenishmentScenario({ item: { id: 'sparse', unit: 'L', totalStock: 1000, usageHistory: [{ date: '2026-10-08', quantity: 10, unit: 'L' }] }, todayKey: '2026-10-08' });
+  assert.equal(result.burnRate.recordedObservationDays, 1);
+  assert.equal(result.burnRate.missingObservationDays, 13);
+  assert.equal(result.runway.runwayStatus, 'unknown');
+  assert.equal(result.burnRate.quantityPerDay, 10);
+  assert.equal(result.burnRate.kgPerDay, null);
+  assert.equal(result.planningNeed.incomingSupplyStatus, 'unknown');
+});
+
+test('replenishment separates horizon, lead time, safety stock and qualifying incoming supply', () => {
+  const result = evaluateReplenishmentScenario({ item: { unit: 'kg', totalStock: 20 }, burnRateKgPerDay: 10, plannedDays: 7, leadTimeDays: 3, safetyStock: 15, incomingQuantity: 25, incomingArrivalDays: 5, todayKey: '2026-10-08' });
+  assert.equal(result.planningNeed.demand, 70);
+  assert.equal(result.planningNeed.purchaseQuantity, 40);
+  assert.equal(result.planningNeed.preArrivalShortfall, 10);
+});
+
+test('incoming supply timing preserves shortages before it arrives and ignores supply beyond the horizon', () => {
+  const options = { item: { totalStock: 20, unit: 'kg' }, burnRateKgPerDay: 10, plannedDays: 7, leadTimeDays: 5, incomingQuantity: 40 };
+  const late = evaluateReplenishmentScenario({ ...options, incomingArrivalDays: 9 });
+  assert.equal(late.planningNeed.qualifyingIncoming, 0);
+  assert.equal(late.planningNeed.purchaseQuantity, 50);
+  const arrives = evaluateReplenishmentScenario({ ...options, incomingArrivalDays: 3 });
+  assert.equal(arrives.planningNeed.purchaseQuantity, 10);
+  assert.equal(arrives.planningNeed.preArrivalShortfall, 10); // A day-three shortage exists before incoming stock covers day five.
+});
+
+test('signed recognized returns adjust usage without fabricating negative consumption', () => {
+  const result = evaluateReplenishmentScenario({ item: { unit: 'kg', totalStock: 50, usageHistory: [
+    { date: '2026-10-08', quantity: 20 }, { date: '2026-10-08', quantity: -5, type: 'return' },
+    { date: '2026-10-08', quantity: -100 },
+  ] }, todayKey: '2026-10-08' });
+  assert.equal(result.burnRate.quantityPerDay, 15);
+  assert.equal(result.burnRate.excludedRows, 1);
 });

@@ -1,4 +1,5 @@
 'use strict';
+const { isRecordedInventoryReturn } = require('./orsonDomain/financeIntegrity');
 
 const TREATMENT_OPT_OUT_PATTERNS = [
   /\b(?:do\s+not|don't|without|no)\b[^.!?\n]{0,120}\b(?:dos(?:e|age|ing)|treatment|application amount|product recommendation)\b/i,
@@ -196,6 +197,10 @@ const evaluateReplenishmentScenario = ({
   requiredQuantity,
   requiredUnit,
   plannedDays = 7,
+  leadTimeDays = null,
+  safetyStock,
+  incomingQuantity = null,
+  incomingArrivalDays = null,
   lookbackDays = 14,
   todayKey: optTodayKey,
   asOfDate: optAsOfDate,
@@ -206,9 +211,13 @@ const evaluateReplenishmentScenario = ({
   const lookback = Math.min(60, Math.max(3, Number(lookbackDays) || 14));
   const horizonDays = Math.min(90, Math.max(1, Number(plannedDays) || 7));
 
+  let recordedObservationDays = 0;
+  let excludedRows = 0;
+  let unitConflict = false;
+  const explicitRate = burnRateKgPerDay !== undefined && burnRateKgPerDay !== null;
   let burnRate = null;
-  let windowStartKey = null;
-  let effectiveTodayKey = null;
+  const effectiveTodayKey = farmDateKey(optTodayKey || optAsOfDate || optCurrentDateKey, timeZone) || farmDateKey(new Date(), timeZone);
+  const windowStartKey = new Date(Date.parse(`${effectiveTodayKey}T00:00:00.000Z`) - (lookback - 1) * 86400000).toISOString().slice(0, 10);
 
   if (burnRateKgPerDay !== undefined && burnRateKgPerDay !== null) {
     burnRate = Number.isFinite(Number(burnRateKgPerDay)) ? Number(burnRateKgPerDay) : null;
@@ -231,20 +240,18 @@ const evaluateReplenishmentScenario = ({
           if (!h || typeof h !== 'object') continue;
           if (h.voided === true || h.isVoid === true) continue;
           if (h.transfer === true || h.source === 'treatmentMixProduction') continue;
+          const dateKey = farmDateKey(h.date, timeZone);
+          if (!dateKey || dateKey < windowStartKey || dateKey > effectiveTodayKey) { excludedRows += 1; continue; }
 
           // Unit compatibility
           if (h.unit && itemUnit) {
             const rowU = String(h.unit).trim().toLowerCase();
-            if (rowU !== itemUnit) continue;
+            if (rowU !== itemUnit) { excludedRows += 1; unitConflict = true; continue; }
           }
 
           if (h.quantity === null || h.quantity === undefined || (typeof h.quantity === 'string' && !h.quantity.trim())) continue;
           const qty = Number(h.quantity);
-          if (!Number.isFinite(qty) || qty < 0) continue;
-
-          // Missing, malformed, and future dates cannot contribute to a burn rate.
-          const dateKey = farmDateKey(h.date, timeZone);
-          if (!dateKey) continue; // Undated rows strictly excluded
+          if (!Number.isFinite(qty) || (qty < 0 && !isRecordedInventoryReturn(h))) { excludedRows += 1; continue; }
 
           parsedRows.push({ dateKey, quantity: qty });
         }
@@ -252,13 +259,6 @@ const evaluateReplenishmentScenario = ({
         if (parsedRows.length === 0) {
           burnRate = null;
         } else {
-          // Determine effective today key
-          const rawRefDate = optTodayKey || optAsOfDate || optCurrentDateKey;
-          effectiveTodayKey = farmDateKey(rawRefDate, timeZone) || farmDateKey(new Date(), timeZone);
-
-          const refMs = Date.parse(`${effectiveTodayKey}T00:00:00.000Z`);
-          windowStartKey = new Date(refMs - (lookback - 1) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-
           // Strictly bound window: windowStartKey <= dateKey <= effectiveTodayKey
           const windowRows = parsedRows.filter(
             (r) => r.dateKey >= windowStartKey && r.dateKey <= effectiveTodayKey,
@@ -274,20 +274,50 @@ const evaluateReplenishmentScenario = ({
 
             const distinctDates = Array.from(dailyTotals.keys()).sort();
             const sum = distinctDates.reduce((acc, d) => acc + dailyTotals.get(d), 0);
-            burnRate = Math.round((sum / distinctDates.length) * 100) / 100;
+            recordedObservationDays = distinctDates.length;
+            burnRate = Math.max(0, Math.round((sum / distinctDates.length) * 100) / 100);
           }
         }
       }
     }
   }
 
+  if (unitConflict) burnRate = null;
+  const scopeComparable = !(item?.stockScope === 'company' && item?.usageScope === 'assigned_ponds');
+  const coverageComplete = (explicitRate || recordedObservationDays === lookback) && scopeComparable && Boolean(item?.unit) && !unitConflict;
   const runway = calculateDaysOfSupply(stockStatus.availableStock, burnRate);
+  if (!coverageComplete && ['adequate', 'stable_zero_consumption'].includes(runway.runwayStatus)) {
+    runway.runwayStatus = 'unknown';
+    runway.reason = 'incomplete_usage_observations';
+  }
+  if (!scopeComparable) { runway.runwayStatus = 'unknown'; runway.daysOfSupply = null; runway.reason = 'incompatible_stock_and_usage_scope'; }
+  if (!item?.unit) { runway.runwayStatus = 'unknown'; runway.daysOfSupply = null; runway.reason = 'unknown_unit'; }
+  runway.conditionalEstimate = !coverageComplete;
+
   const shortfall = calculateReplenishmentShortfall(stockStatus.availableStock, requiredQuantity, {
     unit: requiredUnit,
     itemUnit: item?.unit,
   });
 
+  const compatibleRequirement = shortfall.reason === 'unit_mismatch' || !item?.unit ? null : Number(requiredQuantity) || 0;
+  const incomingKnown = Number.isFinite(incomingQuantity) && incomingQuantity >= 0 &&
+    (incomingQuantity === 0 || (Number.isInteger(incomingArrivalDays) && incomingArrivalDays >= 0));
+  const qualifyingIncoming = incomingKnown ? (incomingQuantity === 0 || incomingArrivalDays <= horizonDays ? incomingQuantity : 0) : null;
+  const safety = safetyStock === undefined ? 0 : Number.isFinite(safetyStock) && safetyStock >= 0 ? safetyStock : null;
+  const demand = burnRate !== null ? burnRate * horizonDays : null;
+  const grossNeed = scopeComparable && stockStatus.availableStock !== null && item?.unit && demand !== null && safety !== null
+    ? Math.round(Math.max(0, Math.max(demand, compatibleRequirement || 0) + safety - stockStatus.availableStock) * 100) / 100 : null;
+  const purchaseQuantity = grossNeed !== null && qualifyingIncoming !== null
+    ? Math.round(Math.max(0, Math.max(demand, compatibleRequirement || 0) + safety - stockStatus.availableStock - qualifyingIncoming) * 100) / 100 : null;
+  const lead = Number.isInteger(leadTimeDays) && leadTimeDays >= 0 ? leadTimeDays : null;
+  const beforeIncomingShortfall = incomingKnown && incomingQuantity > 0 && lead !== null && incomingArrivalDays <= lead && burnRate !== null && stockStatus.availableStock !== null
+    ? Math.max(0, burnRate * incomingArrivalDays - stockStatus.availableStock) : 0;
+  const preArrivalShortfall = scopeComparable && lead !== null && burnRate !== null && stockStatus.availableStock !== null
+    ? Math.max(beforeIncomingShortfall, 0, burnRate * lead - stockStatus.availableStock -
+      (incomingKnown && incomingQuantity > 0 && incomingArrivalDays <= lead ? incomingQuantity : 0)) : null;
+
   const isReorderNeeded = Boolean(
+    (purchaseQuantity ?? grossNeed ?? 0) > 0 || (preArrivalShortfall ?? 0) > 0 ||
     stockStatus.status === REPLENISHMENT_STOCK_STATUS.ZERO_STOCK ||
       stockStatus.isBelowReorderLevel ||
       runway.runwayStatus === 'critical' ||
@@ -295,7 +325,7 @@ const evaluateReplenishmentScenario = ({
       (stockStatus.availableStock !== null && item?.unit && burnRate !== null && burnRate > 0 &&
         stockStatus.availableStock < burnRate * horizonDays),
   );
-  const plannedDemand = burnRate !== null && burnRate > 0 ? burnRate * horizonDays : null;
+  const plannedDemand = burnRate !== null && burnRate >= 0 ? burnRate * horizonDays : null;
   const plannedShortfall = stockStatus.availableStock !== null && item?.unit && plannedDemand !== null
     ? Math.round(Math.max(0, plannedDemand - stockStatus.availableStock) * 10) / 10
     : null;
@@ -327,25 +357,37 @@ const evaluateReplenishmentScenario = ({
       shortfall.shortfall || 0,
       Math.round(Math.max(0, targetStock - currentStock) * 10) / 10,
     );
-  } else if (
-    stockStatus.availableStock !== null && item?.unit && stockStatus.reorderLevel &&
-    (stockStatus.availableStock || 0) <= stockStatus.reorderLevel
-  ) {
-    recommendedReorderQuantity = Math.round(
-      Math.max(0, stockStatus.reorderLevel * 2 - (stockStatus.availableStock || 0)) * 10,
-    ) / 10;
   } else if (stockStatus.availableStock !== null && item?.unit && shortfall.shortfall > 0) {
     recommendedReorderQuantity = shortfall.shortfall;
   }
 
+  if (!scopeComparable) recommendedReorderQuantity = null;
+  if (grossNeed !== null) recommendedReorderQuantity = purchaseQuantity ?? grossNeed;
+  const warnings = [];
+  if (unitConflict) warnings.push('Usage units conflict; demand and runway are unavailable without a supported conversion.');
+  if (!coverageComplete) warnings.push('Usage estimate averages recorded days only; missing days are not zero consumption.');
+  if (!incomingKnown) warnings.push('Incoming supply is unknown. Gross shortfall is provisional; a net purchase quantity is unavailable.');
+  if (lead === null) warnings.push('Supplier lead time is unknown; pre-arrival shortage is unavailable.');
+  if (item?.stockScope === 'company' && item?.usageScope === 'assigned_ponds') warnings.push('Company stock and assigned-pond usage cannot establish company replenishment needs.');
   return {
+    warnings,
     itemId: item?.id || null,
     itemName: item?.feedName || item?.additiveName || item?.name || null,
     itemType: item?.itemType || (item?.feedName ? 'feed' : item?.additiveName ? 'additive' : null),
     unit: item?.unit ? String(item.unit).trim() : null,
     stockStatus,
+    stockAsOf: item?.stockUpdatedAt || item?.updatedAt || null,
+    stockScope: item?.stockScope || 'company',
+    usageScope: item?.usageScope || 'company',
     burnRate: {
-      kgPerDay: burnRate,
+      quantityPerDay: burnRate,
+      unit: item?.unit || null,
+      kgPerDay: String(item?.unit || '').toLowerCase() === 'kg' ? burnRate : null,
+      basis: explicitRate ? 'explicit_scenario_rate' : 'recorded_day_average',
+      recordedObservationDays: explicitRate ? null : recordedObservationDays,
+      missingObservationDays: explicitRate ? null : lookback - recordedObservationDays,
+      completeness: coverageComplete ? 'complete' : 'partial',
+      excludedRows,
       isZeroUsage: burnRate === 0,
       isUnknown: burnRate === null,
       lookbackDays: lookback,
@@ -354,11 +396,21 @@ const evaluateReplenishmentScenario = ({
     runway,
     shortfall,
     planningNeed: {
+      leadTimeDays: lead,
+      safetyStock: safety,
+      incomingSupplyStatus: incomingKnown ? 'explicit_scenario' : 'unknown',
+      qualifyingIncoming,
+      purchaseQuantity,
+      grossRequirementBeforeIncoming: grossNeed,
+      preArrivalShortfall,
+      preArrivalShortfallBasis: incomingKnown ? 'explicit_arrival_timing' : 'before_unknown_incoming_supply',
+      assumptions: { safetyStockDefaultedToZero: safetyStock === undefined, supplyInputsAreScenarioAssumptions: incomingKnown },
       demand: plannedDemand === null ? null : Math.round(plannedDemand * 10) / 10,
       shortfall: plannedShortfall,
       unit: item?.unit ? String(item.unit).trim() : null,
     },
     reorderAssessment: {
+      assessmentStatus: coverageComplete && incomingKnown && scopeComparable ? 'complete_scenario' : 'provisional',
       isReorderNeeded,
       urgency,
       plannedHorizonDays: horizonDays,

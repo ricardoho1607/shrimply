@@ -46,6 +46,7 @@ function compile(name) {
   "physicalPondIdentity",
   "enterpriseCycles",
   "orsonAgentContract",
+  "orsonDecisionContract",
   "orsonEvidence",
 ].forEach(compile);
 console.log(

@@ -327,3 +327,38 @@ export const runHarvestProfitabilitySelfTest = () => {
 
   return profitableGrowth;
 };
+
+{
+  const pond = { id: 'partial', cycleId: 'c', cycleStartedAt: '2026-10-01', cycleStatus: 'active' };
+  const result = buildPondProfitabilityCostSnapshot({ pond, ponds: [pond], feeds: [{ id: 'f', usageHistory: [
+    { date: '2026-10-08', pondId: 'partial', cycleId: 'c', quantity: 10, totalCost: 20 },
+    { date: '2026-10-08', pondId: 'partial', cycleId: 'c', quantity: 10 },
+  ] }], additives: [], expenses: [], startDate: '2026-10-01', endDate: '2026-10-08', timeZone: 'UTC' });
+  assert(result.feedUnitCostPerKg === null, 'partial feed valuation must not dilute the unit price');
+  assert(result.costsToDate.feed === null, 'partial feed subtotal must not be presented as the complete cost');
+  assert(result.recordedFeedCostSubtotal === 20, 'preserves the known subtotal as partial evidence');
+  assert(result.warnings.some(warning => warning.includes('unpriced')), 'discloses unpriced usage');
+}
+
+{
+  const pond = { id: 'returns', cycleId: 'c', cycleStartedAt: '2026-10-01', cycleStatus: 'active' };
+  const result = buildPondProfitabilityCostSnapshot({ pond, ponds: [pond], feeds: [{ id: 'f', usageHistory: [
+    { date: '2026-10-08', pondId: 'returns', cycleId: 'c', quantity: 10, totalCost: 20 },
+    { date: '2026-10-08', pondId: 'returns', cycleId: 'c', quantity: -5, totalCost: -10, source: 'daily_feed_record', feedRecordId: 'deleted-feed' },
+  ] }], additives: [], expenses: [], startDate: '2026-10-01', endDate: '2026-10-08', timeZone: 'UTC' });
+  assert(result.feedUnitCostPerKg === 2, 'signed recorded returns preserve unit valuation');
+  assert(result.costsToDate.feed === 10, 'recorded returns reduce incurred consumption cost');
+}
+
+{
+  const pond = { id: 'missing', cycleId: 'c', cycleStartedAt: '2026-10-01', cycleStatus: 'active' };
+  const result = buildPondProfitabilityCostSnapshot({ pond, ponds: [pond], feeds: [{ id: 'f', usageHistory: [
+    { date: '2026-10-08', pondId: 'missing', cycleId: 'c', quantity: 10, totalCost: 20 },
+    { date: '2026-10-08', pondId: 'missing', cycleId: 'c', totalCost: 20 },
+  ] }], additives: [], expenses: [
+    { id: 'known', date: '2026-10-08', pondId: 'missing', amount: 20, category: 'Energy' },
+    { id: 'unpriced', date: '2026-10-08', pondId: 'missing', amount: null, category: 'Energy' },
+  ], startDate: '2026-10-01', endDate: '2026-10-08', timeZone: 'UTC' });
+  assert(result.feedUnitCostPerKg === null, 'priced rows with missing quantity cannot produce a unit price');
+  assert(result.costsToDate.generalExpenses === null, 'partially priced operating expenses cannot become a complete cost');
+}
