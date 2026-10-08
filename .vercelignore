@@ -22,3 +22,6 @@ output
 
 !functions/shared/orsonInventoryPolicy.js
 !functions/shared/orsonInventoryPolicy.d.ts
+!functions/shared/orsonDomain
+functions/shared/orsonDomain/*
+!functions/shared/orsonDomain/financeIntegrity.js

@@ -39,3 +39,21 @@ test('Vercel includes shared client contracts and excludes backend secrets and c
     assert.equal(excluded.ignores(file), true, `${file} must stay out of the web deployment`);
   }
 });
+
+test('Vercel uploads the shared Orson inventory policy and its runtime dependencies', () => {
+  const excluded = ignore().add(fs.readFileSync(path.join(repositoryRoot, '.vercelignore'), 'utf8'));
+  const pending = ['functions/shared/orsonInventoryPolicy.js'];
+  const visited = new Set();
+  while (pending.length) {
+    const file = pending.pop();
+    if (visited.has(file)) continue;
+    visited.add(file);
+    assert.equal(excluded.ignores(file), false, `${file} must reach the web build`);
+    const source = fs.readFileSync(path.join(repositoryRoot, file), 'utf8');
+    for (const match of source.matchAll(/require\(['"](\.[^'"]+)['"]\)/g)) {
+      const resolved = path.resolve(repositoryRoot, path.dirname(file), match[1]);
+      const dependency = fs.existsSync(resolved) ? resolved : `${resolved}.js`;
+      pending.push(path.relative(repositoryRoot, dependency).split(path.sep).join('/'));
+    }
+  }
+});
