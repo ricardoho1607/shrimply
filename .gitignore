@@ -41,6 +41,7 @@ google-services.json
 .firebase/
 functions/node_modules/
 .agents/
+AGENTS.md
 artifacts/
 web/test-results/
 
