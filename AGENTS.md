@@ -15,6 +15,7 @@ Tech stack:
 
 ## 2. Project Engineering Rules
 
+- Use `v4` as the baseline branch for new Shrimply work.
 - Preserve mobile and web parity where the same feature exists.
 - Use live Firebase data rather than dummy data.
 - Use TypeScript-safe code with strict null handling.
