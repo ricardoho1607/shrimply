@@ -23,6 +23,9 @@ import { db } from '@/config/firebase';
 import { FARM_OPERATIONAL_DAY_ROLLOVER_HOUR, getFarmDateKey } from '../shared/farmDate';
 import { getAssignedEnterpriseBlockIds } from '../shared/enterpriseBlocks';
 import { useEnterpriseBlocks } from './hooks/useEnterpriseBlocks';
+import { useCompanyTechnicians } from './hooks/useCompanyTechnicians';
+import CycleSelector from './components/forms/CycleSelector';
+import { formatTechnicianLabel, resolveCycleTechnicianId } from '../shared/cycleTechnicianAssignment';
 import AppDatePicker from './components/forms/AppDatePicker';
 import { hasFarmPermission } from '../shared/permissions';
 import { useFarmDateKey } from './hooks/useFarmDateKey';
@@ -513,6 +516,7 @@ export default function PondDetails() {
     company?.businessSize === 'enterprise' ? company?.id : undefined,
     user?.uid,
   );
+  const { technicians: companyTechnicians } = useCompanyTechnicians(company?.businessSize === 'enterprise' ? undefined : company?.id, user?.uid);
   const assignedBlockIds = useMemo(
     () => getAssignedEnterpriseBlockIds(enterpriseBlocks.blocks, user?.uid),
     [enterpriseBlocks.blocks, user?.uid],
@@ -544,6 +548,8 @@ export default function PondDetails() {
     docStart: getFarmDateKey(new Date(), company?.timeZone),
     plValue: '',
     plSupplier: '',
+    assignedTechnicianId: '',
+    assignedTechnicianCompanyId: company?.id,
   });
 
   const nextPondSource = pondId ? getPondById(pondId as string) : undefined;
@@ -739,7 +745,7 @@ export default function PondDetails() {
       cycleStartedAt: docStart,
       previousCyclePondId: pond.id,
       physicalPondId: pond.physicalPondId,
-    });
+    }, { assignedTechnicianId: company?.businessSize !== 'enterprise' && newCycleForm.assignedTechnicianCompanyId === company?.id ? resolveCycleTechnicianId(newCycleForm.assignedTechnicianId, companyTechnicians) : null });
 
     if (!added) {
       Alert.alert(t.messages.error, 'Could not start this pond. Sync the farm and check its physical pond link before trying again.');
@@ -752,10 +758,12 @@ export default function PondDetails() {
       docStart: getFarmDateKey(new Date(), company?.timeZone),
       plValue: '',
       plSupplier: '',
+      assignedTechnicianId: '',
+      assignedTechnicianCompanyId: company?.id,
     });
     router.push('/(tabs)' as any);
     Alert.alert(t.messages.success, `${pond.pondName} new cycle started.`);
-  }, [activeFarmCycle, addPond, canManageCycles, canManagePonds, company?.timeZone, isEnterpriseTechnician, newCycleForm, pond, ponds, router, t]);
+  }, [activeFarmCycle, addPond, canManageCycles, canManagePonds, company?.businessSize, company?.id, company?.timeZone, companyTechnicians, isEnterpriseTechnician, newCycleForm, pond, ponds, router, t]);
 
   const closeEditModal = useCallback(() => {
     setEditModalVisible(false);
@@ -942,7 +950,7 @@ export default function PondDetails() {
               </View>
             )}
             {getPondCycleStatus(pond) === 'ended' && canManagePonds && canManageCycles && (
-              <TouchableOpacity style={styles.startCycleButton} onPress={() => setStartCycleVisible(true)}>
+              <TouchableOpacity style={styles.startCycleButton} onPress={() => { setNewCycleForm((current) => ({ ...current, assignedTechnicianId: '', assignedTechnicianCompanyId: company?.id })); setStartCycleVisible(true); }}>
                 <Text style={styles.startCycleButtonText}>Start New Cycle</Text>
               </TouchableOpacity>
             )}
@@ -1358,6 +1366,17 @@ export default function PondDetails() {
                 nestedScrollEnabled={true}
                 bounces={false}
               >
+                {company?.businessSize !== 'enterprise' && !activeFarmCycle && (
+                  <CycleSelector
+                    label={`${t.enterprise.assignTechnician} ${t.inventory.optional}`}
+                    value={newCycleForm.assignedTechnicianCompanyId === company?.id ? resolveCycleTechnicianId(newCycleForm.assignedTechnicianId, companyTechnicians) || '' : ''}
+                    options={[{ id: '', cycleName: t.enterprise.unassigned }, ...companyTechnicians.map((technician) => ({ id: technician.uid, cycleName: formatTechnicianLabel(technician.name, technician.email) }))]}
+                    onChange={(id) => setNewCycleForm((current) => ({ ...current, assignedTechnicianId: id, assignedTechnicianCompanyId: company?.id }))}
+                    placeholder={t.enterprise.unassigned}
+                    sheetEyebrow={t.inventory.optional}
+                    sheetTitle={t.enterprise.assignTechnician}
+                  />
+                )}
                 <Text style={styles.cycleHint}>{pond.pondName} and {pond.pondArea.toLocaleString()} m² will be reused. Enter new stocking details for this cycle.</Text>
                 <EditInputField label={t.forms.density} value={newCycleForm.density} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, density: value }))} keyboardType="numeric" />
                 <View style={styles.editInputContainer}>

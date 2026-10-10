@@ -60,6 +60,8 @@ import {
 } from '../../../../../../shared/pondCalculations';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCompanyTechnicians } from '@/hooks/useCompanyTechnicians';
+import { formatTechnicianLabel, resolveCycleTechnicianId } from '../../../../../../shared/cycleTechnicianAssignment';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import { FARM_OPERATIONAL_DAY_ROLLOVER_HOUR } from '../../../../../../shared/farmDate';
 import { hasFinalHarvestForPondCycle, type HarvestType } from '../../../../../../shared/harvestCalculations';
@@ -319,6 +321,7 @@ export default function PondDetailClient() {
   const today = useFarmDateKey(company?.timeZone);
   const operationalToday = useFarmDateKey(company?.timeZone, FARM_OPERATIONAL_DAY_ROLLOVER_HOUR);
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
+  const { technicians: companyTechnicians } = useCompanyTechnicians(company?.businessSize === 'enterprise' ? null : companyId, auth.currentUser?.uid);
   const [isSamplingModalOpen, setSamplingModalOpen] = useState(requestedAction === 'sampling');
   const [isMortalityModalOpen, setMortalityModalOpen] = useState(requestedAction === 'mortality');
   const [isMortalityHistoryOpen, setMortalityHistoryOpen] = useState(true);
@@ -337,6 +340,8 @@ export default function PondDetailClient() {
     docStart: today,
     plValue: '0.5',
     plSupplier: '',
+    assignedTechnicianId: '',
+    assignedTechnicianCompanyId: companyId,
   });
   const [isBaselineModalOpen, setBaselineModalOpen] = useState(false);
   const [baselineForm, setBaselineForm] = useState({
@@ -764,7 +769,7 @@ export default function PondDetailClient() {
         activeCycle: cycles.find(isOpenFarmCycle), today,
         activePonds: sameNamePonds.docs.map(item => ({ id: item.id, ...item.data() } as Pond)),
         operationId: save.id(`pond-cycle:${companyId}:${pond.id}`),
-        form: { ...startCycleForm, cycleStartMode: 'new', baselineMbw: '', baselineEstimatedPopulation: '', baselineSurvivalRate: '', baselineCumulativeFeed: '', newCycleName: `Cycle ${cycles.length + 1}` },
+        form: { ...startCycleForm, assignedTechnicianId: company?.businessSize !== 'enterprise' && startCycleForm.assignedTechnicianCompanyId === companyId ? resolveCycleTechnicianId(startCycleForm.assignedTechnicianId, companyTechnicians) : undefined, cycleStartMode: 'new', baselineMbw: '', baselineEstimatedPopulation: '', baselineSurvivalRate: '', baselineCumulativeFeed: '', newCycleName: `Cycle ${cycles.length + 1}` },
       });
       save.complete();
       setStartCycleOpen(false);
@@ -958,7 +963,7 @@ export default function PondDetailClient() {
           <div className="pond-detail-actions">
             {!isActiveCycle(pond) && canManagePond && canManageCycles && (
               <button onClick={() => {
-                setStartCycleForm(prev => ({ ...prev, docStart: today }));
+                setStartCycleForm(prev => ({ ...prev, docStart: today, assignedTechnicianId: '', assignedTechnicianCompanyId: companyId }));
                 setStartCycleOpen(true);
               }} className="dashboard-action dashboard-action-primary" disabled={savePending}>
                 <RotateCcw size={18} strokeWidth={2.5} />
@@ -1559,6 +1564,15 @@ export default function PondDetailClient() {
               </button>
             </div>
             <form onSubmit={handleStartCycle} className="responsive-modal-body feed-log-form pond-detail-form-modal-form pond-detail-form-grid"><fieldset disabled={savePending} style={{ display: 'contents' }}>
+              {company?.businessSize !== 'enterprise' && !cycles.some(isOpenFarmCycle) && (
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {t.enterprise.assignTechnician} {t.inventory.optional}
+                  <select value={startCycleForm.assignedTechnicianCompanyId === companyId ? resolveCycleTechnicianId(startCycleForm.assignedTechnicianId, companyTechnicians) || '' : ''} onChange={(event) => setStartCycleForm((current) => ({ ...current, assignedTechnicianId: event.target.value, assignedTechnicianCompanyId: companyId }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }}>
+                    <option value="">{t.enterprise.unassigned}</option>
+                    {companyTechnicians.map((technician) => <option key={technician.uid} value={technician.uid}>{formatTechnicianLabel(technician.name, technician.email)}</option>)}
+                  </select>
+                </label>
+              )}
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {copy.density}
                 <input required type="number" value={startCycleForm.density} onChange={e => setStartCycleForm(prev => ({ ...prev, density: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />

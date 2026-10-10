@@ -223,6 +223,18 @@ const normalizeSamplingNumbers = <T extends Partial<Sampling>>(sampling: T): T =
   ...(sampling.mortality !== undefined ? { mortality: toFiniteNumber(sampling.mortality) } : {}),
   ...(sampling.feed !== undefined ? { feed: toFiniteNumber(sampling.feed) } : {}),
 });
+export const normalizeCycleTechnicianId = (
+  technicianId?: string | null,
+): string | null | undefined => {
+  if (technicianId === undefined) return undefined;
+  if (technicianId === null) return null;
+  if (typeof technicianId !== 'string') return null;
+  const trimmed = technicianId.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+export interface AddPondOptions {
+  assignedTechnicianId?: string | null;
+}
 export const buildDefaultFarmCycle = (existingCycles: FarmCycle[] = [], timeZone?: string): FarmCycle => {
   const now = Date.now();
   const today = getFarmDateKey(new Date(now), timeZone);
@@ -266,7 +278,7 @@ interface PondStore {
   addPhysicalPond: (pond: PhysicalPond, options?: { sync?: boolean }) => void;
   updatePhysicalPond: (pondId: string, updates: Partial<PhysicalPond>) => void;
   deletePhysicalPond: (pondId: string) => void;
-  addPond: (pond: Pond) => boolean; updatePond: (pondId: string, updates: Partial<Pond>) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => Promise<DurableOutcome>; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void; addMortalityRecord: (pondId: string, record: MortalityRecord) => Promise<DurableOutcome>; updateMortalityRecord: (pondId: string, recordId: string, updates: Partial<MortalityRecord>) => void; deleteMortalityRecord: (pondId: string, recordId: string) => void;
+  addPond: (pond: Pond, options?: AddPondOptions) => boolean; updatePond: (pondId: string, updates: Partial<Pond>) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => Promise<DurableOutcome>; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void; addMortalityRecord: (pondId: string, record: MortalityRecord) => Promise<DurableOutcome>; updateMortalityRecord: (pondId: string, recordId: string, updates: Partial<MortalityRecord>) => void; deleteMortalityRecord: (pondId: string, recordId: string) => void;
   addHarvestRecord: (record: HarvestRecord, operationId?: string) => Promise<DurableOutcome>; updateHarvestRecord: (harvestId: string, record: HarvestRecord, operationId?: string) => Promise<DurableOutcome>; removeHarvestRecord: (harvestId: string, operationId?: string) => Promise<DurableOutcome>; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
   
   addWaterQuality: (pondId: string, record: { observedAtByField?: Record<string,string>; ammoniaBasis?: string; nitriteBasis?: string; phMorning: string; phEvening: string; doMorning: string; doEvening: string; transparency: string; salinity: string; temperature?: string; waterAppearance?: string; waterDepthCm?: string; alkalinity?: string; waterQualityRecordedByName?: string; ammonia?: string; operationalNotes?: string; weatherEvent?: Sampling['weatherEvent']; waterExchangePercent?: string; sludgeLoad?: Sampling['sludgeLoad']; surfaceScum?: boolean | null; shrimpBehaviour?: Sampling['shrimpBehaviour']; }) => void;
@@ -308,9 +320,13 @@ export const usePondStore = create<PondStore>()(
       
       addFarmCycle: (cycle) => {
         const state = get();
+        const normalizedTechnicianId = cycle?.assignedTechnicianId !== undefined
+          ? normalizeCycleTechnicianId(cycle.assignedTechnicianId)
+          : undefined;
         const newCycle: FarmCycle = {
           ...buildDefaultFarmCycle(state.cycles, state.currentTimeZone),
           ...cycle,
+          ...(normalizedTechnicianId !== undefined ? { assignedTechnicianId: normalizedTechnicianId } : {}),
         };
         set((state) => ({ cycles: [...state.cycles, newCycle] }));
         state.firebaseSync?.syncCycle?.('create', newCycle);
@@ -455,7 +471,7 @@ export const usePondStore = create<PondStore>()(
         state.firebaseSync?.syncPhysicalPond?.('delete', pondToDelete);
       },
 
-      addPond: (pond) => {
+      addPond: (pond, options) => {
         const state = get();
         const physicalPond = resolvePhysicalPond(pond, state.physicalPonds);
         if (!physicalPond) return false;
@@ -473,10 +489,12 @@ export const usePondStore = create<PondStore>()(
 
         let cycle = pond.cycleId ? state.cycles.find((item) => item.id === pond.cycleId) : getActiveFarmCycle(state.cycles);
         if (!cycle) {
+          const normalizedTechnicianId = normalizeCycleTechnicianId(options?.assignedTechnicianId);
           cycle = {
             ...buildDefaultFarmCycle(state.cycles, state.currentTimeZone),
             stockingStartDate: pond.docStart,
             plannedStartDate: pond.docStart,
+            ...(normalizedTechnicianId !== undefined ? { assignedTechnicianId: normalizedTechnicianId } : {}),
           };
           set((current) => ({ cycles: [...current.cycles, cycle!] }));
           state.firebaseSync?.syncCycle?.('create', cycle);

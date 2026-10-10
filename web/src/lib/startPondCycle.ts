@@ -24,6 +24,7 @@ export interface StartPondCycleFormValue {
   cycleTargetMode?: 'existing' | 'new';
   targetCycleId?: string;
   newCycleName?: string;
+  assignedTechnicianId?: string | null;
 }
 
 export interface StartablePondCycleRecord {
@@ -198,7 +199,9 @@ export async function startPondCycle({
   if (isCreatingNewCycle) {
     targetCycleId = cycleRef.id;
     targetCycleName = form.newCycleName?.trim() || 'New Cycle';
+    const technicianId = form.assignedTechnicianId?.trim();
     batch.set(cycleRef, {
+      ...(technicianId ? { assignedTechnicianId: technicianId } : {}),
       cycleName: targetCycleName,
       status: 'active',
       plannedStartDate: form.docStart,

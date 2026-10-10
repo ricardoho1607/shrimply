@@ -8,6 +8,7 @@ import {
   type StartPondCycleFormValue,
 } from '@/lib/startPondCycle';
 import styles from './StartPondCycleModal.module.css';
+import { formatTechnicianLabel, resolveCycleTechnicianId, type CompanyTechnician } from '../../../shared/cycleTechnicianAssignment';
 
 const createInitialValue = (today: string, defaultCycleId?: string, nextCycleName?: string): StartPondCycleFormValue => ({
   density: '',
@@ -22,6 +23,7 @@ const createInitialValue = (today: string, defaultCycleId?: string, nextCycleNam
   cycleTargetMode: defaultCycleId ? 'existing' : 'new',
   targetCycleId: defaultCycleId || '',
   newCycleName: nextCycleName || '',
+  assignedTechnicianId: '',
 });
 
 export default function StartPondCycleModal({
@@ -29,6 +31,8 @@ export default function StartPondCycleModal({
   today,
   openCycles = [],
   activeCycleId,
+  technicians = [],
+  allowTechnicianAssignment = false,
   saving,
   onClose,
   onSubmit,
@@ -37,6 +41,8 @@ export default function StartPondCycleModal({
   today: string;
   openCycles?: { id: string; cycleName: string }[];
   activeCycleId?: string;
+  technicians?: CompanyTechnician[];
+  allowTechnicianAssignment?: boolean;
   saving: boolean;
   onClose: () => void;
   onSubmit: (value: StartPondCycleFormValue) => Promise<void>;
@@ -93,7 +99,7 @@ export default function StartPondCycleModal({
             className={styles.form}
             onSubmit={(event) => {
               event.preventDefault();
-              void onSubmit(form);
+              void onSubmit({ ...form, assignedTechnicianId: allowTechnicianAssignment ? resolveCycleTechnicianId(form.assignedTechnicianId, technicians) : undefined });
             }}
           >
             {openCycles.length > 0 && (
@@ -143,6 +149,15 @@ export default function StartPondCycleModal({
               </label>
             )}
 
+            {allowTechnicianAssignment && (form.cycleTargetMode === 'new' || openCycles.length === 0) && (
+              <label className={styles.field}>
+                {t.enterprise.assignTechnician} {t.inventory.optional}
+                <select value={resolveCycleTechnicianId(form.assignedTechnicianId, technicians) || ''} onChange={(event) => update('assignedTechnicianId', event.target.value)} disabled={saving}>
+                  <option value="">{t.enterprise.unassigned}</option>
+                  {technicians.map((technician) => <option key={technician.uid} value={technician.uid}>{formatTechnicianLabel(technician.name, technician.email)}</option>)}
+                </select>
+              </label>
+            )}
             <div className={styles.modeRow} aria-label={t.startPondCycle.cycleQuestion}>
               {(['new', 'midcycle'] as const).map((mode) => (
                 <button

@@ -23,6 +23,9 @@ import {
 } from '../../shared/enterpriseBlocks';
 import EnterpriseDashboard from '../components/enterprise/EnterpriseCycleDashboard';
 import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
+import { useCompanyTechnicians } from '../hooks/useCompanyTechnicians';
+import { formatTechnicianLabel, resolveCycleTechnicianId } from '../../shared/cycleTechnicianAssignment';
+import CycleSelector from '../components/forms/CycleSelector';
 import ProfileCompletionCard from '../components/onboarding/ProfileCompletionCard';
 import AppDatePicker from '../components/forms/AppDatePicker';
 import { useFarmDateKey } from '../hooks/useFarmDateKey';
@@ -47,6 +50,8 @@ interface FormData {
   cycleId: string;
   cycleTargetMode: 'existing' | 'new';
   newCycleName: string;
+  assignedTechnicianId?: string | null;
+  assignedTechnicianCompanyId?: string;
   selectedPond: string; 
   mbw: string; 
   feed: string; 
@@ -161,6 +166,7 @@ export default function PondManagementScreen() {
   const canManageFarmCycle = hasFarmPermission(user, 'manageCycles', company?.ownerId);
   const canManageEnterpriseBlocks = hasFarmPermission(user, 'manageEnterpriseBlocks', company?.ownerId);
   const enterpriseBlocks = useEnterpriseBlocks(isEnterpriseFarm ? company?.id : undefined, user?.uid);
+  const { technicians: companyTechnicians } = useCompanyTechnicians(isEnterpriseFarm ? undefined : company?.id, user?.uid);
   
   const { 
     ponds, 
@@ -211,6 +217,7 @@ export default function PondManagementScreen() {
     cycleId: '',
     cycleTargetMode: 'existing',
     newCycleName: '',
+    assignedTechnicianId: '',
     selectedPond: '', 
     mbw: '', 
     feed: '', 
@@ -248,6 +255,7 @@ export default function PondManagementScreen() {
     cycleId: '',
     cycleTargetMode: 'existing',
     newCycleName: '',
+    assignedTechnicianId: '',
     selectedPond: '', 
     mbw: '', 
     feed: '', 
@@ -607,12 +615,16 @@ export default function PondManagementScreen() {
     let selectedFarmCycle: FarmCycle | undefined;
     if (isCreatingNewCycle) {
       const cycleName = formData.newCycleName?.trim() || `Cycle ${cycles.length + 1}`;
+      const validatedTechnicianId = formData.assignedTechnicianCompanyId === company?.id
+        ? resolveCycleTechnicianId(formData.assignedTechnicianId, companyTechnicians)
+        : null;
       selectedFarmCycle = addFarmCycle({
         cycleName,
         status: 'active',
         plannedStartDate: docStartString,
         stockingStartDate: docStartString,
         stockingEndDate: docStartString,
+        assignedTechnicianId: validatedTechnicianId,
       });
     } else {
       selectedFarmCycle = cycles.find((cycle) => cycle.id === formData.cycleId) || activeFarmCycle;
@@ -755,7 +767,7 @@ export default function PondManagementScreen() {
     closeModal();
     setCycleFilter('active');
     Alert.alert(t.messages.success, t.farmCycle.cycleStartedSuccess.replace('{{pondName}}', sourcePond.pondName));
-  }, [activeFarmCycle, activePhysicalPondNames, addFarmCycle, addPond, calculateDocFromDates, canManageFarmCycle, canManagePonds, closeModal, convertPlToGrams, cycles, formData, formatLocalDateKey, isEnterpriseFarm, openAccessibleFarmCycles.length, startablePondOptions, t, updateFarmCycle]);
+  }, [activeFarmCycle, activePhysicalPondNames, addFarmCycle, addPond, calculateDocFromDates, canManageFarmCycle, canManagePonds, closeModal, company, companyTechnicians, convertPlToGrams, cycles, formData, formatLocalDateKey, isEnterpriseFarm, openAccessibleFarmCycles.length, startablePondOptions, t, updateFarmCycle]);
 
   const handleAddSamplingData = useCallback(async () => {
     if (submitLockRef.current) return;
@@ -1274,6 +1286,8 @@ export default function PondManagementScreen() {
         cycleTargetMode: openAccessibleFarmCycles.length > 0 ? 'existing' : 'new',
         cycleId: current.cycleId || activeFarmCycle?.id || openAccessibleFarmCycles[0]?.id || '',
         newCycleName: `Cycle ${nextCycleNumber}`,
+        assignedTechnicianId: '',
+        assignedTechnicianCompanyId: company?.id,
       }));
     }
     setModalType(type); 
@@ -1281,7 +1295,7 @@ export default function PondManagementScreen() {
     submitLockRef.current = false;
     setIsSubmitting(false);
     setModalVisible(true);
-  }, [activeFarmCycle?.id, availableEnterpriseBlocks, cycles.length, isEnterpriseFarm, openAccessibleFarmCycles]);
+  }, [activeFarmCycle?.id, availableEnterpriseBlocks, company?.id, cycles.length, isEnterpriseFarm, openAccessibleFarmCycles]);
 
   const openBaselineEditModal = useCallback((pond: Pond) => {
     if (submitLockRef.current) return;
@@ -1897,6 +1911,17 @@ export default function PondManagementScreen() {
         />
       ) : null}
 
+      {!isEnterpriseFarm && (formData.cycleTargetMode === 'new' || openAccessibleFarmCycles.length === 0) && (
+        <CycleSelector
+          label={`${t.enterprise.assignTechnician} ${t.inventory.optional}`}
+          value={formData.assignedTechnicianCompanyId === company?.id ? resolveCycleTechnicianId(formData.assignedTechnicianId, companyTechnicians) || '' : ''}
+          options={[{ id: '', cycleName: t.enterprise.unassigned }, ...companyTechnicians.map((technician) => ({ id: technician.uid, cycleName: formatTechnicianLabel(technician.name, technician.email) }))]}
+          onChange={(id) => setFormData((current) => ({ ...current, assignedTechnicianId: id, assignedTechnicianCompanyId: company?.id }))}
+          placeholder={t.enterprise.unassigned}
+          sheetEyebrow={t.inventory.optional}
+          sheetTitle={t.enterprise.assignTechnician}
+        />
+      )}
       <View style={styles.inputContainer}>
         <Text style={styles.inputLabel}>{t.midcycleOnboarding.cycleQuestion}</Text>
         <View style={styles.segmentRow}>
@@ -1983,7 +2008,7 @@ export default function PondManagementScreen() {
         </>
       )}
     </>
-  ), [activeFarmCycle?.id, cycles.length, formData, isEnterpriseFarm, openAccessibleFarmCycles, startablePondOptions, t, updateForm]);
+  ), [activeFarmCycle?.id, company?.id, companyTechnicians, cycles.length, formData, isEnterpriseFarm, openAccessibleFarmCycles, startablePondOptions, t, updateForm]);
 
   const dataEntryModal = (
     <Modal visible={modalVisible} animationType="slide" transparent>

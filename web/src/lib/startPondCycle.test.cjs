@@ -75,3 +75,37 @@ test('invalid calendar day cannot start a pond cycle', async () => {
 });
 
 test('unmet SOP stage requirements stop a planned stocking before operational writes', async () => { const h = harness({gateBlocked:true}); await assert.rejects(h.startPondCycle(h.args), /SOP prerequisites/); assert.equal(h.writes.length,0); });
+
+for (const implicit of [false, true]) {
+  for (const technician of [' technician ', '', undefined, null]) {
+    test(`new ${implicit ? 'implicit' : 'explicit'} cycle permits technician ${String(technician)}`, async () => {
+      const h = harness();
+      if (implicit) h.args.activeCycle = null;
+      else h.args.form.cycleTargetMode = 'new';
+      h.args.form.assignedTechnicianId = technician;
+      const result = await h.startPondCycle(h.args);
+      const cycle = h.documents.get(`companies/company/cycles/${result.cycleId}`);
+      assert.equal(cycle.assignedTechnicianId, technician ? 'technician' : undefined);
+      assert.equal(h.documents.get(`companies/company/ponds/${result.pondId}`).assignedTechnicianId, undefined);
+      assert.equal(h.writes.length, 3);
+    });
+  }
+}
+
+test('adding a pond to an existing cycle preserves its assigned technician', async () => {
+  const h = harness({ cycle: { assignedTechnicianId: 'original' } });
+  h.args.form.assignedTechnicianId = 'another';
+  await h.startPondCycle(h.args);
+  assert.equal(h.documents.get('companies/company/cycles/existing').assignedTechnicianId, 'original');
+});
+
+test('lost acknowledgement retry preserves the originally saved technician', async () => {
+  const h = harness({ loseAck: true });
+  h.args.activeCycle = null;
+  h.args.form.assignedTechnicianId = 'original';
+  await assert.rejects(h.startPondCycle(h.args), /ack lost/);
+  h.args.form.assignedTechnicianId = 'another';
+  const result = await h.startPondCycle(h.args);
+  assert.equal(h.documents.get(`companies/company/cycles/${result.cycleId}`).assignedTechnicianId, 'original');
+  assert.equal(h.writes.length, 3);
+});
