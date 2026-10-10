@@ -60,7 +60,12 @@ export interface SopWorkspace {
   tasks: SopTask[];
   issues: SopIssue[];
   blocks: { id: string; name: string; assignedTechnicianId?: string }[];
-  physicalPonds: { id: string; pondName: string; blockId?: string }[];
+  physicalPonds: {
+    id: string;
+    pondName: string;
+    blockId?: string;
+    plannedStockingDate?: string;
+  }[];
   ponds: {
     id: string;
     pondName: string;
@@ -127,7 +132,7 @@ export interface SopClient {
 }
 export function sopSummary(workspace: SopWorkspace) {
   if (workspace.summary) return workspace.summary;
-  const routine = workspace.tasks.filter((t) => t.purpose === "routine");
+  const routine = workspace.tasks.filter((t) => t.purpose === "routine" && t.status !== "cancelled");
   return {
     recorded: routine.filter((t) => t.status === "completed").length,
     total: routine.length,

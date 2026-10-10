@@ -6,6 +6,7 @@ import { sopText } from "../../../shared/sop/uiCopy";
 import {
   sopMeasurementLabel,
   sopTargetLabel,
+  sopTimingLabel,
   sopEditorIssue,
   sopIssueLinks,
   SOP_INTERFACE_LANGUAGES,
@@ -208,6 +209,9 @@ export function SopReader({
             <p className="sop-procedure-scope">
               {ui("Applies to")}: {ui(step.scope)} ·{" "}
               {step.stages.map(ui).join(", ")}
+            </p>
+            <p className="sop-procedure-scope">
+              {ui("When")}: {sopTimingLabel(step, language)}
             </p>
             <div className="sop-check-details">
               <h4>{sopMeasurementLabel(step.check.field, language)}</h4>

@@ -1,5 +1,7 @@
 "use strict";
-const { getPondTechnicianId } = require("../shared/orsonDomain/pondAssignments");
+const {
+  getPondTechnicianId,
+} = require("../shared/orsonDomain/pondAssignments");
 const {
   scheduledOccurrence,
   evaluateSopStep,
@@ -10,6 +12,11 @@ const {
 const { hash, projectEvidence } = require("./evidence");
 const { currentEvidence } = require("./currentEvidence");
 const { rows } = require("./service");
+const {
+  isSopDate,
+  sopPondStage,
+  obsoleteSopTaskReason,
+} = require("../shared/orsonDomain/sop/lifecycle");
 const terminal = (task) => ["waived", "cancelled"].includes(task.status);
 function isFullyValidManualOnly(definition) {
   try {
@@ -83,7 +90,7 @@ function createSopRuntime(db) {
       });
     }
   }
-  async function createTask(companyId, task) {
+  async function createTask(companyId, task, now) {
     const ref = base(companyId);
     return db.runTransaction(async (tx) => {
       const tRef = ref.collection("tasks").doc(task.id),
@@ -103,8 +110,13 @@ function createSopRuntime(db) {
           )
       )
         return false;
+      const obsolete = obsoleteSopTaskReason(task, task.target, farmDate(now, adoption.data().timeZone));
+      if (obsolete) Object.assign(task, {
+        status: "cancelled", cancellationReason: obsolete, cancelledAt: now,
+        previousResult: task.result, result: "not_applicable",
+      });
       tx.create(tRef, task);
-      notify(tx, ref, task, "assigned", "Farm task assigned", [
+      if (!obsolete) notify(tx, ref, task, "assigned", "Farm task assigned", [
         task.assigneeId,
       ]);
       tx.create(ref.collection("sopAudit").doc(hash([task.id, "created"])), {
@@ -161,14 +173,15 @@ function createSopRuntime(db) {
         );
       await adRef.update({ baselineReconciledAt: now });
     }
-    const [stageSnap, pondSnap, taskSnap, cycleSnap, blockSnap, companySnap] = await Promise.all([
-      ref.collection("sopStages").get(),
-      ref.collection("ponds").get(),
-      ref.collection("tasks").where("adoptionId", "==", adId).get(),
-      ref.collection("cycles").get(),
-      ref.collection("blocks").get(),
-      ref.get(),
-    ]);
+    const [stageSnap, pondSnap, taskSnap, cycleSnap, blockSnap, companySnap] =
+      await Promise.all([
+        ref.collection("sopStages").get(),
+        ref.collection("ponds").get(),
+        ref.collection("tasks").where("adoptionId", "==", adId).get(),
+        ref.collection("cycles").get(),
+        ref.collection("blocks").get(),
+        ref.get(),
+      ]);
     const stages = rows(stageSnap),
       ponds = rows(pondSnap),
       tasks = rows(taskSnap);
@@ -212,6 +225,7 @@ function createSopRuntime(db) {
           ad.definition,
           (await tx.get(ref)).data(),
           true,
+          now,
         ),
       );
       const existingTargets = ad.targets;
@@ -242,6 +256,7 @@ function createSopRuntime(db) {
               t.assigneeId,
               t.stage,
               t.stockingDate,
+              t.plannedStockingDate || "",
             ])
             .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
         );
@@ -306,24 +321,55 @@ function createSopRuntime(db) {
           return null;
         return {
           ...target,
-          assigneeId: getPondTechnicianId(active || { id: target.id, blockId: target.blockId }, { businessSize: companySnap.data()?.businessSize, blocks: rows(blockSnap), cycles: rows(cycleSnap) }) || ad.managerId,
+          assigneeId:
+            getPondTechnicianId(
+              active || { id: target.id, blockId: target.blockId },
+              {
+                businessSize: companySnap.data()?.businessSize,
+                blocks: rows(blockSnap),
+                cycles: rows(cycleSnap),
+              },
+            ) || ad.managerId,
           pondId: active?.id || "",
           cycleId: active?.pondCycleId || active?.cycleId || active?.id || "",
           stockingDate: active?.docStart || "",
-          stage:
-            stages.find((s) => s.id === target.id)?.stage ||
-            (active ? "growout" : "preparation"),
+          stage: sopPondStage(
+            active,
+            stages.find((s) => s.id === target.id)?.stage,
+            farmDate(now, ad.timeZone),
+          ),
         };
       })
       .filter(Boolean);
+    const stageStart = (target) => {
+      const saved = stages.find((s) => s.id === target.id);
+      if (saved?.stage === target.stage)
+        return saved.changedAt || ad.activatedAt;
+      const stockingDate = target.stockingDate?.slice(0, 10);
+      if (
+        target.pondId &&
+        isSopDate(stockingDate) &&
+        ["stocking", "growout"].includes(target.stage)
+      ) {
+        const date =
+          target.stage === "growout"
+            ? new Date(Date.parse(`${stockingDate}T00:00:00Z`) + 86400000)
+                .toISOString()
+                .slice(0, 10)
+            : stockingDate;
+        return Math.max(
+          ad.activatedAt,
+          localInstant(date, "00:00", ad.timeZone),
+        );
+      }
+      return saved?.changedAt || ad.activatedAt;
+    };
     const stageContexts = (target) => {
       if (target.scope === "pond")
         return [
           {
             ...target,
-            stageEnteredAt:
-              stages.find((s) => s.id === target.id)?.changedAt ||
-              ad.activatedAt,
+            stageEnteredAt: stageStart(target),
           },
         ];
       const members = targets.filter(
@@ -340,7 +386,13 @@ function createSopRuntime(db) {
           const physicalId = p.physicalPondId || p.previousCyclePondId || p.id;
           members.push({
             id: physicalId,
-            stage: stages.find((s) => s.id === physicalId)?.stage || "growout",
+            stage: sopPondStage(
+              p,
+              stages.find((s) => s.id === physicalId)?.stage,
+              farmDate(now, ad.timeZone),
+            ),
+            pondId: p.id,
+            stockingDate: p.docStart || "",
           });
         }
       const phases = [...new Set(members.map((t) => t.stage))];
@@ -350,15 +402,88 @@ function createSopRuntime(db) {
         stage,
         stageEnteredAt: Math.max(
           ad.activatedAt,
-          ...members
-            .filter((t) => t.stage === stage)
-            .map(
-              (t) =>
-                stages.find((s) => s.id === t.id)?.changedAt || ad.activatedAt,
-            ),
+          ...members.filter((t) => t.stage === stage).map((t) => stageStart(t)),
         ),
       }));
     };
+    const contexts = targets.flatMap(stageContexts);
+    for (const task of tasks) {
+      const matching = contexts.filter(
+        (t) => t.id === task.target.id && t.scope === task.target.scope,
+      );
+      const target =
+        matching.find((t) => task.step?.stages.includes(t.stage)) ||
+        matching[0];
+      const reason = obsoleteSopTaskReason(
+        task,
+        target,
+        farmDate(now, ad.timeZone),
+      );
+      if (!reason) continue;
+      await db.runTransaction(async (tx) => {
+        const taskRef = ref.collection("tasks").doc(task.id);
+        const current = await tx.get(taskRef);
+        const currentAd = await tx.get(adRef);
+        if (
+          !current.exists ||
+          currentAd.data()?.status !== "active" ||
+          currentAd.data()?.revision !== ad.revision ||
+          current.data().revision !== task.revision ||
+          obsoleteSopTaskReason(
+            current.data(),
+            target,
+            farmDate(now, ad.timeZone),
+          ) !== reason
+        )
+          return;
+        // A concurrent transition or plan edit must be reconsidered next tick.
+        if (target?.scope === "pond") {
+          const physical = await tx.get(
+            ref.collection("physicalPonds").doc(target.id),
+          );
+          const stage = await tx.get(
+            ref.collection("sopStages").doc(target.id),
+          );
+          const pond = target.pondId
+            ? await tx.get(ref.collection("ponds").doc(target.pondId))
+            : null;
+          if (
+            (physical.data()?.plannedStockingDate || "") !==
+              (target.plannedStockingDate || "") ||
+            (physical.data()?.activePondId && physical.data().activePondId !== target.pondId) ||
+            sopPondStage(
+              pond?.exists && pond.data().cycleStatus !== "ended"
+                ? pond.data()
+                : null,
+              stage.data()?.stage,
+              farmDate(now, ad.timeZone),
+            ) !== target.stage
+          )
+            return;
+        }
+        tx.update(taskRef, {
+          status: "cancelled",
+          cancellationReason: reason,
+          cancelledAt: now,
+          revision: task.revision + 1,
+          previousResult: current.data().result,
+          result: "not_applicable",
+        });
+        tx.create(
+          ref
+            .collection("sopAudit")
+            .doc(hash([task.id, "lifecycle", task.revision])),
+          {
+            action: "cancelObsoleteTask",
+            taskId: task.id,
+            adoptionId: ad.id,
+            reason,
+            at: now,
+            actorId: "scheduler",
+          },
+        );
+      });
+    }
     // A bounded catch-up page leaves a cursor due immediately until every missed date is covered.
     const fromDate = farmDate(
       ad.scheduleCursorAt || ad.activatedAt,
@@ -497,6 +622,7 @@ function createSopRuntime(db) {
                     start,
                     start + step.trigger.windowMinutes * 60000,
                   ),
+                  now,
                 );
             }
           }
@@ -545,6 +671,7 @@ function createSopRuntime(db) {
             await createTask(
               companyId,
               taskFrom(ad, step, target, due.key, due.start, due.due),
+              now,
             );
           }
         }

@@ -348,6 +348,29 @@ test("manual-review recovery cannot fabricate missing content or swallow unexpec
   );
 });
 
+test("invalid measurement automation retains valid H-20 preparation timing in its blocked review draft", (t) => {
+  t.mock.method(console, "warn", () => {});
+  const { prepareGeneratedSopDraft } = require("./draftValidation");
+  const input = fixture();
+  input.steps[0].stages = ["preparation"];
+  input.steps[0].trigger = {
+    ...input.steps[0].trigger,
+    kind: "doc",
+    docFrom: -20,
+    docTo: -20,
+  };
+  input.steps[0].check.field = "unsupported-procedure";
+  const output = prepareGeneratedSopDraft(input);
+  assert.deepEqual(output.definition.steps[0].trigger, input.steps[0].trigger);
+  assert.deepEqual(output.definition.steps[0].stages, ["preparation"]);
+  assert.equal(output.definition.steps[0].check.field, "manual");
+  assert.ok(
+    output.warnings.some((w) =>
+      w.startsWith("Resolve omitted source content:"),
+    ),
+  );
+});
+
 test("AI manual measurement checks retain their source limits without inventing a clock schedule", () => {
   const { prepareGeneratedSopDraft } = require("./draftValidation");
   const definition = fixture();

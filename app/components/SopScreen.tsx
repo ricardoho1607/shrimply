@@ -12,6 +12,7 @@ import {
   sopSimpleCheckModes,
   sopTargetLabel,
   sopScheduleLabel,
+  sopTimingLabel,
   sopEditorIssue,
   sopIssueLinks,
 } from "../../shared/sop/editor";
@@ -316,6 +317,7 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
   const [quietStart, setQuietStart] = useState("22:00"),
     [quietEnd, setQuietEnd] = useState("06:00");
   const [stageTarget, setStageTarget] = useState(""),
+    [plannedStockingDate, setPlannedStockingDate] = useState(""),
     [stage, setStage] = useState("preparation"),
     [stageReason, setStageReason] = useState(""),
     [actual, setActual] = useState(false),
@@ -1071,8 +1073,41 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                       title: p.pondName,
                     }))}
                     selected={[stageTarget]}
-                    onChange={setStageTarget}
+                    onChange={(id) => {
+                      setStageTarget(id);
+                      setPlannedStockingDate(
+                        w.physicalPonds.find((p) => p.id === id)
+                          ?.plannedStockingDate || "",
+                      );
+                    }}
                   />
+                  {w.manage && (
+                    <>
+                      <Input
+                        label={ui("Planned stocking date (YYYY-MM-DD)")}
+                        value={plannedStockingDate}
+                        onChange={setPlannedStockingDate}
+                      />
+                      <Text style={styles.muted}>
+                        {ui(
+                          "H-20 means 20 days before the planned stocking date. Actual stocking starts DOC0.",
+                        )}
+                      </Text>
+                      <Button
+                        title={ui("Save stocking plan")}
+                        disabled={!stageTarget}
+                        onPress={() =>
+                          void run(() =>
+                            client.command({
+                              action: "planStocking",
+                              targetId: stageTarget,
+                              plannedStockingDate,
+                            }),
+                          )
+                        }
+                      />
+                    </>
+                  )}
                   <Choices
                     label={ui("Next stage")}
                     values={vals(SOP_STAGES)}
@@ -1701,6 +1736,19 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                         {ui("When to do it")}
                       </Text>
                       <Choices
+                        label={ui("Stages")}
+                        values={vals(SOP_STAGES)}
+                        selected={s.stages}
+                        onChange={(stage) =>
+                          patch(i, {
+                            stages: toggle(
+                              s.stages,
+                              stage,
+                            ) as SopStep["stages"],
+                          })
+                        }
+                      />
+                      <Choices
                         id={`sop-check-${s.id}-schedule`}
                         label={ui("When")}
                         values={(
@@ -1727,7 +1775,8 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                         }
                       />
                       {(s.trigger.kind === "daily" ||
-                        s.trigger.kind === "weekly") && (
+                        s.trigger.kind === "weekly" ||
+                        s.trigger.kind === "doc") && (
                         <>
                           <Input
                             label={ui("Local time (HH:MM)")}
@@ -1736,6 +1785,32 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                               patch(i, { trigger: { ...s.trigger, at } })
                             }
                           />
+                        </>
+                      )}
+                      {s.trigger.kind === "doc" && (
+                        <>
+                          {(["docFrom", "docTo", "everyDays"] as const).map(
+                            (key) => (
+                              <Input
+                                key={key}
+                                label={sopFieldLabel(key, currentLanguage)}
+                                value={String(s.trigger[key])}
+                                onChange={(v) =>
+                                  patch(i, {
+                                    trigger: { ...s.trigger, [key]: Number(v) },
+                                  })
+                                }
+                              />
+                            ),
+                          )}
+                          <Text style={styles.muted}>
+                            {ui(
+                              "Use -20 for H-20, -1 for H-1, and 0 or more for DOC. Preparation and stocked steps need separate windows.",
+                            )}
+                          </Text>
+                          <Text style={styles.muted}>
+                            {sopTimingLabel(s, currentLanguage)}
+                          </Text>
                         </>
                       )}
                       {s.trigger.kind === "weekly" && (
@@ -1814,19 +1889,6 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                             }
                           />
                           <Choices
-                            label={ui("Stages")}
-                            values={vals(SOP_STAGES)}
-                            selected={s.stages}
-                            onChange={(stage) =>
-                              patch(i, {
-                                stages: toggle(
-                                  s.stages,
-                                  stage,
-                                ) as SopStep["stages"],
-                              })
-                            }
-                          />
-                          <Choices
                             label={ui("Severity")}
                             values={vals(["low", "warning", "critical"])}
                             selected={[s.severity]}
@@ -1840,23 +1902,26 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                             [
                               "windowMinutes",
                               "everyDays",
-                              "docFrom",
-                              "docTo",
                               "offsetMinutes",
                             ] as const
-                          ).map((k) => (
-                            <Input
-                              key={k}
-                              label={sopFieldLabel(k, currentLanguage)}
-                              numeric
-                              value={String(s.trigger[k])}
-                              onChange={(v) =>
-                                patch(i, {
-                                  trigger: { ...s.trigger, [k]: Number(v) },
-                                })
-                              }
-                            />
-                          ))}
+                          )
+                            .filter(
+                              (k) =>
+                                s.trigger.kind !== "doc" || k !== "everyDays",
+                            )
+                            .map((k) => (
+                              <Input
+                                key={k}
+                                label={sopFieldLabel(k, currentLanguage)}
+                                numeric
+                                value={String(s.trigger[k])}
+                                onChange={(v) =>
+                                  patch(i, {
+                                    trigger: { ...s.trigger, [k]: Number(v) },
+                                  })
+                                }
+                              />
+                            ))}
                           <Choices
                             label={ui("Other check methods")}
                             values={sopCheckModes(s).map((mode) => ({

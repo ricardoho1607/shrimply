@@ -37,12 +37,21 @@ export function sopScheduleLabel(
   const labels = {
     daily: "Daily",
     weekly: "Weekly",
-    doc: "By days of culture",
+    doc: "By stocking day (H- / DOC)",
     event: "After an event",
     stage: "At a production stage",
     manual: "When assigned manually",
   };
   return sopText(labels[kind], language);
+}
+
+export function sopTimingLabel(step: SopStep, language: string): string {
+  const day = (value: number) =>
+    value < 0 ? `H−${Math.abs(value)}` : `DOC ${value}`;
+  if (step.trigger.kind !== "doc")
+    return sopScheduleLabel(step.trigger.kind, language);
+  const { docFrom, docTo, everyDays, at } = step.trigger;
+  return `${day(docFrom)}${docTo !== docFrom ? ` – ${day(docTo)}` : ""} · ${at}${docTo !== docFrom ? ` · ${sopText("Repeat every (days)", language)}: ${everyDays}` : ""}`;
 }
 
 export function sopCheckModes(step: SopStep): SopOperator[] {

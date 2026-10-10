@@ -11,6 +11,7 @@ exports.assessNarrative = assessNarrative;
 const contracts_1 = require("./contracts");
 const registry_1 = require("./registry");
 const content_1 = require("./content");
+const lifecycle_1 = require("./lifecycle");
 const finiteSopNumber = (value) => {
     if (typeof value !== "number" && typeof value !== "string")
         return null;
@@ -84,10 +85,22 @@ function validateSop(definition) {
             s.trigger.weekDays.some((day) => !Number.isInteger(day) || day < 0 || day > 6))
             errors.push(prefix + "Invalid weekdays.");
         if (![s.trigger.docFrom, s.trigger.docTo, s.trigger.offsetMinutes].every(Number.isInteger) ||
-            s.trigger.docFrom < 0 ||
             s.trigger.docTo < s.trigger.docFrom ||
             s.trigger.offsetMinutes < 0)
             errors.push(prefix + "Invalid DOC/event window.");
+        if (s.trigger.kind === "doc" &&
+            Array.isArray(s.stages) &&
+            s.trigger.docFrom < 0 &&
+            (s.trigger.docTo >= 0 ||
+                s.stages.some((stage) => stage !== "preparation")))
+            errors.push(prefix +
+                "Before-stocking days require preparation only and must end before DOC0.");
+        if (s.trigger.kind === "doc" &&
+            Array.isArray(s.stages) &&
+            s.trigger.docFrom >= 0 &&
+            s.stages.includes("preparation"))
+            errors.push(prefix +
+                "DOC0 and later require a stocked stage; use negative days for preparation.");
         if (s.trigger.kind === "event" && !s.trigger.event)
             errors.push(prefix + "Choose an event.");
         const f = (0, registry_1.sopField)(s.check?.field);
@@ -380,10 +393,17 @@ function scheduledOccurrence(step, target, now, activatedAt, timeZone) {
         ["event", "stage", "manual"].includes(step.trigger.kind))
         return null;
     const date = (0, exports.farmDate)(now, timeZone), dateMs = Date.parse(date + "T00:00:00Z");
-    const doc = target.stockingDate
-        ? Math.floor((dateMs - Date.parse(target.stockingDate.slice(0, 10) + "T00:00:00Z")) /
-            86400000)
-        : null;
+    const beforeStocking = step.trigger.docTo < 0;
+    if (step.trigger.kind === "doc" &&
+        (beforeStocking
+            ? target.stage !== "preparation" ||
+                !!target.pondId ||
+                !!target.stockingDate
+            : target.stage === "preparation"))
+        return null;
+    const doc = (0, lifecycle_1.sopCycleDay)(date, beforeStocking
+        ? target.plannedStockingDate || ""
+        : target.stockingDate.slice(0, 10));
     if (step.trigger.kind === "weekly" &&
         !step.trigger.weekDays.includes(new Date(dateMs).getUTCDay()))
         return null;

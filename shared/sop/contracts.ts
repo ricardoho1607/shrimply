@@ -95,6 +95,7 @@ export interface SopTarget {
   name: string;
   stage: SopStage;
   stockingDate: string;
+  plannedStockingDate?: string;
   assigneeId: string;
 }
 export interface SopAdoption {

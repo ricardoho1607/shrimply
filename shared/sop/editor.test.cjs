@@ -7,9 +7,18 @@ const {
   sopTargetLabel,
   sopEditorIssue,
   sopMeasurementLabel,
+  sopTimingLabel,
 } = require("./editor.ts");
 const { SOP_FIELDS } = require("./registry.ts");
 const { sopText } = require("./uiCopy.ts");
+test("readers show H- preparation dates and DOC milestones without changing their schedules", () => {
+  const step = emptySopStep();
+  step.trigger = { ...step.trigger, kind: "doc", docFrom: -20, docTo: -1 };
+  assert.match(sopTimingLabel(step, "en"), /H−20 – H−1/);
+  step.trigger.docFrom = 30;
+  step.trigger.docTo = 30;
+  assert.match(sopTimingLabel(step, "en"), /DOC 30/);
+});
 
 test("simple checks offer the relevant farmer choices without losing advanced or saved rules", () => {
   const step = emptySopStep();

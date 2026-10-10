@@ -58,7 +58,7 @@ function prepareGeneratedSopDraft(generated) {
         },
         steps: generated.steps.map((step, index) => {
           const manual = emptySopStep(`step-${index + 1}`);
-          return {
+          const candidate = {
             ...manual,
             title: step.title,
             instructions: step.instructions,
@@ -87,6 +87,19 @@ function prepareGeneratedSopDraft(generated) {
                 : "",
             requireNotes: true,
           };
+          // A bad measurement/branch must not erase an otherwise valid H-/DOC schedule.
+          const timed = { ...candidate, trigger: step.trigger };
+          if (
+            step.trigger &&
+            validateSop({
+              title: generated.title,
+              description: "",
+              language: generated.language,
+              steps: [timed],
+            }).length === 0
+          )
+            candidate.trigger = step.trigger;
+          return candidate;
         }),
       },
       true,

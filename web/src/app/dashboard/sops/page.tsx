@@ -7,6 +7,7 @@ import {
   sopSimpleCheckModes,
   sopTargetLabel,
   sopScheduleLabel,
+  sopTimingLabel,
   sopEditorIssue,
   sopIssueLinks,
 } from "../../../../../shared/sop/editor";
@@ -153,6 +154,7 @@ function SopsPageContent() {
   } | null>(null);
   const [activatedAdoptionId, setActivatedAdoptionId] = useState("");
   const [stageTarget, setStageTarget] = useState(""),
+    [plannedStockingDate, setPlannedStockingDate] = useState(""),
     [stage, setStage] = useState("preparation"),
     [stageReason, setStageReason] = useState(""),
     [actual, setActual] = useState(false),
@@ -925,7 +927,13 @@ function SopsPageContent() {
                 <Field label={ui("Pond")}>
                   <select
                     value={stageTarget}
-                    onChange={(e) => setStageTarget(e.target.value)}
+                    onChange={(e) => {
+                      setStageTarget(e.target.value);
+                      setPlannedStockingDate(
+                        w.physicalPonds.find((p) => p.id === e.target.value)
+                          ?.plannedStockingDate || "",
+                      );
+                    }}
                   >
                     <option value="">{ui("Choose pond")}</option>
                     {w.physicalPonds.map((p) => (
@@ -950,6 +958,36 @@ function SopsPageContent() {
                   />
                 </Field>
               </div>
+              {w.manage && (
+                <div className="sop-grid">
+                  <Field label={ui("Planned stocking date")}>
+                    <input
+                      type="date"
+                      value={plannedStockingDate}
+                      onChange={(e) => setPlannedStockingDate(e.target.value)}
+                    />
+                  </Field>
+                  <p className="sop-help">
+                    {ui(
+                      "H-20 means 20 days before the planned stocking date. Actual stocking starts DOC0.",
+                    )}
+                  </p>
+                  <button
+                    disabled={!stageTarget || client.busy}
+                    onClick={() =>
+                      void run(() =>
+                        client.command({
+                          action: "planStocking",
+                          targetId: stageTarget,
+                          plannedStockingDate,
+                        }),
+                      )
+                    }
+                  >
+                    {ui("Save stocking plan")}
+                  </button>
+                </div>
+              )}
               <label>
                 <input
                   type="checkbox"
@@ -1653,6 +1691,27 @@ function SopsPageContent() {
               <div className="sop-step-section">
                 <h4>{ui("When to do it")}</h4>
                 <div className="sop-grid">
+                  <Field group label={ui("Stages")}>
+                    <div className="sop-checkboxes">
+                      {SOP_STAGES.map((stage) => (
+                        <label key={stage}>
+                          <input
+                            type="checkbox"
+                            checked={s.stages.includes(stage)}
+                            onChange={() =>
+                              changeStep(index, {
+                                stages: toggle(
+                                  s.stages,
+                                  stage,
+                                ) as SopStep["stages"],
+                              })
+                            }
+                          />
+                          {ui(stage)}
+                        </label>
+                      ))}
+                    </div>
+                  </Field>
                   <Field id={`sop-check-${s.id}-schedule`} label={ui("When")}>
                     <select
                       value={s.trigger.kind}
@@ -1682,7 +1741,8 @@ function SopsPageContent() {
                     </select>
                   </Field>
                   {(s.trigger.kind === "daily" ||
-                    s.trigger.kind === "weekly") && (
+                    s.trigger.kind === "weekly" ||
+                    s.trigger.kind === "doc") && (
                     <>
                       <Field label={ui("Local time")}>
                         <input
@@ -1695,6 +1755,41 @@ function SopsPageContent() {
                           }
                         />
                       </Field>
+                    </>
+                  )}
+                  {s.trigger.kind === "doc" && (
+                    <>
+                      {(["docFrom", "docTo", "everyDays"] as const).map(
+                        (key) => (
+                          <Field
+                            label={sopFieldLabel(key, currentLanguage)}
+                            key={key}
+                          >
+                            <input
+                              type="number"
+                              step={1}
+                              min={key === "everyDays" ? 1 : undefined}
+                              value={s.trigger[key]}
+                              onChange={(e) =>
+                                changeStep(index, {
+                                  trigger: {
+                                    ...s.trigger,
+                                    [key]: Number(e.target.value),
+                                  },
+                                })
+                              }
+                            />
+                          </Field>
+                        ),
+                      )}
+                      <p className="sop-help">
+                        {ui(
+                          "Use -20 for H-20, -1 for H-1, and 0 or more for DOC. Preparation and stocked steps need separate windows.",
+                        )}
+                      </p>
+                      <p className="sop-help">
+                        {sopTimingLabel(s, currentLanguage)}
+                      </p>
                     </>
                   )}
                   {s.trigger.kind === "weekly" && (
@@ -1800,52 +1895,27 @@ function SopsPageContent() {
                       {options(["low", "warning", "critical"])}
                     </select>
                   </Field>
-                  <Field group label={ui("Stages")}>
-                    <div className="sop-checkboxes">
-                      {SOP_STAGES.map((stage) => (
-                        <label key={stage}>
-                          <input
-                            type="checkbox"
-                            checked={s.stages.includes(stage)}
-                            onChange={() =>
-                              changeStep(index, {
-                                stages: toggle(
-                                  s.stages,
-                                  stage,
-                                ) as SopStep["stages"],
-                              })
-                            }
-                          />
-                          {ui(stage)}
-                        </label>
-                      ))}
-                    </div>
-                  </Field>
-                  {(
-                    [
-                      "windowMinutes",
-                      "everyDays",
-                      "docFrom",
-                      "docTo",
-                      "offsetMinutes",
-                    ] as const
-                  ).map((k) => (
-                    <Field label={sopFieldLabel(k, currentLanguage)} key={k}>
-                      <input
-                        type="number"
-                        min={0}
-                        value={s.trigger[k]}
-                        onChange={(e) =>
-                          changeStep(index, {
-                            trigger: {
-                              ...s.trigger,
-                              [k]: Number(e.target.value),
-                            },
-                          })
-                        }
-                      />
-                    </Field>
-                  ))}
+                  {(["windowMinutes", "everyDays", "offsetMinutes"] as const)
+                    .filter(
+                      (k) => s.trigger.kind !== "doc" || k !== "everyDays",
+                    )
+                    .map((k) => (
+                      <Field label={sopFieldLabel(k, currentLanguage)} key={k}>
+                        <input
+                          type="number"
+                          min={0}
+                          value={s.trigger[k]}
+                          onChange={(e) =>
+                            changeStep(index, {
+                              trigger: {
+                                ...s.trigger,
+                                [k]: Number(e.target.value),
+                              },
+                            })
+                          }
+                        />
+                      </Field>
+                    ))}
                   <Field label={ui("Other check methods")}>
                     <select
                       value={s.check.operator}

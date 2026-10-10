@@ -133,6 +133,14 @@ Severity|Tingkat keparahan|Mức độ nghiêm trọng|ระดับควา�
 Urgency|Urgensi|Mức độ khẩn cấp|ความเร่งด่วน|紧急程度
 Stages|Tahapan|Các giai đoạn|ระยะการผลิต|生产阶段
 Production stage|Tahap produksi|Giai đoạn sản xuất|ระยะการผลิต|生产阶段
+By stocking day (H- / DOC)|Berdasarkan hari tebar (H- / DOC)|Theo ngày thả (H- / DOC)|ตามวันปล่อยกุ้ง (H- / DOC)|按放苗日 (H- / DOC)
+Planned stocking date|Tanggal rencana tebar|Ngày thả dự kiến|วันที่วางแผนปล่อยกุ้ง|计划放苗日期
+Planned stocking date (YYYY-MM-DD)|Tanggal rencana tebar (YYYY-MM-DD)|Ngày thả dự kiến (YYYY-MM-DD)|วันที่วางแผนปล่อยกุ้ง (YYYY-MM-DD)|计划放苗日期 (YYYY-MM-DD)
+Save stocking plan|Simpan rencana tebar|Lưu kế hoạch thả|บันทึกแผนปล่อยกุ้ง|保存放苗计划
+H-20 means 20 days before the planned stocking date. Actual stocking starts DOC0.|H-20 berarti 20 hari sebelum rencana tebar. Tebar aktual memulai DOC0.|H-20 là 20 ngày trước ngày thả dự kiến. Thả thực tế bắt đầu DOC0.|H-20 คือ 20 วันก่อนวันที่วางแผนปล่อยกุ้ง การปล่อยจริงเริ่ม DOC0|H-20 表示计划放苗前20天。实际放苗开始 DOC0。
+Use -20 for H-20, -1 for H-1, and 0 or more for DOC. Preparation and stocked steps need separate windows.|Gunakan -20 untuk H-20, -1 untuk H-1, dan 0 atau lebih untuk DOC. Langkah persiapan dan setelah tebar memerlukan rentang terpisah.|Dùng -20 cho H-20, -1 cho H-1 và từ 0 cho DOC. Chuẩn bị và sau thả cần khoảng ngày riêng.|ใช้ -20 สำหรับ H-20, -1 สำหรับ H-1 และ 0 ขึ้นไปสำหรับ DOC แยกช่วงเตรียมบ่อกับหลังปล่อยกุ้ง|用 -20 表示 H-20，-1 表示 H-1，0及以上表示 DOC。准备和放苗后的步骤需分别设置时间范围。
+Start day (H- / DOC)|Hari mulai (H- / DOC)|Ngày bắt đầu (H- / DOC)|วันเริ่ม (H- / DOC)|开始日 (H- / DOC)
+End day (H- / DOC)|Hari akhir (H- / DOC)|Ngày kết thúc (H- / DOC)|วันสิ้นสุด (H- / DOC)|结束日 (H- / DOC)
 Next stage|Tahap berikutnya|Giai đoạn tiếp theo|ระยะถัดไป|下一阶段
 Event / stage|Peristiwa / tahap|Sự kiện / giai đoạn|เหตุการณ์ / ระยะ|事件／阶段
 Local time|Waktu lokal|Giờ địa phương|เวลาท้องถิ่น|当地时间
@@ -543,8 +551,8 @@ export function sopFieldLabel(key: string, language: string): string {
   const labels: Record<string, string> = {
     windowMinutes: "Measurement window (minutes)",
     everyDays: "Repeat every (days)",
-    docFrom: "DOC from",
-    docTo: "DOC through",
+    docFrom: "Start day (H- / DOC)",
+    docTo: "End day (H- / DOC)",
     offsetMinutes: "Offset (minutes)",
     recheckMinutes: "Recheck interval (minutes)",
     maxRechecks: "Maximum rechecks",

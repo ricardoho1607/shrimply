@@ -1,0 +1,78 @@
+import type { SopStage, SopTarget, SopTask } from "./contracts";
+
+export function isSopDate(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(Date.parse(`${value}T00:00:00Z`)) &&
+    new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value
+  );
+}
+
+export function sopCycleDay(
+  today: string,
+  stockingDate: string,
+): number | null {
+  return isSopDate(today) && isSopDate(stockingDate)
+    ? Math.floor(
+        (Date.parse(`${today}T00:00:00Z`) -
+          Date.parse(`${stockingDate}T00:00:00Z`)) /
+          86400000,
+      )
+    : null;
+}
+
+/** A saved preparation flag cannot put a stocked pond back into preparation. */
+export function sopPondStage(
+  pond: { docStart?: string; cycleStartMode?: string } | null | undefined,
+  saved: SopStage | undefined,
+  today: string,
+): SopStage {
+  if (!pond) return saved || "preparation";
+  if (saved === "harvest") return saved;
+  const day = sopCycleDay(today, pond.docStart?.slice(0, 10) || "");
+  if (
+    saved === "growout" ||
+    pond.cycleStartMode === "midcycle" ||
+    (day !== null && day > 0)
+  )
+    return "growout";
+  return "stocking";
+}
+
+export function obsoleteSopTaskReason(
+  task: SopTask,
+  target: SopTarget | undefined,
+  today: string,
+): string {
+  // Keep submitted evidence, manager reviews and corrective episodes actionable.
+  if (
+    task.purpose !== "routine" ||
+    !["open", "scheduled"].includes(task.status) ||
+    !task.step ||
+    task.issueId ||
+    task.requiresHumanReview ||
+    ["fail", "needs_review"].includes(task.result)
+  )
+    return "";
+  if (!target || task.target.cycleId !== target.cycleId)
+    return "Production cycle changed or ended";
+  if (!task.step.stages.includes(target.stage))
+    return "Production stage changed";
+  if (task.step.trigger.kind !== "doc") return "";
+  const beforeStocking = task.step.trigger.docTo < 0;
+  if (
+    beforeStocking &&
+    task.target.plannedStockingDate !== target.plannedStockingDate
+  )
+    return "Planned stocking date changed";
+  const day = sopCycleDay(
+    today,
+    beforeStocking
+      ? target.plannedStockingDate || ""
+      : target.stockingDate.slice(0, 10),
+  );
+  return day !== null && day > task.step.trigger.docTo
+    ? "Culture-day schedule ended"
+    : "";
+}

@@ -1,6 +1,13 @@
 "use strict";
-const { filterPondRecordsForUser, getPondTechnicianId } = require("../shared/orsonDomain/pondAssignments");
+const {
+  filterPondRecordsForUser,
+  getPondTechnicianId,
+} = require("../shared/orsonDomain/pondAssignments");
 const { targetTechnician } = require("./assignments");
+const {
+  isSopDate,
+  sopPondStage,
+} = require("../shared/orsonDomain/sop/lifecycle");
 const { HttpsError } = require("firebase-functions/v2/https");
 const { assertCompanyMemberForCallable } = require("../shared/companyAccess");
 const {
@@ -229,11 +236,12 @@ function createSopService(db, storage) {
         ref
           .collection("sopIssues")
           .where("status", "in", ["open", "closure_review", "action_required"]),
+        routine.where("status", "==", "cancelled"),
       ];
       const totals = await Promise.all(specs.map((q) => q.count().get()));
       summary = {
         recorded: totals[0].data().count,
-        total: totals[1].data().count,
+        total: totals[1].data().count - totals[7].data().count,
         pass: totals[2].data().count,
         fail: totals[3].data().count,
         missing: totals[4].data().count,
@@ -261,7 +269,9 @@ function createSopService(db, storage) {
           : {
               ...ad,
               targets: (ad.targets || []).filter(
-                (t) => targetAllowed(t) && (t.assigneeId === uid || (isScoped && t.scope !== "company")),
+                (t) =>
+                  targetAllowed(t) &&
+                  (t.assigneeId === uid || (isScoped && t.scope !== "company")),
               ),
             },
       ),
@@ -297,13 +307,25 @@ function createSopService(db, storage) {
     definition,
     company,
     allowEmptyMembership = false,
+    contextNow = Date.now(),
   ) {
-    const [physicalSnap, pondSnap, blockSnap, stageSnap, existingSnap, cycleSnap] =
-      await Promise.all(
-        ["physicalPonds", "ponds", "blocks", "sopStages", "sopAdoptions", "cycles"].map(
-          (name) => tx.get(ref.collection(name)),
-        ),
-      );
+    const [
+      physicalSnap,
+      pondSnap,
+      blockSnap,
+      stageSnap,
+      existingSnap,
+      cycleSnap,
+    ] = await Promise.all(
+      [
+        "physicalPonds",
+        "ponds",
+        "blocks",
+        "sopStages",
+        "sopAdoptions",
+        "cycles",
+      ].map((name) => tx.get(ref.collection(name))),
+    );
     const physical = rows(physicalSnap).map((p) =>
         input.proposedPondIds?.includes(p.id)
           ? { ...p, blockId: input.proposedBlockId }
@@ -379,9 +401,26 @@ function createSopService(db, storage) {
           `${p.pondName || p.id} has no active cycle. Choose a standing procedure to include preparation ponds.`,
         );
       }
-      const stage =
-          stages.find((s) => s.id === p.id)?.stage ||
-          (active ? "growout" : "preparation");
+      const stage = sopPondStage(
+        active,
+        stages.find((s) => s.id === p.id)?.stage,
+        farmDate(contextNow, input.timeZone || company.timeZone || "UTC"),
+      );
+      if (
+        !allowEmptyMembership &&
+        stage === "preparation" &&
+        !isSopDate(p.plannedStockingDate) &&
+        definition.steps.some(
+          (s) =>
+            s.scope === "pond" &&
+            s.trigger.kind === "doc" &&
+            s.trigger.docFrom < 0,
+        )
+      )
+        fail(
+          "failed-precondition",
+          `${p.pondName || p.id} needs a planned stocking date for H- preparation tasks.`,
+        );
       targets.push({
         id: p.id,
         scope: "pond",
@@ -392,7 +431,13 @@ function createSopService(db, storage) {
         name: p.pondName || p.id,
         stage,
         stockingDate: active?.docStart || "",
-        assigneeId: getPondTechnicianId(active || { id: p.id, blockId: p.blockId }, { businessSize: company.businessSize, blocks, cycles: rows(cycleSnap) }) || managerId,
+        plannedStockingDate: p.plannedStockingDate || "",
+        assigneeId:
+          getPondTechnicianId(active || { id: p.id, blockId: p.blockId }, {
+            businessSize: company.businessSize,
+            blocks,
+            cycles: rows(cycleSnap),
+          }) || managerId,
       });
     }
     if (definition.steps.some((s) => s.scope === "block"))
@@ -496,6 +541,7 @@ function createSopService(db, storage) {
       "postpone",
       "reassign",
       "stage",
+      "planStocking",
       "markRead",
       "registerDevice",
       "report",
@@ -1389,7 +1435,11 @@ function createSopService(db, storage) {
           if (
             !manageNow &&
             u.role === "technician" &&
-            (await targetTechnician(tx, ref, c, { scope: input.scope, id: targetId, blockId })) !== uid
+            (await targetTechnician(tx, ref, c, {
+              scope: input.scope,
+              id: targetId,
+              blockId,
+            })) !== uid
           )
             fail("permission-denied", "Task is outside your pond assignment.");
           target = {
@@ -1463,8 +1513,12 @@ function createSopService(db, storage) {
         if (!s.exists) fail("not-found", "Task not found.");
         const task = s.data();
         if (input.action !== "submitEvidence") expected(task);
-        if (!manageNow && u.role === "technician" && task.target.scope !== "company"
-          && (await targetTechnician(tx, ref, c, task.target)) !== uid)
+        if (
+          !manageNow &&
+          u.role === "technician" &&
+          task.target.scope !== "company" &&
+          (await targetTechnician(tx, ref, c, task.target)) !== uid
+        )
           fail("permission-denied", "Your pond assignment changed.");
         if (!manageNow && !task.visibleTo.includes(uid))
           fail("permission-denied", "This task is outside your assignment.");
@@ -1757,14 +1811,62 @@ function createSopService(db, storage) {
               revision: task.revision + 1,
             });
         }
+      } else if (input.action === "planStocking") {
+        const targetId = id(input.targetId);
+        const date = input.plannedStockingDate;
+        if (date !== "" && !isSopDate(date))
+          fail("invalid-argument", "Choose a valid planned stocking date.");
+        const physicalRef = ref.collection("physicalPonds").doc(targetId);
+        const physical = await tx.get(physicalRef);
+        if (!physical.exists) fail("not-found", "Pond no longer exists.");
+        const ponds = await tx.get(ref.collection("ponds"));
+        if (
+          ponds.docs.some(
+            (p) =>
+              (p.data().physicalPondId ||
+                p.data().previousCyclePondId ||
+                p.id) === targetId && p.data().cycleStatus !== "ended",
+          )
+        )
+          fail(
+            "failed-precondition",
+            "This pond is already stocked. Its actual stocking date controls DOC.",
+          );
+        const stageRef = ref.collection("sopStages").doc(targetId);
+        const savedStage = await tx.get(stageRef);
+        const adoptions = await tx.get(
+          ref.collection("sopAdoptions").where("status", "==", "active"),
+        );
+        tx.update(physicalRef, { plannedStockingDate: date });
+        if (date && savedStage.data()?.stage !== "preparation")
+          tx.set(stageRef, {
+            stage: "preparation",
+            changedAt: now,
+            changedBy: uid,
+            reason: "Planned the next stocking date.",
+          });
+        for (const ad of adoptions.docs)
+          if (
+            ad
+              .data()
+              .targets.some((t) => t.scope === "pond" && t.id === targetId)
+          )
+            tx.update(ad.ref, { nextDueAt: now });
       } else if (input.action === "stage") {
         const targetId = id(input.targetId);
         const physical = await tx.get(
           ref.collection("physicalPonds").doc(targetId),
         );
         if (!physical.exists) fail("not-found", "Pond no longer exists.");
-        if (!manageNow && u.role === "technician"
-          && (await targetTechnician(tx, ref, c, { scope: "pond", id: targetId, blockId: physical.data().blockId })) !== uid)
+        if (
+          !manageNow &&
+          u.role === "technician" &&
+          (await targetTechnician(tx, ref, c, {
+            scope: "pond",
+            id: targetId,
+            blockId: physical.data().blockId,
+          })) !== uid
+        )
           fail("permission-denied", "Pond is outside your assignment.");
         if (!SOP_STAGES.includes(input.stage))
           fail("invalid-argument", "Invalid production stage.");
