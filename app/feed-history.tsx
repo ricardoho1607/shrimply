@@ -1,3 +1,4 @@
+import { filterPondRecordsForUser } from '../shared/pondAssignments';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -28,7 +29,7 @@ import {
   normalizeFeedAllocations,
   sumFeedAllocations,
 } from '../shared/feedInventoryUsage';
-import { filterEnterpriseRecordsForUser } from '../shared/enterpriseBlocks';
+
 import { useEnterpriseBlocks } from './hooks/useEnterpriseBlocks';
 import { hasFarmPermission } from '../shared/permissions';
 
@@ -37,6 +38,7 @@ type FeedAllocationInput = { inventoryFeedId: string; quantityKg: string };
 
 export default function FeedHistoryScreen() {
   const { pondId, pondName } = useLocalSearchParams();
+  const cycles = usePondStore((state) => state.cycles);
   const { ponds, updateSampling } = usePondStore();
   const { user, company } = useAuth();
   const { setCurrentCompanyId, reconcileDailyFeedAllocations, deleteDailyFeedRecord } = useFeedAdditiveStore();
@@ -55,12 +57,13 @@ export default function FeedHistoryScreen() {
     company?.businessSize === 'enterprise' ? company.id : undefined,
     user?.uid,
   );
-  const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
+  const accessiblePonds = useMemo(() => filterPondRecordsForUser(ponds, {
     businessSize: company?.businessSize,
     role: user?.role,
     userId: user?.uid,
     blocks: enterpriseBlocks.blocks,
-  }), [company?.businessSize, enterpriseBlocks.blocks, ponds, user?.role, user?.uid]);
+    cycles, companyOwnerId: company?.ownerId,
+  }), [cycles, company?.ownerId, company?.businessSize, enterpriseBlocks.blocks, ponds, user?.role, user?.uid]);
   const pond: Pond | undefined = accessiblePonds.find((p: Pond) => p.id === resolvedPondId);
   const displayPondName = Array.isArray(pondName) ? pondName[0] : pondName;
   const canEditFeed = hasFarmPermission(user, 'manageFeedInventory', company?.ownerId);

@@ -1,4 +1,5 @@
 "use strict";
+const { targetTechnician } = require("./assignments");
 const { access, id, rows, fail } = require("./service");
 async function sopHistory(db, uid, companyId, kind, cursor) {
   const { manage, company, user } = await access(db, uid, companyId);
@@ -34,28 +35,13 @@ async function sopHistory(db, uid, companyId, kind, cursor) {
   }
   const snap = await query.limit(200).get();
   let items = rows(snap);
-  if (
-    !manage &&
-    user.role === "technician" &&
-    company.businessSize === "enterprise"
-  ) {
-    const blocks = await ref
-        .collection("blocks")
-        .where("assignedTechnicianId", "==", uid)
-        .get(),
-      allowed = new Set(blocks.docs.map((d) => d.id));
-    if (kind === "adoptions")
-      items = items.map((item) => ({
-        ...item,
-        targets: (item.targets || []).filter(
-          (t) => t.scope === "company" || allowed.has(t.blockId),
-        ),
-      }));
-    else if (!library)
-      items = items.filter(
-        (item) =>
-          item.target.scope === "company" || allowed.has(item.target.blockId),
-      );
+  if (!manage && user.role === "technician") {
+    const allowed = async (target) => target.scope === "company" || (await targetTechnician({}, ref, company, target)) === uid;
+    if (kind === "adoptions") {
+      items = await Promise.all(items.map(async (item) => ({ ...item, targets: (await Promise.all((item.targets || []).map(async (target) => await allowed(target) ? target : null))).filter(Boolean) })));
+    } else if (!library) {
+      items = (await Promise.all(items.map(async (item) => await allowed(item.target) ? item : null))).filter(Boolean);
+    }
   }
   return {
     items,

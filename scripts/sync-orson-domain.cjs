@@ -50,6 +50,7 @@ function compile(name) {
   "harvestCalculations",
   "physicalPondIdentity",
   "enterpriseCycles",
+  "pondAssignments",
   "orsonAgentContract",
   "orsonEvidence",
 ].forEach(compile);

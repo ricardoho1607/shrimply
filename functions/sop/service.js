@@ -1,4 +1,6 @@
 "use strict";
+const { filterPondRecordsForUser, getPondTechnicianId } = require("../shared/orsonDomain/pondAssignments");
+const { targetTechnician } = require("./assignments");
 const { HttpsError } = require("firebase-functions/v2/https");
 const { assertCompanyMemberForCallable } = require("../shared/companyAccess");
 const {
@@ -143,6 +145,7 @@ function createSopService(db, storage) {
         .orderBy("createdAt", "desc")
         .limit(100)
         .get(),
+      ref.collection("cycles").get(),
     ]);
     const sourceSets = await Promise.all([
       ref.collection("feeds").get(),
@@ -176,16 +179,18 @@ function createSopService(db, storage) {
         .filter(Boolean)
         .map((uid) => db.doc(`users/${uid}`).get()),
     );
-    const isScoped =
-      a.user.role === "technician" &&
-      a.company.businessSize === "enterprise" &&
-      !a.manage;
-    const blocks = rows(sets[4]).filter(
-        (b) => !isScoped || b.assignedTechnicianId === uid,
-      ),
-      blockIds = new Set(blocks.map((b) => b.id));
-    const ponds = rows(sets[6]).filter(
-      (p) => !isScoped || blockIds.has(p.blockId),
+    const isScoped = a.user.role === "technician" && !a.manage;
+    const assignmentScope = { businessSize: a.company.businessSize, role: a.user.role, userId: uid,
+      companyOwnerId: a.company.ownerId, blocks: rows(sets[4]), cycles: rows(sets[9]) };
+    const blocks = rows(sets[4]).filter((b) => !isScoped || b.assignedTechnicianId === uid);
+    const blockIds = new Set(blocks.map((b) => b.id));
+    const ponds = filterPondRecordsForUser(rows(sets[6]), assignmentScope);
+    const pondIds = new Set(ponds.map((p) => p.id));
+    const physicalPonds = filterPondRecordsForUser(rows(sets[5]), assignmentScope, { ponds: rows(sets[6]) });
+    const physicalIds = new Set(physicalPonds.map((p) => p.id));
+    const targetAllowed = (target) => !isScoped || target?.scope === 'company' || (
+      a.company.businessSize === 'enterprise' ? blockIds.has(target?.blockId)
+        : target?.scope === 'pond' && (target.pondId ? pondIds.has(target.pondId) : physicalIds.has(target.physicalPondId || target.id))
     );
     let summary;
     if (a.manage) {
@@ -256,26 +261,14 @@ function createSopService(db, storage) {
           : {
               ...ad,
               targets: (ad.targets || []).filter(
-                (t) => t.assigneeId === uid || blockIds.has(t.blockId),
+                (t) => targetAllowed(t) && (t.assigneeId === uid || (isScoped && t.scope !== "company")),
               ),
             },
       ),
-      tasks: rows(sets[2]).filter(
-        (t) =>
-          !isScoped ||
-          t.target?.scope === "company" ||
-          blockIds.has(t.target?.blockId),
-      ),
-      issues: rows(sets[3]).filter(
-        (t) =>
-          !isScoped ||
-          t.target?.scope === "company" ||
-          blockIds.has(t.target?.blockId),
-      ),
+      tasks: rows(sets[2]).filter((t) => targetAllowed(t.target)),
+      issues: rows(sets[3]).filter((t) => targetAllowed(t.target)),
       blocks,
-      physicalPonds: rows(sets[5]).filter(
-        (p) => !isScoped || blockIds.has(p.blockId),
-      ),
+      physicalPonds,
       ponds: ponds.map((p) => ({
         id: p.id,
         pondName: p.pondName,
@@ -305,9 +298,9 @@ function createSopService(db, storage) {
     company,
     allowEmptyMembership = false,
   ) {
-    const [physicalSnap, pondSnap, blockSnap, stageSnap, existingSnap] =
+    const [physicalSnap, pondSnap, blockSnap, stageSnap, existingSnap, cycleSnap] =
       await Promise.all(
-        ["physicalPonds", "ponds", "blocks", "sopStages", "sopAdoptions"].map(
+        ["physicalPonds", "ponds", "blocks", "sopStages", "sopAdoptions", "cycles"].map(
           (name) => tx.get(ref.collection(name)),
         ),
       );
@@ -386,8 +379,7 @@ function createSopService(db, storage) {
           `${p.pondName || p.id} has no active cycle. Choose a standing procedure to include preparation ponds.`,
         );
       }
-      const block = blocks.find((b) => b.id === p.blockId),
-        stage =
+      const stage =
           stages.find((s) => s.id === p.id)?.stage ||
           (active ? "growout" : "preparation");
       targets.push({
@@ -400,7 +392,7 @@ function createSopService(db, storage) {
         name: p.pondName || p.id,
         stage,
         stockingDate: active?.docStart || "",
-        assigneeId: block?.assignedTechnicianId || managerId,
+        assigneeId: getPondTechnicianId(active || { id: p.id, blockId: p.blockId }, { businessSize: company.businessSize, blocks, cycles: rows(cycleSnap) }) || managerId,
       });
     }
     if (definition.steps.some((s) => s.scope === "block"))
@@ -1394,16 +1386,12 @@ function createSopService(db, storage) {
           if (!source.exists) fail("not-found", "Task scope no longer exists.");
           const data = source.data(),
             blockId = input.scope === "block" ? targetId : data.blockId || "";
-          const block = blockId
-            ? (await tx.get(ref.collection("blocks").doc(blockId))).data()
-            : null;
           if (
             !manageNow &&
-            c.businessSize === "enterprise" &&
             u.role === "technician" &&
-            block?.assignedTechnicianId !== uid
+            (await targetTechnician(tx, ref, c, { scope: input.scope, id: targetId, blockId })) !== uid
           )
-            fail("permission-denied", "Task is outside your block.");
+            fail("permission-denied", "Task is outside your pond assignment.");
           target = {
             ...target,
             id: targetId,
@@ -1475,18 +1463,9 @@ function createSopService(db, storage) {
         if (!s.exists) fail("not-found", "Task not found.");
         const task = s.data();
         if (input.action !== "submitEvidence") expected(task);
-        if (
-          !manageNow &&
-          c.businessSize === "enterprise" &&
-          u.role === "technician" &&
-          task.target.scope !== "company"
-        ) {
-          const block = await tx.get(
-            ref.collection("blocks").doc(task.target.blockId || "missing"),
-          );
-          if (block.data()?.assignedTechnicianId !== uid)
-            fail("permission-denied", "Your block assignment changed.");
-        }
+        if (!manageNow && u.role === "technician" && task.target.scope !== "company"
+          && (await targetTechnician(tx, ref, c, task.target)) !== uid)
+          fail("permission-denied", "Your pond assignment changed.");
         if (!manageNow && !task.visibleTo.includes(uid))
           fail("permission-denied", "This task is outside your assignment.");
         if (["waived", "cancelled"].includes(task.status))
@@ -1784,17 +1763,9 @@ function createSopService(db, storage) {
           ref.collection("physicalPonds").doc(targetId),
         );
         if (!physical.exists) fail("not-found", "Pond no longer exists.");
-        if (
-          !manageNow &&
-          c.businessSize === "enterprise" &&
-          u.role === "technician"
-        ) {
-          const block = await tx.get(
-            ref.collection("blocks").doc(physical.data().blockId || "missing"),
-          );
-          if (block.data()?.assignedTechnicianId !== uid)
-            fail("permission-denied", "Pond is outside your block.");
-        }
+        if (!manageNow && u.role === "technician"
+          && (await targetTechnician(tx, ref, c, { scope: "pond", id: targetId, blockId: physical.data().blockId })) !== uid)
+          fail("permission-denied", "Pond is outside your assignment.");
         if (!SOP_STAGES.includes(input.stage))
           fail("invalid-argument", "Invalid production stage.");
         const tasks = await tx.get(ref.collection("tasks"));

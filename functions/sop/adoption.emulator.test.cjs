@@ -390,3 +390,60 @@ test("measured checks and inactive measured branches still reconcile history; in
   ])
     assert.equal(isFullyValidManualOnly(def), false);
 });
+
+async function ordinaryFixture() {
+  const f = await fixture();
+  await f.base.update({businessSize: 'large'});
+  await f.base.collection('cycles').doc('assigned-cycle').set({assignedTechnicianId: f.tech});
+  for(const id of ['a','b']) {
+    await f.base.collection('ponds').doc(`${id}-current`).update({cycleId:'assigned-cycle',blockId:''});
+    await f.base.collection('physicalPonds').doc(id).update({blockId:''});
+  }
+  await f.base.collection('physicalPonds').doc('other').set({pondName:'OTHER',activePondId:'other-current'});
+  await f.base.collection('ponds').doc('other-current').set({physicalPondId:'other',cycleId:'unassigned-cycle',cycleStatus:'active'});
+  return f;
+}
+test('ordinary two-pond cycle sends SOP tasks to its technician and scopes the workspace',async()=>{
+  const f=await ordinaryFixture();
+  const preview=await f.command('previewAdoption',f.settings);
+  assert.deepEqual(preview.targets.map(t=>t.assigneeId),[f.tech,f.tech]);
+  const activated=await f.command('activate',{...f.settings,expectedVersionId:preview.versionId});
+  const runtime=createSopRuntime(db);
+  await runtime.tickAdoption(f.companyId,activated.adoptionId,f.now);
+  const workspace=await createSopService(db).snapshot(f.tech,f.companyId);
+  assert.deepEqual(workspace.ponds.map(p=>p.id).sort(),['a-current','b-current']);
+  assert.deepEqual(workspace.physicalPonds.map(p=>p.id).sort(),['a','b']);
+  assert.equal(workspace.tasks.length,4);
+  for(const task of workspace.tasks) {assert.equal(task.assigneeId,f.tech);assert.deepEqual(task.visibleTo.sort(),[f.owner,f.tech].sort());}
+  assert.equal(workspace.adoptions[0].targets.length,2);
+  assert.ok(workspace.adoptions[0].targets.every(target => target.assigneeId === f.tech));
+  await assert.rejects(f.command('manualTask',{scope:'pond',targetId:'other',title:'Outside',instructions:'',dueAt:f.now+60000},f.tech),{code:'permission-denied'});
+  await f.command('manualTask',{scope:'pond',targetId:'a',title:'Own pond',instructions:'',dueAt:f.now+60000},f.tech);
+  const ownerWorkspace=await createSopService(db).snapshot(f.owner,f.companyId);
+  assert.equal(ownerWorkspace.ponds.length,3);
+});
+test('ordinary assignment reconciliation repairs existing owner tasks without duplicates and revocation blocks stale access',async()=>{
+  const f=await ordinaryFixture();
+  await f.base.collection('cycles').doc('assigned-cycle').update({assignedTechnicianId:null});
+  const preview=await f.command('previewAdoption',f.settings);
+  const activated=await f.command('activate',{...f.settings,expectedVersionId:preview.versionId});
+  const runtime=createSopRuntime(db);
+  await runtime.tickAdoption(f.companyId,activated.adoptionId,f.now);
+  assert.equal((await createSopService(db).snapshot(f.tech,f.companyId)).tasks.length,0);
+  const before=await f.base.collection('tasks').get();
+  await f.base.collection('cycles').doc('assigned-cycle').update({assignedTechnicianId:f.tech});
+  await runtime.tickAdoption(f.companyId,activated.adoptionId,f.now+1000);
+  const after=await f.base.collection('tasks').get();
+  assert.deepEqual(after.docs.map(d=>d.id),before.docs.map(d=>d.id));
+  const workspace=await createSopService(db).snapshot(f.tech,f.companyId);
+  assert.equal(workspace.tasks.length,4);
+  assert.equal(workspace.adoptions[0].targets.length,2);
+  assert.ok(workspace.adoptions[0].targets.every(target => target.assigneeId === f.tech));
+  const task=workspace.tasks[0];
+  await f.base.collection('cycles').doc('assigned-cycle').update({assignedTechnicianId:null});
+  const revoked=await createSopService(db).snapshot(f.tech,f.companyId);
+  assert.equal(revoked.ponds.length,0);assert.equal(revoked.tasks.length,0);assert.equal(revoked.physicalPonds.length,0);
+  await assert.rejects(f.command('submitEvidence',{taskId:task.id,expectedRevision:task.revision,notes:'Attempt after revocation',attachments:[],observedAt:new Date(f.now).toISOString()},f.tech),{code:'permission-denied'});
+  const history=await require('./history').sopHistory(db,f.tech,f.companyId,'tasks');
+  assert.equal(history.items.length,0);
+});

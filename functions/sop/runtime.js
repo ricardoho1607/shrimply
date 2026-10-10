@@ -1,4 +1,5 @@
 "use strict";
+const { getPondTechnicianId } = require("../shared/orsonDomain/pondAssignments");
 const {
   scheduledOccurrence,
   evaluateSopStep,
@@ -121,6 +122,7 @@ function createSopRuntime(db) {
       snap = await adRef.get();
     if (!snap.exists || snap.data().status !== "active") return;
     const ad = { id: adId, ...snap.data() };
+    await refreshAssignments(companyId);
     if (
       !isFullyValidManualOnly(ad.definition) &&
       (!ad.baselineReconciledAt || now - ad.baselineReconciledAt > 6 * 3600000)
@@ -159,10 +161,13 @@ function createSopRuntime(db) {
         );
       await adRef.update({ baselineReconciledAt: now });
     }
-    const [stageSnap, pondSnap, taskSnap] = await Promise.all([
+    const [stageSnap, pondSnap, taskSnap, cycleSnap, blockSnap, companySnap] = await Promise.all([
       ref.collection("sopStages").get(),
       ref.collection("ponds").get(),
       ref.collection("tasks").where("adoptionId", "==", adId).get(),
+      ref.collection("cycles").get(),
+      ref.collection("blocks").get(),
+      ref.get(),
     ]);
     const stages = rows(stageSnap),
       ponds = rows(pondSnap),
@@ -197,7 +202,7 @@ function createSopRuntime(db) {
           });
       return;
     }
-    if (ad.blockIds?.length) {
+    if (ad.blockIds?.length || ad.pondIds?.length) {
       const { createSopService } = require("./service");
       const membership = await db.runTransaction(async (tx) =>
         createSopService(db).resolveTargets(
@@ -301,6 +306,7 @@ function createSopRuntime(db) {
           return null;
         return {
           ...target,
+          assigneeId: getPondTechnicianId(active || { id: target.id, blockId: target.blockId }, { businessSize: companySnap.data()?.businessSize, blocks: rows(blockSnap), cycles: rows(cycleSnap) }) || ad.managerId,
           pondId: active?.id || "",
           cycleId: active?.pondCycleId || active?.cycleId || active?.id || "",
           stockingDate: active?.docStart || "",
@@ -987,7 +993,7 @@ function createSopRuntime(db) {
     const ref = base(companyId),
       company = (await ref.get()).data();
     if (!company) return;
-    const [physical, blocks, tasks, issues, users] = await Promise.all([
+    const [physical, blocks, tasks, issues, users, productionPonds, cycles] = await Promise.all([
       ref.collection("physicalPonds").get(),
       ref.collection("blocks").get(),
       ref.collection("tasks").get(),
@@ -997,9 +1003,13 @@ function createSopRuntime(db) {
           db.doc(`users/${uid}`).get(),
         ),
       ),
+      ref.collection("ponds").get(),
+      ref.collection("cycles").get(),
     ]);
     const ponds = rows(physical),
       blockRows = rows(blocks),
+      productionRows = rows(productionPonds),
+      cycleRows = rows(cycles),
       members = new Map(
         users
           .filter(
@@ -1026,22 +1036,26 @@ function createSopRuntime(db) {
           )
             ? data.managerId
             : company.ownerId;
+      const sourcePond = target.pondId
+        ? productionRows.find((p) => p.id === target.pondId)
+        : productionRows.find((p) => p.id === ponds.find((physical) => physical.id === target.id)?.activePondId);
+      const assignedTechnician = target.scope === "pond"
+        ? getPondTechnicianId(sourcePond || { id: target.id, blockId: target.blockId }, { businessSize: company.businessSize, blocks: blockRows, cycles: cycleRows })
+        : block?.assignedTechnicianId;
       const candidate =
         snapshot.ref.parent.id === "tasks" && !data.step
           ? data.assigneeId || manager
-          : data.step?.assigneeId || block?.assignedTechnicianId || manager;
+          : data.step?.assigneeId || assignedTechnician || manager;
       const user = members.get(candidate),
         allowed =
           !!user &&
           !user.founderAccessSuspended &&
-          (company.businessSize !== "enterprise" ||
-            user.role !== "technician" ||
-            target.scope === "company" ||
-            block?.assignedTechnicianId === candidate);
+          (user.role !== "technician" || target.scope === "company" || assignedTechnician === candidate);
       const assignee = allowed ? candidate : manager,
         visibleTo = [...new Set([assignee, manager])];
       if (
         JSON.stringify(visibleTo) === JSON.stringify(data.visibleTo) &&
+        (snapshot.ref.parent.id !== "tasks" || data.assigneeId === assignee) &&
         target.blockId === data.target.blockId &&
         data.managerId === manager
       )
@@ -1098,8 +1112,9 @@ function createSopRuntime(db) {
       return true;
     });
     if (!accepted) return;
-    if (["ponds", "physicalPonds", "blocks"].includes(kind))
+    if (["ponds", "physicalPonds", "blocks", "cycles"].includes(kind))
       await refreshAssignments(companyId);
+    if (kind === "cycles") return;
     const entries = projectEvidence(kind, documentId, data, receivedAt),
       current = await ref
         .collection("sopEvidence")

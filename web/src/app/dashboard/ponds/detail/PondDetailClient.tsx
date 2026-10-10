@@ -32,15 +32,12 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { onAuthStateChanged } from 'firebase/auth';
 import {
   doc,
-  onSnapshot,
   runTransaction,
   deleteDoc,
   query,
   collection,
-  orderBy,
   serverTimestamp,
   getDocs,
   where,
@@ -65,7 +62,7 @@ import { formatTechnicianLabel, resolveCycleTechnicianId } from '../../../../../
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import { FARM_OPERATIONAL_DAY_ROLLOVER_HOUR } from '../../../../../../shared/farmDate';
 import { hasFinalHarvestForPondCycle, type HarvestType } from '../../../../../../shared/harvestCalculations';
-import { useCompanyBlocks } from '@/hooks/useDashboardData';
+import { useCompanyBlocks, useCompanyPonds, useCompanyCycles } from '@/hooks/useDashboardData';
 import {
   getAssignedEnterpriseBlockIds,
   type FarmBlock,
@@ -307,20 +304,20 @@ const GrowthChart = ({ data, emptyMessage }: { data: { x: number, y: number }[];
 
 export default function PondDetailClient() {
   const { save, busy: savePending } = useSaveOperation();
-  const { company } = useAuth();
+  const { user, company } = useAuth();
   const { t } = useLanguage();
   const copy = t.pondDetail;
   const searchParams = useSearchParams();
   const id = searchParams.get('id');
   const requestedAction = searchParams.get('action');
   const router = useRouter();
-  const [pond, setPond] = useState<Pond | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [companyId, setCompanyId] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<string | undefined>();
+  const { data: scopedPonds, loading: pondsLoading, companyId } = useCompanyPonds<Pond>();
+  const { data: cycles, loading: cyclesLoading } = useCompanyCycles<FarmCycle>('asc');
+  const pond = useMemo(() => scopedPonds.find((item) => item.id === id) || null, [scopedPonds, id]);
+  const loading = pondsLoading || cyclesLoading;
+  const userRole = user?.role;
   const today = useFarmDateKey(company?.timeZone);
   const operationalToday = useFarmDateKey(company?.timeZone, FARM_OPERATIONAL_DAY_ROLLOVER_HOUR);
-  const [cycles, setCycles] = useState<FarmCycle[]>([]);
   const { technicians: companyTechnicians } = useCompanyTechnicians(company?.businessSize === 'enterprise' ? null : companyId, auth.currentUser?.uid);
   const [isSamplingModalOpen, setSamplingModalOpen] = useState(requestedAction === 'sampling');
   const [isMortalityModalOpen, setMortalityModalOpen] = useState(requestedAction === 'mortality');
@@ -385,70 +382,6 @@ export default function PondDetailClient() {
     return () => document.removeEventListener('pointerdown', closeRecordMenu);
   }, [isRecordMenuOpen]);
 
-  useEffect(() => {
-    let unsubUser: (() => void) | null = null;
-    let unsubPond: (() => void) | null = null;
-    let unsubCycles: (() => void) | null = null;
-    let currentCompanyId: string | null = null;
-
-    const cleanCompanyListeners = () => {
-      if (unsubPond) unsubPond();
-      if (unsubCycles) unsubCycles();
-      unsubPond = null;
-      unsubCycles = null;
-    };
-
-    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (unsubUser) unsubUser();
-      cleanCompanyListeners();
-      unsubUser = null;
-      currentCompanyId = null;
-
-      if (firebaseUser) {
-        unsubUser = onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          const userData = uDoc.data();
-          const cid = userData?.companyId;
-          setUserRole(userData?.role);
-          setCompanyId(cid);
-          if (cid && cid !== currentCompanyId) {
-            cleanCompanyListeners();
-            currentCompanyId = cid;
-            // Listen to Pond
-            unsubPond = onSnapshot(doc(db, 'companies', cid, 'ponds', id as string), (snapshot) => {
-              if (snapshot.exists()) {
-                setPond({ id: snapshot.id, ...snapshot.data() } as Pond);
-              } else {
-                setPond(null);
-              }
-              setLoading(false);
-            });
-
-            const qCycles = query(collection(db, 'companies', cid, 'cycles'), orderBy('createdAt', 'asc'));
-            unsubCycles = onSnapshot(qCycles, (snapshot) => {
-              setCycles(snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as FarmCycle)));
-            });
-          } else if (!cid) {
-            cleanCompanyListeners();
-            currentCompanyId = null;
-            setPond(null);
-            setCycles([]);
-            setLoading(false);
-          }
-        });
-      } else {
-        setPond(null);
-        setCycles([]);
-        setCompanyId(null);
-        setUserRole(undefined);
-        setLoading(false);
-      }
-    });
-    return () => {
-      unsubAuth();
-      if (unsubUser) unsubUser();
-      cleanCompanyListeners();
-    };
-  }, [id]);
   const isEnterpriseTechnician = company?.businessSize === 'enterprise' && userRole === 'technician';
   const hasPondAccess = !isEnterpriseTechnician
     || (typeof pond?.blockId === 'string' && assignedBlockIds.has(pond.blockId));

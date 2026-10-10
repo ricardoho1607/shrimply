@@ -1,3 +1,4 @@
+import { filterPondRecordsForUser } from '../../shared/pondAssignments';
 import { assertSopStageGate, previewSopPondChange } from '../services/sopGuards';
 // app/(tabs)/index.tsx - Fully translated version with keyboard handling
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -18,7 +19,7 @@ import { hasFinalHarvestForPondCycle } from '../../shared/harvestCalculations';
 import { hasFarmPermission } from '../../shared/permissions';
 import { getEnterpriseStockingDateRange } from '../../shared/enterpriseCycleSetup';
 import {
-  filterEnterpriseRecordsForUser,
+
   type FarmBlock,
 } from '../../shared/enterpriseBlocks';
 import EnterpriseDashboard from '../components/enterprise/EnterpriseCycleDashboard';
@@ -307,18 +308,20 @@ export default function PondManagementScreen() {
     if (user?.role === 'technician') return enterpriseBlocks.blocksAssignedToUser;
     return enterpriseBlocks.blocks;
   }, [canManagePonds, enterpriseBlocks.blocks, enterpriseBlocks.blocksAssignedToUser, isEnterpriseFarm, user?.role]);
-  const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
+  const accessiblePonds = useMemo(() => filterPondRecordsForUser(ponds, {
     businessSize: company?.businessSize,
     role: user?.role,
     userId: user?.uid,
     blocks: enterpriseBlocks.blocks,
-  }), [company?.businessSize, enterpriseBlocks.blocks, ponds, user?.role, user?.uid]);
-  const accessiblePhysicalPonds = useMemo(() => filterEnterpriseRecordsForUser(physicalPonds, {
+    cycles, companyOwnerId: company?.ownerId,
+  }), [cycles, company?.ownerId, company?.businessSize, enterpriseBlocks.blocks, ponds, user?.role, user?.uid]);
+  const accessiblePhysicalPonds = useMemo(() => filterPondRecordsForUser(physicalPonds, {
     businessSize: company?.businessSize,
     role: user?.role,
     userId: user?.uid,
     blocks: enterpriseBlocks.blocks,
-  }), [company?.businessSize, enterpriseBlocks.blocks, physicalPonds, user?.role, user?.uid]);
+    cycles, companyOwnerId: company?.ownerId,
+  }, { ponds }), [cycles, company?.ownerId, company?.businessSize, enterpriseBlocks.blocks, ponds, physicalPonds, user?.role, user?.uid]);
   const activePonds = useMemo(
     () => accessiblePonds.filter(isPondCycleActive).sort(compareByPondName),
     [accessiblePonds]
@@ -389,7 +392,8 @@ export default function PondManagementScreen() {
     };
   }, [accessiblePonds, cycles.length, t.farmCycle.currentCycle]);
   const accessibleFarmCycles = useMemo(() => {
-    if (!isEnterpriseFarm || user?.role !== 'technician') return cycles;
+    if (user?.role !== 'technician' || user.uid === company?.ownerId) return cycles;
+    if (!isEnterpriseFarm) return cycles.filter((cycle) => cycle.assignedTechnicianId === user.uid);
     const assignedBlockIds = new Set(availableEnterpriseBlocks.map((block) => block.id));
     return cycles.filter((cycle) => (
       cycle.blockIds?.some((blockId) => assignedBlockIds.has(blockId))
@@ -397,7 +401,7 @@ export default function PondManagementScreen() {
       (cycle.blockId && assignedBlockIds.has(cycle.blockId))
       || (!cycle.blockId && accessiblePonds.some((pond) => pond.cycleId === cycle.id))
     ));
-  }, [accessiblePonds, availableEnterpriseBlocks, cycles, isEnterpriseFarm, user?.role]);
+  }, [accessiblePonds, availableEnterpriseBlocks, cycles, isEnterpriseFarm, company?.ownerId, user]);
   const openAccessibleFarmCycles = useMemo(
     () => accessibleFarmCycles.filter((cycle) => ['planning', 'stocking', 'active'].includes(cycle.status)),
     [accessibleFarmCycles],

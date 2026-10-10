@@ -1,6 +1,7 @@
+import { filterPondRecordsForUser } from '../shared/pondAssignments';
 import { reportCalculationOptions, buildPondReportSnapshot } from '../shared/reportSnapshots';
 import { calculatePondMetricsWithHarvest as calculateReportMetrics } from '../shared/pondCalculations';
-import { filterEnterpriseRecordsForUser } from '../shared/enterpriseBlocks';
+
 import { useEnterpriseBlocks } from './hooks/useEnterpriseBlocks';
 // app/shrimp-reports.tsx - Optimized with Android Consistency
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -31,6 +32,7 @@ export default function ShrimpReportsScreen() {
   const { user, company } = useAuth();
   const farmToday = useFarmDateKey(company?.timeZone, FARM_OPERATIONAL_DAY_ROLLOVER_HOUR);
   const { t, currentLanguage } = useLanguage();
+  const cycles = usePondStore((state) => state.cycles);
   const { ponds, harvestRecords, calculatePondMetricsWithHarvest } = usePondStore();
   const enterpriseBlocks = useEnterpriseBlocks(company?.businessSize === 'enterprise' ? company.id : undefined, user?.uid);
   const [loading, setLoading] = useState(false);
@@ -39,8 +41,8 @@ export default function ShrimpReportsScreen() {
   const canExportReports = hasFarmPermission(user, 'exportReports', company?.ownerId);
 
   const activePonds = useMemo(
-    () => filterEnterpriseRecordsForUser(ponds, { businessSize: company?.businessSize, role: user?.role, userId: user?.uid, blocks: enterpriseBlocks.blocks }).filter(pond => isPondCycleActive(pond) && getPondCurrentDoc(pond, company?.timeZone, farmToday) >= 0),
-    [company?.timeZone, company?.businessSize, user?.role, user?.uid, enterpriseBlocks.blocks, farmToday, ponds]
+    () => filterPondRecordsForUser(ponds, { businessSize: company?.businessSize, role: user?.role, userId: user?.uid, blocks: enterpriseBlocks.blocks, cycles, companyOwnerId: company?.ownerId }).filter(pond => isPondCycleActive(pond) && getPondCurrentDoc(pond, company?.timeZone, farmToday) >= 0),
+    [cycles, company?.ownerId, company?.timeZone, company?.businessSize, user?.role, user?.uid, enterpriseBlocks.blocks, farmToday, ponds]
   );
 
   const pondMembership = activePonds.map(pond => pond.id).sort().join('|');

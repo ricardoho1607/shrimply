@@ -21,7 +21,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { FARM_OPERATIONAL_DAY_ROLLOVER_HOUR, getFarmDateKey } from '../shared/farmDate';
-import { getAssignedEnterpriseBlockIds } from '../shared/enterpriseBlocks';
+import { filterPondRecordsForUser } from '../shared/pondAssignments';
 import { useEnterpriseBlocks } from './hooks/useEnterpriseBlocks';
 import { useCompanyTechnicians } from './hooks/useCompanyTechnicians';
 import CycleSelector from './components/forms/CycleSelector';
@@ -517,10 +517,6 @@ export default function PondDetails() {
     user?.uid,
   );
   const { technicians: companyTechnicians } = useCompanyTechnicians(company?.businessSize === 'enterprise' ? undefined : company?.id, user?.uid);
-  const assignedBlockIds = useMemo(
-    () => getAssignedEnterpriseBlockIds(enterpriseBlocks.blocks, user?.uid),
-    [enterpriseBlocks.blocks, user?.uid],
-  );
   
   const { 
     getPondById, 
@@ -553,8 +549,10 @@ export default function PondDetails() {
   });
 
   const nextPondSource = pondId ? getPondById(pondId as string) : undefined;
-  const canAccessCurrentPond = !isEnterpriseTechnician || (!enterpriseBlocks.loading
-    && typeof nextPondSource?.blockId === 'string' && assignedBlockIds.has(nextPondSource.blockId));
+  const canAccessCurrentPond = Boolean(nextPondSource && filterPondRecordsForUser([nextPondSource], {
+    businessSize: company?.businessSize, role: user?.role, userId: user?.uid, companyOwnerId: company?.ownerId,
+    blocks: enterpriseBlocks.blocks, cycles,
+  }).length);
   const accessiblePondSource = canAccessCurrentPond ? nextPondSource ?? null : null;
   const [previousPondSource, setPreviousPondSource] = useState<typeof accessiblePondSource | undefined>(undefined);
   if (previousPondSource !== accessiblePondSource) {

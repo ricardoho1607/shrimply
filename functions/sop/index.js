@@ -91,6 +91,7 @@ for (const kind of [
   "labReports",
   "physicalPonds",
   "blocks",
+  "cycles",
 ])
   exports[`onSop${kind[0].toUpperCase() + kind.slice(1)}Evidence`] =
     onDocumentWritten(

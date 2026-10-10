@@ -1,3 +1,4 @@
+import { filterPondRecordsForUser } from '../../shared/pondAssignments';
 import { SopObservationTimes } from '../components/SopObservationTimes';
 import { parseObservationTimes } from '../../shared/sop/observationTimes';
 import { labMeasurementLabel, validateLabRow } from '../../functions/shared/labMeasurementContract';
@@ -12,7 +13,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { db } from '../../config/firebase';
 import { getFarmDateKey } from '../../shared/farmDate';
-import { filterEnterpriseRecordsForUser, getEnterprisePondStatus, isEnterpriseOwner } from '../../shared/enterpriseBlocks';
+import { getEnterprisePondStatus, isEnterpriseOwner } from '../../shared/enterpriseBlocks';
 import EnterprisePondGrid from '../components/enterprise/EnterprisePondGrid';
 import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
 import { hasFarmPermission } from '../../shared/permissions';
@@ -157,6 +158,7 @@ export default function WaterQualityScreen() {
   const insets = useSafeAreaInsets();
   const { user, company } = useAuth();
   const { t } = useLanguage();
+  const cycles = usePondStore((state) => state.cycles);
   const { ponds, addWaterQuality } = usePondStore();
   const [sopTimes, setSopTimes] = useState<Record<string,string>>({});
   const canEditPonds = hasFarmPermission(user, 'recordPondData', company?.ownerId);
@@ -166,12 +168,13 @@ export default function WaterQualityScreen() {
     company?.businessSize === 'enterprise' ? company?.id : undefined,
     user?.uid,
   );
-  const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
+  const accessiblePonds = useMemo(() => filterPondRecordsForUser(ponds, {
     businessSize: company?.businessSize,
     role: user?.role,
     userId: user?.uid,
     blocks: enterpriseBlocks.blocks,
-  }), [company?.businessSize, enterpriseBlocks.blocks, ponds, user?.role, user?.uid]);
+    cycles, companyOwnerId: company?.ownerId,
+  }), [cycles, company?.ownerId, company?.businessSize, enterpriseBlocks.blocks, ponds, user?.role, user?.uid]);
   const activePonds = useMemo(() => accessiblePonds.filter(isPondCycleActive), [accessiblePonds]);
   const [activeView, setActiveView] = useState<'daily' | 'lab'>('daily');
   

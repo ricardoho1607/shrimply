@@ -17,6 +17,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
+import { filterPondRecordsForUser, type PondAssignmentRecord, type TechnicianAssignment } from '../../../shared/pondAssignments';
 import { isOperationalSummaryFresh } from '../../../shared/operationalSummary';
 
 type SnapshotState<T> = {
@@ -68,11 +69,14 @@ export function useDebouncedValue<T>(value: T, delay = 180) {
 
 function useCompanySubcollection<T>(
   collectionName: string,
-  constraints: QueryConstraint[] = EMPTY_CONSTRAINTS
+  constraints: QueryConstraint[] = EMPTY_CONSTRAINTS,
+  enabled = true
 ): SnapshotState<T> & ReturnType<typeof useCompanyId> {
   const dashboardContext = useCompanyId();
-  const { companyId } = dashboardContext;
-  const [state, setState] = useState<SnapshotState<T>>({
+  const { companyId, user, company } = dashboardContext;
+  const scope = JSON.stringify([companyId, user?.uid, user?.role, company?.ownerId, company?.businessSize]);
+  const [state, setState] = useState<SnapshotState<T> & { scope: string }>({
+    scope,
     data: [],
     loading: true,
     error: null,
@@ -86,21 +90,23 @@ function useCompanySubcollection<T>(
       });
     };
 
-    if (!companyId) {
-      deferIfActive(() => setState({ data: [], loading: false, error: null }));
+    if (!companyId || !enabled) {
+      deferIfActive(() => setState({ scope, data: [], loading: false, error: null }));
       return () => {
         isActive = false;
       };
     }
 
-    deferIfActive(() => setState((previous) => ({ ...previous, loading: true, error: null })));
+    deferIfActive(() => setState((previous) => ({ ...previous, scope, data: [], loading: true, error: null })));
 
     const ref = collection(db, 'companies', companyId, collectionName);
     const q = constraints.length > 0 ? query(ref, ...constraints) : query(ref);
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
+        if (!isActive) return;
         setState({
+          scope,
           data: snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as T)),
           loading: false,
           error: null,
@@ -108,7 +114,7 @@ function useCompanySubcollection<T>(
       },
       (error) => {
         console.error(`Error loading ${collectionName}:`, error);
-        setState((previous) => ({ ...previous, loading: false, error }));
+        if (isActive) setState({ scope, data: [], loading: false, error });
       }
     );
 
@@ -116,19 +122,32 @@ function useCompanySubcollection<T>(
       isActive = false;
       unsubscribe();
     };
-  }, [companyId, collectionName, constraints]);
+  }, [companyId, collectionName, constraints, scope, enabled]);
 
-  return { ...state, ...dashboardContext };
+  return { ...state, ...(state.scope !== scope ? { data: [], loading: Boolean(companyId), error: null } : {}), ...dashboardContext };
+}
+
+function useAssignedCompanyRecords<T>(collectionName: 'ponds' | 'physicalPonds', sort: 'asc' | 'desc') {
+  const constraints = useMemo(() => [orderBy('createdAt', sort)], [sort]);
+  const records = useCompanySubcollection<T>(collectionName, constraints);
+  const restricted = records.user?.role === 'technician' && records.user.uid !== records.company?.ownerId;
+  const cycles = useCompanySubcollection<TechnicianAssignment>('cycles', EMPTY_CONSTRAINTS, restricted);
+  const blocks = useCompanySubcollection<TechnicianAssignment>('blocks', EMPTY_CONSTRAINTS, restricted);
+  const ponds = useCompanySubcollection<PondAssignmentRecord>('ponds', EMPTY_CONSTRAINTS, restricted && collectionName === 'physicalPonds');
+  const scope = { businessSize: records.company?.businessSize, role: records.user?.role, userId: records.user?.uid,
+    companyOwnerId: records.company?.ownerId, cycles: cycles.data, blocks: blocks.data };
+  return { ...records, data: filterPondRecordsForUser(records.data as (T & PondAssignmentRecord)[], scope,
+    collectionName === 'physicalPonds' ? { ponds: ponds.data } : undefined),
+    loading: records.loading || (restricted && (cycles.loading || blocks.loading || (collectionName === 'physicalPonds' && ponds.loading))),
+    error: records.error || (restricted ? cycles.error || blocks.error || ponds.error : null) };
 }
 
 export function useCompanyPonds<T>(sort: 'asc' | 'desc' = 'desc') {
-  const constraints = useMemo(() => [orderBy('createdAt', sort)], [sort]);
-  return useCompanySubcollection<T>('ponds', constraints);
+  return useAssignedCompanyRecords<T>('ponds', sort);
 }
 
 export function useCompanyPhysicalPonds<T>(sort: 'asc' | 'desc' = 'asc') {
-  const constraints = useMemo(() => [orderBy('createdAt', sort)], [sort]);
-  return useCompanySubcollection<T>('physicalPonds', constraints);
+  return useAssignedCompanyRecords<T>('physicalPonds', sort);
 }
 
 export function useCompanyBlocks<T>(sort: 'asc' | 'desc' = 'asc') {
@@ -138,7 +157,9 @@ export function useCompanyBlocks<T>(sort: 'asc' | 'desc' = 'asc') {
 
 export function useCompanyCycles<T>(sort: 'asc' | 'desc' = 'asc') {
   const constraints = useMemo(() => [orderBy('createdAt', sort)], [sort]);
-  return useCompanySubcollection<T>('cycles', constraints);
+  const state = useCompanySubcollection<T>('cycles', constraints);
+  const restricted = state.user?.role === 'technician' && state.company?.businessSize !== 'enterprise' && state.user.uid !== state.company?.ownerId;
+  return { ...state, data: restricted ? state.data.filter((cycle) => (cycle as TechnicianAssignment).assignedTechnicianId === state.user?.uid) : state.data };
 }
 
 export function useCompanyFeeds<T>() {
@@ -556,7 +577,7 @@ export function useInventoryFeeds<TFeed, TAdditive, TPond>() {
   const { companyId } = useCompanyId();
   const [feeds, setFeeds] = useState<TFeed[]>([]);
   const [additives, setAdditives] = useState<TAdditive[]>([]);
-  const [ponds, setPonds] = useState<TPond[]>([]);
+  const pondState = useCompanyPonds<TPond>('asc');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -572,7 +593,6 @@ export function useInventoryFeeds<TFeed, TAdditive, TPond>() {
       deferIfActive(() => {
         setFeeds([]);
         setAdditives([]);
-        setPonds([]);
         setLoading(false);
         setError(null);
       });
@@ -583,14 +603,13 @@ export function useInventoryFeeds<TFeed, TAdditive, TPond>() {
 
     let receivedFeeds = false;
     let receivedAdditives = false;
-    let receivedPonds = false;
     deferIfActive(() => {
       setLoading(true);
       setError(null);
     });
 
     const markReady = () => {
-      if (receivedFeeds && receivedAdditives && receivedPonds) setLoading(false);
+      if (receivedFeeds && receivedAdditives) setLoading(false);
     };
 
     const unsubFeeds = onSnapshot(
@@ -631,30 +650,14 @@ export function useInventoryFeeds<TFeed, TAdditive, TPond>() {
       }
     );
 
-    const unsubPonds = onSnapshot(
-      query(collection(db, 'companies', companyId, 'ponds'), orderBy('pondName', 'asc')),
-      (snapshot) => {
-        receivedPonds = true;
-        setPonds(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as TPond)));
-        markReady();
-      },
-      (snapshotError) => {
-        receivedPonds = true;
-        console.error('Error loading inventory ponds:', snapshotError);
-        setError(snapshotError);
-        markReady();
-      }
-    );
-
     return () => {
       isActive = false;
       unsubFeeds();
       unsubAdditives();
-      unsubPonds();
     };
   }, [companyId]);
 
-  return { feeds, additives, ponds, loading, error, companyId };
+  return { feeds, additives, ponds: pondState.data, loading: loading || pondState.loading, error: error || pondState.error, companyId };
 }
 
 export function useUnreadNotificationsCount(options: { enabled?: boolean } = {}) {
