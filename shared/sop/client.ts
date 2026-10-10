@@ -11,6 +11,7 @@ export interface SopDocument {
   definition: SopDefinition;
   revision: number;
   status: string;
+  createdBy?: string;
   approvedVersionId?: string;
   source?: { author: string; publicationId: string; versionId: string };
 }
@@ -21,12 +22,6 @@ export interface SopPublication {
   definition: SopDefinition;
   versionId: string;
   adoptionCount: number;
-}
-export interface SopVersion {
-  id: string;
-  definition: SopDefinition;
-  approvedAt: number;
-  approvedBy: string;
 }
 export interface SopIssue {
   id: string;
@@ -119,14 +114,13 @@ export interface SopClient {
   pending: string[];
   busy: boolean;
   refresh: () => Promise<void>;
-  versions: (
-    sopId: string,
-    cursor?: string,
-  ) => Promise<{ items: SopVersion[]; nextCursor: string }>;
   loadMore: (
     kind: "tasks" | "issues" | "sops" | "adoptions" | "community",
   ) => Promise<void>;
-  openAttachment: (attachment: SopAttachment) => Promise<void>;
+  openAttachment: (
+    attachment: SopAttachment,
+    download?: boolean,
+  ) => Promise<void>;
   command: (data: Record<string, unknown>) => Promise<Record<string, unknown>>;
   assist: (data: Record<string, unknown>) => Promise<Record<string, unknown>>;
   upload: (file: unknown, taskId?: string) => Promise<SopAttachment>;

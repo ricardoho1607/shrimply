@@ -7,11 +7,14 @@ const {
   defineBoolean,
   defineString,
 } = require("firebase-functions/params");
-const { access, checkDefinition, fail, id } = require("./service");
+const { access, fail, id } = require("./service");
 const { assessNarrative } = require("../shared/orsonDomain/sop/engine");
 const { hash } = require("./evidence");
 const { enforceFixedWindowLimits } = require("../abuseProtection");
 const key = defineSecret("MODEL_API_KEY");
+const {
+  SOP_ASSIST_TIMEOUT_SECONDS,
+} = require("../shared/orsonDomain/sop/timing");
 // Enable only after the labelled evaluator suite is run against the configured model.
 const calibrated = defineBoolean("SOP_NARRATIVE_CALIBRATED", {
   default: false,
@@ -34,10 +37,25 @@ const {
   SOP_NARRATIVE_FORMAT,
 } = require("./model");
 async function generate(prompt, format, files = []) {
-  return generateSopJson({ apiKey: key.value(), prompt, format, files });
+  try {
+    return await generateSopJson({
+      apiKey: key.value(),
+      prompt,
+      format,
+      files,
+    });
+  } catch (error) {
+    if (error?.code === "deadline-exceeded")
+      fail("deadline-exceeded", error.message);
+    throw error;
+  }
 }
 exports.assistSop = onCall(
-  { secrets: [key], timeoutSeconds: 150, memory: "512MiB" },
+  {
+    secrets: [key],
+    timeoutSeconds: SOP_ASSIST_TIMEOUT_SECONDS,
+    memory: "512MiB",
+  },
   async (request) => {
     const { companyId, mode } = request.data || {},
       uid = request.auth?.uid,
@@ -64,7 +82,7 @@ exports.assistSop = onCall(
     const db = admin.firestore(),
       ref = db.collection("companies").doc(companyId);
     if (mode === "draft") {
-      let text = String(request.data.text || "").slice(0, 40000),
+      let text = String(request.data.text || ""),
         parts = [];
       if (request.data.attachment) {
         const path = String(request.data.attachment.path || "");
@@ -89,26 +107,32 @@ exports.assistSop = onCall(
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
           text +=
-            "\n" +
-            (await require("mammoth").extractRawText({ buffer })).value.slice(
-              0,
-              40000,
-            );
+            "\n" + (await require("mammoth").extractRawText({ buffer })).value;
         else if (meta.contentType === "text/plain")
-          text += "\n" + buffer.toString("utf8").slice(0, 40000);
+          text += "\n" + buffer.toString("utf8");
         else fail("invalid-argument", "Import PDF, DOCX, or plain text.");
       }
       if (!text.trim() && !parts.length)
         fail("invalid-argument", "Describe or upload your SOP.");
+      if (text.length > 200000)
+        fail(
+          "invalid-argument",
+          "Source text exceeds 200,000 characters. Split it into chapters; no content was silently truncated.",
+        );
       const prompt = sopDraftPrompt(text, request.data.language || "en");
       let definition = await generate(prompt, SOP_DRAFT_FORMAT, parts);
-      const { validateSop } = require("../shared/orsonDomain/sop/engine");
       let warnings;
       try {
-        warnings = validateSop(definition);
-        definition = checkDefinition(definition, true);
-      } catch {
-        fail("data-loss", "The AI draft could not be validated. Try again.");
+        ({ definition, warnings } =
+          require("./draftValidation").prepareGeneratedSopDraft(definition));
+      } catch (error) {
+        fail(
+          "data-loss",
+          "The AI draft could not be validated. " +
+            (error?.code === "invalid-argument"
+              ? error.message
+              : "Try generating the draft again."),
+        );
       }
       return { definition, warnings, modelId: MODEL, requiresApproval: true };
     }
@@ -122,7 +146,9 @@ exports.assistSop = onCall(
         fail("invalid-argument", "Unsupported language.");
       const cache = ref
           .collection("sopTranslations")
-          .doc(hash([request.data.sopId, sop.revision, language])),
+          .doc(
+            hash([request.data.sopId, sop.revision, language, "document-v2"]),
+          ),
         old = await cache.get();
       if (old.exists) return old.data();
       const translated = await generate(
@@ -130,11 +156,10 @@ exports.assistSop = onCall(
         SOP_TRANSLATION_FORMAT,
       );
       if (
-        !Array.isArray(translated.steps) ||
-        translated.steps.length !== sop.definition.steps.length ||
-        translated.steps.some(
-          (step, index) => step.id !== sop.definition.steps[index].id,
-        )
+        require("../shared/orsonDomain/sop/translation").validateSopTranslation(
+          sop.definition,
+          translated,
+        ).length
       )
         fail(
           "data-loss",

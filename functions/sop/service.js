@@ -27,6 +27,30 @@ const text = (value, max = 10000) => {
 };
 const rows = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 function checkDefinition(value, draft = false) {
+  if (value?.content !== undefined) {
+    const { validateSopContent } = require("../shared/orsonDomain/sop/content");
+    const invalid = validateSopContent(value.content).filter(
+      (item) => !item.startsWith("Resolve omitted source content:"),
+    );
+    if (invalid.length) fail("invalid-argument", invalid.join("\n"));
+    value = {
+      ...value,
+      content: {
+        omissions: value.content.omissions,
+        sections: value.content.sections.map((section) => ({
+          id: section.id,
+          title: section.title,
+          body: section.body,
+          sourcePages: section.sourcePages,
+          tables: section.tables.map((table) => ({
+            title: table.title,
+            columns: table.columns,
+            rows: table.rows.map((row) => ({ cells: row.cells })),
+          })),
+        })),
+      },
+    };
+  }
   if (value && Array.isArray(value.steps)) {
     const { emptySopStep } = require("../shared/orsonDomain/sop/contracts");
     const shape = emptySopStep();
@@ -34,6 +58,7 @@ function checkDefinition(value, draft = false) {
       title: value.title,
       description: value.description,
       language: value.language,
+      ...(value.content !== undefined ? { content: value.content } : {}),
       attachments: Array.isArray(value.attachments)
         ? value.attachments.map((a) => ({
             path: String(a.path || ""),
@@ -66,7 +91,7 @@ function checkDefinition(value, draft = false) {
   const blocking = draft
     ? errors.filter(
         (e) =>
-          !/Set a farm-approved|Provide corrective guidance|Bind this check|Specify the inventory|Specify the analytical|Narrative checks need|Specify the required value/.test(
+          !/Set a farm-approved|Bind this check|Specify the inventory|Specify the analytical|Specify the required value|^Resolve omitted source content:/.test(
             e,
           ),
       )
@@ -444,8 +469,14 @@ function createSopService(db, storage) {
       a = await access(db, uid, companyId),
       ref = base(companyId),
       now = Date.now();
+    // Read-only feature negotiation on the same endpoint that will save the
+    // document. Older deployments must not silently strip new content fields.
+    if (input.action === "checkContentSupport")
+      return { ok: true, documentContentVersion: 1 };
     const actions = [
       "saveDraft",
+      "deleteSop",
+      "restoreSop",
       "copyPublication",
       "approve",
       "publish",
@@ -475,6 +506,8 @@ function createSopService(db, storage) {
       fail("invalid-argument", "Unknown SOP command.");
     const staffActions = [
       "saveDraft",
+      "deleteSop",
+      "restoreSop",
       "copyPublication",
       "manualTask",
       "submitEvidence",
@@ -644,11 +677,84 @@ function createSopService(db, storage) {
           },
         });
         result = { ok: true, sopId };
+      } else if (["deleteSop", "restoreSop"].includes(input.action)) {
+        const doc = ref.collection("sops").doc(id(input.sopId)),
+          s = await tx.get(doc);
+        if (!s.exists) fail("not-found", "SOP not found.");
+        const data = s.data();
+        expected(data);
+        if (
+          !manageNow &&
+          (data.createdBy !== uid ||
+            (data.deletedFromStatus || data.status) !== "draft")
+        )
+          fail(
+            "permission-denied",
+            "You may delete or restore your own drafts.",
+          );
+        if (input.action === "restoreSop") {
+          if (data.status !== "deleted")
+            fail("failed-precondition", "This SOP is not in Deleted SOPs.");
+          tx.update(doc, {
+            status:
+              data.deletedFromStatus === "approved" ? "approved" : "draft",
+            revision: data.revision + 1,
+            updatedAt: now,
+            deletedAt: null,
+            deletedBy: null,
+            deletedFromStatus: null,
+          });
+        } else {
+          if (!["draft", "approved"].includes(data.status))
+            fail("failed-precondition", "This SOP cannot be deleted.");
+          // Existing executions retain their approved snapshots. Public copies
+          // are withdrawn, while the company document and versions remain recoverable.
+          const publications = await tx.get(
+            db
+              .collection("communitySops")
+              .where("companyId", "==", companyId)
+              .where("sopId", "==", s.id),
+          );
+          if (publications.size > 200)
+            fail(
+              "resource-exhausted",
+              "Too many publications to withdraw in one change.",
+            );
+          for (const pub of publications.docs)
+            if (pub.data().status === "published") {
+              tx.update(pub.ref, {
+                status: "withdrawn",
+                withdrawnAt: now,
+                withdrawalReason: "Company SOP deleted.",
+              });
+              tx.set(
+                db.collection("sopWithdrawalJobs").doc(hash([pub.id, now])),
+                {
+                  publicationId: pub.id,
+                  status: "pending",
+                  cursor: "",
+                  createdAt: now,
+                  nextDueAt: now,
+                },
+              );
+            }
+          tx.update(doc, {
+            status: "deleted",
+            deletedFromStatus: data.status,
+            deletedAt: now,
+            deletedBy: uid,
+            revision: data.revision + 1,
+            updatedAt: now,
+          });
+        }
+        result = { ok: true, sopId: s.id };
       } else if (input.action === "saveDraft") {
         const sopId = input.sopId ? id(input.sopId) : hash([uid, operationId]),
           doc = ref.collection("sops").doc(sopId),
           s = await tx.get(doc);
         if (s.exists) expected(s.data());
+        if (s.data()?.status === "deleted")
+          fail("failed-precondition", "Restore this SOP before editing it.");
         if (s.exists && !manageNow && s.data().createdBy !== uid)
           fail("permission-denied", "You may edit your own drafts.");
         const definition = checkDefinition(input.definition, true);
@@ -689,6 +795,11 @@ function createSopService(db, storage) {
         const sopRef = ref.collection("sops").doc(id(input.sopId)),
           s = await tx.get(sopRef);
         if (!s.exists) fail("not-found", "SOP not found.");
+        if (s.data().status === "deleted")
+          fail(
+            "failed-precondition",
+            "Restore this SOP before approving or publishing it.",
+          );
         expected(s.data());
         if (
           preparedRevision !== undefined &&
@@ -830,7 +941,11 @@ function createSopService(db, storage) {
         } else if (input.sopId) {
           sopId = id(input.sopId);
           const s = await tx.get(ref.collection("sops").doc(sopId));
-          if (!s.exists || !s.data().approvedVersionId)
+          if (
+            !s.exists ||
+            s.data().status === "deleted" ||
+            !s.data().approvedVersionId
+          )
             fail("failed-precondition", "Approve the farm SOP first.");
           versionId = s.data().approvedVersionId;
           const v = await tx.get(

@@ -32,12 +32,18 @@ let env,
   clock = Date.parse("2026-10-08T06:00Z");
 const originalNow = Date.now;
 Date.now = () => clock;
-const command = (uid, data) =>
-  service.command(uid, {
+const command = (uid, data) => {
+  const payload = {
     companyId: "farm",
     operationId: `op-${Math.random().toString(36).slice(2)}`,
     ...data,
-  });
+  };
+  return data.action === "deleteSop"
+    ? require("./delete").createDeleteSopHandler((request) =>
+        service.command(request.auth?.uid, request.data),
+      )({ auth: { uid }, data: payload })
+    : service.command(uid, payload);
+};
 const get = async (name) =>
   (await db.collection(`companies/farm/${name}`).get()).docs.map((d) => ({
     id: d.id,
@@ -98,6 +104,7 @@ test.after(async () => {
   await env.cleanup();
   await deleteApp(adminApp);
 });
+
 let sopId, adoptionId;
 test("staff can draft but cannot approve, and commands are replay safe", async () => {
   const definition = {
@@ -884,4 +891,127 @@ test("a departing block member leaves future scope and unchanged membership does
   await runtime.tickAdoption("farm", adoptionId, clock);
   assert.equal((await ref.get()).data().revision, current.revision);
   assert.ok((await ref.collection("membershipRevisions").get()).size);
+});
+
+test("readable SOP content survives draft reload, approval, versions and publication copy", async () => {
+  const content = require("./fixtures/water-content.json");
+  const definition = {
+    title: "Source-content preservation fixture",
+    description: "Test fixture, not approved biological advice.",
+    language: "id",
+    content,
+    steps: [
+      {
+        ...emptySopStep(),
+        trigger: { ...emptySopStep().trigger, kind: "manual" },
+        check: { ...emptySopStep().check, operator: "present" },
+        correctiveInstructions: "Review findings with the manager.",
+      },
+    ],
+  };
+  const saved = await command("owner", { action: "saveDraft", definition });
+  const reloaded = (
+    await db.doc(`companies/farm/sops/${saved.sopId}`).get()
+  ).data();
+  assert.deepEqual(reloaded.definition.content, content);
+  await command("owner", {
+    action: "approve",
+    sopId: saved.sopId,
+    expectedRevision: reloaded.revision,
+  });
+  const history = await require("./versions").sopVersions(
+    db,
+    "owner",
+    "farm",
+    saved.sopId,
+  );
+  assert.deepEqual(history.items[0].definition.content, content);
+  const published = await command("owner", {
+    action: "publish",
+    sopId: saved.sopId,
+  });
+  const publication = (
+    await db.doc(`communitySops/${published.publicationId}`).get()
+  ).data();
+  assert.deepEqual(publication.definition.content, content);
+  const copy = await command("owner", {
+    action: "copyPublication",
+    publicationId: published.publicationId,
+  });
+  const copied = (
+    await db.doc(`companies/farm/sops/${copy.sopId}`).get()
+  ).data();
+  assert.deepEqual(copied.definition.content, content);
+});
+test("SOP deletion is recoverable, scoped, revision checked and withdraws publications", async () => {
+  const definition = {
+    title: "Recoverable procedure",
+    description: "Deletion regression fixture",
+    language: "en",
+    attachments: [],
+    steps: [
+      {
+        ...emptySopStep(),
+        check: { ...emptySopStep().check, operator: "present" },
+        correctiveInstructions: "Ask the manager to review.",
+      },
+    ],
+  };
+  const saved = await command("tech", { action: "saveDraft", definition });
+  const sopId = saved.sopId,
+    ref = db.doc(`companies/farm/sops/${sopId}`);
+  await assert.rejects(
+    command("other", { action: "deleteSop", sopId, expectedRevision: 1 }),
+    /own drafts/,
+  );
+  await assert.rejects(
+    command("stranger", { action: "deleteSop", sopId }),
+    /permission|company|member/i,
+  );
+  await assert.rejects(
+    command("tech", { action: "deleteSop", sopId, expectedRevision: 0 }),
+    /changed/,
+  );
+  await command("tech", { action: "deleteSop", sopId, expectedRevision: 1 });
+  assert.equal((await ref.get()).data().status, "deleted");
+  assert.deepEqual((await ref.get()).data().definition, definition);
+  await assert.rejects(
+    command("tech", { action: "saveDraft", sopId, definition }),
+    /Restore/,
+  );
+  await assert.rejects(
+    command("owner", { action: "approve", sopId }),
+    /Restore/,
+  );
+  await command("tech", { action: "restoreSop", sopId, expectedRevision: 2 });
+  assert.equal((await ref.get()).data().status, "draft");
+  await command("owner", { action: "approve", sopId });
+  const publication = await command("owner", { action: "publish", sopId });
+  await assert.rejects(
+    command("tech", { action: "deleteSop", sopId }),
+    /own drafts/,
+  );
+  await command("owner", { action: "deleteSop", sopId });
+  assert.equal(
+    (await db.doc(`communitySops/${publication.publicationId}`).get()).data()
+      .status,
+    "withdrawn",
+  );
+  assert.ok((await ref.collection("versions").get()).size);
+  const jobs = await db
+    .collection("sopWithdrawalJobs")
+    .where("publicationId", "==", publication.publicationId)
+    .get();
+  assert.equal(jobs.size, 1);
+  await assert.rejects(
+    command("owner", { action: "activate", sopId }),
+    /Approve/,
+  );
+  await command("owner", { action: "restoreSop", sopId });
+  assert.equal((await ref.get()).data().status, "approved");
+  assert.equal(
+    (await db.doc(`communitySops/${publication.publicationId}`).get()).data()
+      .status,
+    "withdrawn",
+  );
 });

@@ -1,5 +1,86 @@
 /** Interface text only. Farm instructions and approved rules retain their original language. */
 const rows = `
+Record a measurement|Catat pengukuran|Ghi nhận phép đo|บันทึกค่าที่วัด|记录测量值
+outside target|Di luar sasaran|Ngoài mục tiêu|นอกเป้าหมาย|超出目标
+Select a warning to open the field that needs attention.|Pilih peringatan untuk membuka kolom yang perlu dilengkapi.|Chọn cảnh báo để mở trường cần bổ sung.|เลือกคำเตือนเพื่อเปิดช่องที่ต้องแก้ไข|选择警告以打开需要补充的字段。
+Confirm deletion|Konfirmasi penghapusan|Xác nhận xóa|ยืนยันการลบ|确认删除
+Confirm delete|Konfirmasi hapus|Xác nhận xóa|ยืนยันลบ|确认删除
+Keep SOP|Batalkan penghapusan|Giữ SOP|เก็บ SOP|保留 SOP
+Delete draft|Hapus draf|Xóa bản nháp|ลบฉบับร่าง|删除草稿
+Delete SOP|Hapus SOP|Xóa SOP|ลบ SOP|删除 SOP
+Deleted SOPs|SOP yang dihapus|SOP đã xóa|SOP ที่ลบ|已删除的 SOP
+Restore SOP|Pulihkan SOP|Khôi phục SOP|กู้คืน SOP|恢复 SOP
+You can restore it from Deleted SOPs. Published copies are withdrawn; existing farm tasks keep their instructions.|Anda dapat memulihkannya dari SOP yang dihapus. Salinan publik ditarik; tugas tambak yang sudah ada tetap menyimpan instruksinya.|Có thể khôi phục trong SOP đã xóa. Bản công khai được rút lại; công việc hiện có giữ nguyên hướng dẫn.|กู้คืนได้จาก SOP ที่ลบ สำเนาที่เผยแพร่จะถูกถอน งานฟาร์มเดิมยังคงคำแนะนำ|可以从已删除的 SOP 恢复。公开副本将撤回；现有农场任务保留其说明。
+SOP moved to Deleted SOPs.|SOP dipindahkan ke SOP yang dihapus.|SOP đã chuyển vào SOP đã xóa.|ย้าย SOP ไปยังรายการที่ลบแล้ว|SOP 已移至已删除的 SOP。
+SOP restored. Republish separately if needed.|SOP dipulihkan. Publikasikan kembali secara terpisah bila perlu.|SOP đã khôi phục. Xuất bản lại riêng nếu cần.|กู้คืน SOP แล้ว เผยแพร่ใหม่แยกต่างหากหากจำเป็น|SOP 已恢复。如有需要，请单独重新发布。
+Additional reference files|File referensi tambahan|Tệp tham khảo bổ sung|ไฟล์อ้างอิงเพิ่มเติม|其他参考文件
+These files are attached for readers only. To convert a document, use Import SOP document above.|File ini hanya dilampirkan untuk pembaca. Untuk mengonversi dokumen, gunakan Impor dokumen SOP di atas.|Các tệp này chỉ dành cho người đọc. Để chuyển đổi, dùng Nhập tài liệu SOP ở trên.|ไฟล์เหล่านี้แนบให้อ่านเท่านั้น หากต้องการแปลงให้ใช้นำเข้าเอกสาร SOP ด้านบน|这些文件仅供读者参考。转换文档请使用上方的导入 SOP 文档。
+Import failed|Impor gagal|Nhập thất bại|นำเข้าไม่สำเร็จ|导入失败
+Import did not finish. Your file is still selected. Retry or return to the library. If content appeared below, use Save draft to retry saving.|Impor belum selesai. File masih dipilih. Coba lagi atau kembali ke pustaka. Jika isi muncul di bawah, gunakan Simpan draf untuk menyimpan ulang.|Nhập chưa hoàn tất. Tệp vẫn được chọn. Thử lại hoặc về thư viện. Nếu nội dung xuất hiện bên dưới, dùng Lưu bản nháp để lưu lại.|นำเข้ายังไม่เสร็จ ไฟล์ยังถูกเลือก ลองอีกครั้งหรือกลับคลัง หากมีเนื้อหาด้านล่างให้บันทึกฉบับร่างอีกครั้ง|导入未完成。文件仍已选择。重试或返回资料库。如果下方出现了内容，请使用保存草稿重试保存。
+Import did not finish. Retry the import or return to the library. If content appeared below, use Save draft to retry saving.|Impor belum selesai. Coba impor lagi atau kembali ke pustaka. Jika isi muncul di bawah, gunakan Simpan draf untuk menyimpan ulang.|Nhập chưa hoàn tất. Thử lại hoặc về thư viện. Nếu nội dung xuất hiện bên dưới, dùng Lưu bản nháp để lưu lại.|นำเข้ายังไม่เสร็จ ลองนำเข้าอีกครั้งหรือกลับคลัง หากมีเนื้อหาด้านล่างให้บันทึกฉบับร่างอีกครั้ง|导入未完成。重试导入或返回资料库。如果下方出现了内容，请使用保存草稿重试保存。
+SOP document content|Isi dokumen SOP|Nội dung tài liệu SOP|เนื้อหาเอกสาร SOP|SOP文档内容
+Workflow rules|Aturan alur kerja|Quy tắc công việc|กฎเวิร์กโฟลว์|工作流程规则
+Source pages|Halaman sumber|Trang nguồn|หน้าต้นฉบับ|来源页码
+Source content still needs review|Isi sumber masih perlu ditinjau|Nội dung nguồn cần xem xét|เนื้อหาต้นฉบับยังต้องตรวจสอบ|来源内容仍需审核
+Section title|Judul bagian|Tiêu đề phần|ชื่อส่วน|章节标题
+Method and guidance|Metode dan panduan|Phương pháp và hướng dẫn|วิธีการและคำแนะนำ|方法与指南
+Unresolved source omission|Bagian sumber yang belum tercakup|Nội dung nguồn còn thiếu|เนื้อหาต้นฉบับที่ยังขาด|尚未补充的来源内容
+Mark omission resolved|Tandai kekurangan telah diselesaikan|Đánh dấu đã bổ sung|ทำเครื่องหมายว่าแก้ไขแล้ว|标记遗漏已解决
+Table title|Judul tabel|Tiêu đề bảng|ชื่อตาราง|表格标题
+Column heading|Judul kolom|Tiêu đề cột|หัวคอลัมน์|列标题
+rows|baris|hàng|แถว|行
+row|baris|hàng|แถว|行
+Add row|Tambah baris|Thêm hàng|เพิ่มแถว|添加行
+Remove row|Hapus baris|Xóa hàng|ลบแถว|删除行
+Reference table|Tabel referensi|Bảng tham chiếu|ตารางอ้างอิง|参考表
+Parameter|Parameter|Thông số|พารามิเตอร์|参数
+Source value|Nilai sumber|Giá trị nguồn|ค่าจากต้นฉบับ|来源数值
+Notes|Catatan|Ghi chú|หมายเหตุ|备注
+Add reference table|Tambah tabel referensi|Thêm bảng tham chiếu|เพิ่มตารางอ้างอิง|添加参考表
+Remove section|Hapus bagian|Xóa phần|ลบส่วน|删除章节
+Procedure section|Bagian prosedur|Phần quy trình|ส่วนขั้นตอน|规程章节
+Add document section|Tambah bagian dokumen|Thêm phần tài liệu|เพิ่มส่วนเอกสาร|添加文档章节
+Keep methods and source values here. Workflow checks are configured separately below.|Simpan metode dan nilai sumber di sini. Pemeriksaan alur kerja diatur terpisah di bawah.|Lưu phương pháp và giá trị nguồn tại đây. Kiểm tra công việc được cấu hình riêng bên dưới.|เก็บวิธีการและค่าต้นฉบับไว้ที่นี่ ตั้งค่าการตรวจสอบงานแยกด้านล่าง|在此保存方法和来源数值。工作流程检查在下方单独配置。
+This import contains workflow rules only. Re-import the source with the updated SOP service to retain document sections and tables.|Impor ini hanya berisi aturan alur kerja. Impor ulang sumber dengan layanan SOP terbaru agar bagian dokumen dan tabel tersimpan.|Bản nhập này chỉ có quy tắc công việc. Nhập lại nguồn bằng dịch vụ SOP đã cập nhật để giữ các phần và bảng.|รายการนำเข้านี้มีเฉพาะกฎงาน นำเข้าต้นฉบับอีกครั้งด้วยบริการ SOP ที่อัปเดตเพื่อเก็บส่วนเอกสารและตาราง|此导入仅包含工作流程规则。请使用更新后的SOP服务重新导入，以保留文档章节和表格。
+
+Download source|Unduh sumber|Tải tài liệu nguồn|ดาวน์โหลดต้นฉบับ|下载原文
+Mobile reminders|Pengingat seluler|Nhắc nhở trên điện thoại|การแจ้งเตือนบนมือถือ|手机提醒
+Active work|Pekerjaan aktif|Công việc đang thực hiện|งานที่กำลังดำเนินการ|进行中的工作
+All tasks|Semua tugas|Tất cả công việc|งานทั้งหมด|全部任务
+Filters|Filter|Bộ lọc|ตัวกรอง|筛选
+Clear filters|Hapus filter|Xóa bộ lọc|ล้างตัวกรอง|清除筛选
+Assigned work|Pekerjaan yang ditugaskan|Công việc được giao|งานที่มอบหมาย|已分配的工作
+tasks|tugas|công việc|งาน|项任务
+No assigned work yet|Belum ada pekerjaan yang ditugaskan|Chưa có công việc được giao|ยังไม่มีงานที่มอบหมาย|尚无已分配的工作
+Choose another status or clear filters to see more work.|Pilih status lain atau hapus filter untuk melihat pekerjaan lain.|Chọn trạng thái khác hoặc xóa bộ lọc để xem thêm công việc.|เลือกสถานะอื่นหรือล้างตัวกรองเพื่อดูงานเพิ่มเติม|选择其他状态或清除筛选以查看更多工作。
+Show all tasks|Tampilkan semua tugas|Hiển thị tất cả công việc|แสดงงานทั้งหมด|显示全部任务
+Read farm procedures, review source documents, and manage approved workflows.|Baca prosedur tambak, tinjau dokumen sumber, dan kelola alur kerja yang disetujui.|Đọc quy trình trang trại, xem xét tài liệu nguồn và quản lý quy trình đã duyệt.|อ่านขั้นตอนฟาร์ม ตรวจสอบเอกสารต้นฉบับ และจัดการงานที่อนุมัติแล้ว|阅读农场规程、审核来源文档并管理已批准的工作流程。
+STANDARD OPERATING PROCEDURE|PROSEDUR OPERASIONAL STANDAR|QUY TRÌNH VẬN HÀNH CHUẨN|ขั้นตอนการปฏิบัติงานมาตรฐาน|标准操作规程
+revision|revisi|phiên bản|ฉบับแก้ไข|修订
+Read SOP|Baca SOP|Đọc SOP|อ่าน SOP|阅读 SOP
+Edit workflow|Edit alur kerja|Sửa quy trình công việc|แก้ไขขั้นตอนงาน|编辑工作流程
+Draft guidance. Review and approve before applying it to farm work.|Panduan draf. Tinjau dan setujui sebelum diterapkan di tambak.|Hướng dẫn nháp. Xem xét và duyệt trước khi áp dụng tại trang trại.|คำแนะนำฉบับร่าง ตรวจสอบและอนุมัติก่อนใช้ในฟาร์ม|草稿指南。用于农场工作前请审核并批准。
+Overview and review notes|Ikhtisar dan catatan tinjauan|Tổng quan và ghi chú đánh giá|ภาพรวมและบันทึกการตรวจสอบ|概述与审核说明
+Source documents|Dokumen sumber|Tài liệu nguồn|เอกสารต้นฉบับ|来源文档
+Read the source for full tables, recipes, and context. AI guidance requires review.|Baca sumber untuk tabel, resep, dan konteks lengkap. Panduan AI perlu ditinjau.|Đọc nguồn để xem đầy đủ bảng, công thức và ngữ cảnh. Cần xem xét hướng dẫn AI.|อ่านต้นฉบับเพื่อดูตาราง สูตร และบริบททั้งหมด ต้องตรวจสอบคำแนะนำ AI|完整表格、配方和背景请参阅原文。AI 指南需要审核。
+Procedure contents|Daftar isi prosedur|Mục lục quy trình|สารบัญขั้นตอน|规程目录
+Contents|Daftar isi|Mục lục|สารบัญ|目录
+If the expected result is not met|Jika hasil yang diharapkan tidak tercapai|Nếu không đạt kết quả mong đợi|หากไม่ได้ผลตามที่คาดหวัง|未达到预期结果时
+Required evidence|Bukti yang diperlukan|Bằng chứng cần có|หลักฐานที่ต้องใช้|所需证据
+Choose a document, then generate a draft. The draft and source are saved for review.|Pilih dokumen, lalu buat draf. Draf dan sumber disimpan untuk ditinjau.|Chọn tài liệu rồi tạo bản nháp. Bản nháp và nguồn được lưu để xem xét.|เลือกเอกสารแล้วสร้างฉบับร่าง ฉบับร่างและต้นฉบับจะถูกบันทึกเพื่อตรวจสอบ|选择文档后生成草稿。草稿和原文会保存供审核。
+Approve draft|Setujui draf|Duyệt bản nháp|อนุมัติฉบับร่าง|批准草稿
+Saving draft…|Menyimpan draf…|Đang lưu bản nháp…|กำลังบันทึกฉบับร่าง…|正在保存草稿…
+Draft not saved|Draf belum tersimpan|Chưa lưu bản nháp|ยังไม่ได้บันทึกฉบับร่าง|草稿未保存
+Your edits are still here. Retry Save draft.|Perubahan Anda masih ada di editor. Coba Simpan draf lagi.|Các chỉnh sửa vẫn còn trong trình soạn thảo. Hãy thử lưu lại.|การแก้ไขยังอยู่ในตัวแก้ไข ลองบันทึกฉบับร่างอีกครั้ง|修改仍保留在编辑器中。请重试保存草稿。
+The draft was not saved. Review it and choose Save draft to retry.|Draf belum tersimpan. Tinjau lalu pilih Simpan draf untuk mencoba lagi.|Bản nháp chưa được lưu. Kiểm tra rồi chọn lưu để thử lại.|ยังไม่ได้บันทึกฉบับร่าง ตรวจสอบแล้วเลือกบันทึกเพื่อลองใหม่|草稿未保存。请检查并选择保存草稿重试。
+No measurement limits are set. This check only requires a record.|Batas pengukuran belum diatur. Pemeriksaan ini hanya membutuhkan catatan.|Chưa đặt giới hạn đo. Chỉ yêu cầu có bản ghi.|ยังไม่ได้กำหนดขีดจำกัดการวัด การตรวจสอบนี้ต้องการเพียงบันทึก|尚未设置测量限值。此检查仅要求存在记录。
+These are SOP targets, not today’s measurements.|Ini adalah sasaran SOP, bukan hasil pengukuran hari ini.|Đây là mục tiêu SOP, không phải số đo hôm nay.|นี่คือเป้าหมาย SOP ไม่ใช่ค่าที่วัดวันนี้|这些是SOP目标值，不是今天的测量结果。
+The SOP backend must be updated before saving document sections and tables. Your existing saved draft has not been changed.|Layanan SOP perlu diperbarui agar bagian prosedur dan tabel dapat disimpan. Draf tersimpan sebelumnya belum berubah.|Cần cập nhật dịch vụ SOP để lưu các phần và bảng. Bản nháp đã lưu chưa thay đổi.|ต้องอัปเดตบริการ SOP เพื่อบันทึกส่วนเอกสารและตาราง ฉบับร่างเดิมยังไม่เปลี่ยนแปลง|需更新SOP服务才能保存章节和表格。原有草稿未改变。
+Draft saved. Review before approval.|Draf tersimpan. Tinjau sebelum disetujui.|Đã lưu bản nháp. Xem xét trước khi duyệt.|บันทึกฉบับร่างแล้ว ตรวจสอบก่อนอนุมัติ|草稿已保存。批准前请审核。
+Uploading source document…|Mengunggah dokumen sumber…|Đang tải tài liệu nguồn…|กำลังอัปโหลดเอกสารต้นฉบับ…|正在上传来源文档…
+Generating SOP draft. Large documents can take several minutes. Keep this page open…|Membuat draf SOP. Dokumen besar bisa memerlukan beberapa menit. Biarkan halaman ini tetap terbuka…|Đang tạo bản nháp SOP. Tài liệu lớn có thể mất vài phút. Giữ trang này mở…|กำลังสร้างฉบับร่าง SOP เอกสารขนาดใหญ่อาจใช้เวลาหลายนาที โปรดเปิดหน้านี้ไว้…|正在生成SOP草稿。大文档可能需要几分钟，请保持此页面打开…
+SOP generation timed out. Try generating the draft again.|Pembuatan SOP melewati batas waktu. Coba buat draf lagi.|Tạo SOP quá thời gian. Hãy thử tạo lại bản nháp.|การสร้าง SOP หมดเวลา ลองสร้างฉบับร่างอีกครั้ง|SOP生成超时，请重试生成草稿。
+Saving draft and source document…|Menyimpan draf dan dokumen sumber…|Đang lưu bản nháp và tài liệu nguồn…|กำลังบันทึกฉบับร่างและเอกสารต้นฉบับ…|正在保存草稿和来源文档…
 Title|Judul|Tiêu đề|ชื่อเรื่อง|标题
 Description|Deskripsi|Mô tả|คำอธิบาย|说明
 Step title|Judul langkah|Tên bước|ชื่อขั้นตอน|步骤标题
@@ -38,6 +119,7 @@ No gate|Tanpa prasyarat|Không có điều kiện|ไม่มีเงื่อ
 Inventory item / equipment binding|Pilih persediaan / peralatan|Chọn vật tư / thiết bị|เลือกวัสดุ / อุปกรณ์|绑定库存物品／设备
 Accountable manager|Manajer penanggung jawab|Quản lý chịu trách nhiệm|ผู้จัดการที่รับผิดชอบ|负责经理
 Responsible person|Penanggung jawab|Người chịu trách nhiệm|ผู้รับผิดชอบ|负责人
+Optional|Opsional|Tùy chọn|ไม่บังคับ|可选
 Assigned person (optional override)|Petugas (opsional)|Người được giao (tùy chọn)|ผู้รับมอบหมาย (ไม่บังคับ)|指定人员（可选覆盖）
 Assignee override|Ganti petugas|Thay người được giao|เปลี่ยนผู้รับมอบหมาย|覆盖指派人员
 Block technician / accountable manager|Teknisi blok / manajer|Kỹ thuật viên khu / quản lý|ช่างประจำบล็อก / ผู้จัดการ|区块技术员／负责经理
@@ -267,6 +349,140 @@ Equipment inspection|Pemeriksaan peralatan|Kiểm tra thiết bị|ตรวจ�
 Set your farm targets, measurement windows, corrective instructions, and escalation timing before approval.|Tetapkan sasaran tambak, jendela pengukuran, instruksi perbaikan, dan waktu eskalasi sebelum persetujuan.|Đặt mục tiêu trang trại, khoảng đo, hướng dẫn khắc phục và thời gian báo cáo nâng cấp trước khi duyệt.|กำหนดเป้าหมายฟาร์ม ช่วงเวลาวัด คำแนะนำแก้ไข และเวลายกระดับก่อนอนุมัติ|批准前请设置农场目标、测量时间窗、纠正说明和升级时间。
 Configure sampling milestones and the measurements your farm requires.|Atur jadwal sampling dan pengukuran yang diperlukan tambak.|Thiết lập các mốc lấy mẫu và phép đo trang trại yêu cầu.|กำหนดช่วงเก็บตัวอย่างและค่าที่ฟาร์มต้องวัด|配置取样节点和农场要求的测量项目。
 Define equipment checks and required photographic or written evidence.|Tentukan pemeriksaan peralatan serta bukti foto atau tertulis yang diperlukan.|Xác định kiểm tra thiết bị và bằng chứng ảnh hoặc văn bản cần có.|กำหนดการตรวจอุปกรณ์และหลักฐานภาพถ่ายหรือข้อความที่ต้องมี|定义设备检查及所需的照片或文字证据。
+Edit SOP|Ubah SOP|Sửa SOP|แก้ไข SOP|编辑 SOP
+1. About this SOP|1. Tentang SOP ini|1. Thông tin SOP|1. เกี่ยวกับ SOP นี้|1. SOP 基本信息
+2. Procedure|2. Prosedur|2. Quy trình|2. ขั้นตอนปฏิบัติ|2. 操作规程
+3. Checks and follow-up|3. Pemeriksaan dan tindak lanjut|3. Kiểm tra và theo dõi|3. การตรวจและติดตาม|3. 检查与后续处理
+Write the procedure, set your targets, then review before approval.|Tulis prosedur, tentukan sasaran, lalu tinjau sebelum persetujuan.|Viết quy trình, đặt mục tiêu rồi xem lại trước khi duyệt.|เขียนขั้นตอน กำหนดเป้าหมาย แล้วตรวจทานก่อนอนุมัติ|填写规程、设定目标，再审核批准。
+Write the methods staff should follow. Keep source tables and reference values here; set automatic checks below.|Tulis metode yang harus diikuti staf. Simpan tabel dan nilai referensi di sini; atur pemeriksaan otomatis di bawah.|Viết cách thực hiện cho nhân viên. Giữ bảng và giá trị tham khảo ở đây; đặt kiểm tra tự động bên dưới.|เขียนวิธีที่พนักงานต้องปฏิบัติ เก็บตารางและค่าอ้างอิงไว้ที่นี่ ตั้งการตรวจอัตโนมัติด้านล่าง|填写员工应遵循的方法，在此保留来源表格和参考数值，在下方设置自动检查。
+Open a check to set its targets and instructions. Advanced settings are optional to edit.|Buka pemeriksaan untuk mengatur sasaran dan instruksinya. Pengaturan lanjutan tidak wajib diubah.|Mở kiểm tra để đặt mục tiêu và hướng dẫn. Không bắt buộc sửa cài đặt nâng cao.|เปิดการตรวจเพื่อกำหนดเป้าหมายและคำแนะนำ ไม่จำเป็นต้องแก้การตั้งค่าขั้นสูง|展开检查以填写目标和说明。可按需修改高级设置。
+What to do|Apa yang harus dilakukan|Việc cần làm|สิ่งที่ต้องทำ|需要做什么
+Check name|Nama pemeriksaan|Tên kiểm tra|ชื่อการตรวจ|检查名称
+Instructions for staff|Instruksi untuk staf|Hướng dẫn cho nhân viên|คำแนะนำสำหรับพนักงาน|员工操作说明
+Acceptable measurement or result|Nilai atau hasil yang diterima|Giá trị hoặc kết quả chấp nhận được|ค่าหรือผลที่ยอมรับได้|可接受的测量值或结果
+Set targets here. Record actual readings in the pond records.|Atur sasaran di sini. Catat hasil pengukuran aktual di catatan kolam.|Đặt mục tiêu ở đây. Ghi số đo thực tế trong hồ sơ ao.|กำหนดเป้าหมายที่นี่ บันทึกค่าที่วัดจริงในบันทึกบ่อ|在此设置目标。实际读数请填写在池塘记录中。
+Measurement or record|Pengukuran atau catatan|Phép đo hoặc bản ghi|ค่าที่วัดหรือบันทึก|测量项目或记录
+How to check it|Cara memeriksanya|Cách kiểm tra|วิธีตรวจ|检查方式
+Lower limit|Batas bawah|Giới hạn dưới|ค่าต่ำสุด|下限
+Upper limit|Batas atas|Giới hạn trên|ค่าสูงสุด|上限
+Measurement basis|Dasar pengukuran|Cơ sở phép đo|ฐานการวัด|测量口径
+What must the notes or photos show?|Apa yang harus ditunjukkan catatan atau foto?|Ghi chú hoặc ảnh cần thể hiện gì?|บันทึกหรือภาพต้องแสดงอะไร?|记录或照片需要说明什么？
+If something goes wrong|Jika ada masalah|Nếu có vấn đề|หากเกิดปัญหา|出现问题时
+What should staff do if this check fails?|Apa yang harus dilakukan staf jika pemeriksaan gagal?|Nhân viên phải làm gì khi kiểm tra không đạt?|พนักงานควรทำอะไรหากการตรวจไม่ผ่าน?|检查未通过时员工应如何处理？
+Add instructions for staff when this check fails.|Tambahkan instruksi untuk staf saat pemeriksaan gagal.|Thêm hướng dẫn cho nhân viên khi kiểm tra không đạt.|เพิ่มคำแนะนำให้พนักงานเมื่อการตรวจไม่ผ่าน|填写检查未通过时员工应采取的措施。
+When to do it|Kapan dilakukan|Khi nào thực hiện|ต้องทำเมื่อไร|何时执行
+Advanced settings|Pengaturan lanjutan|Cài đặt nâng cao|การตั้งค่าขั้นสูง|高级设置
+Assignment, evidence rules, rechecks, and linked tasks. Existing settings are kept.|Penugasan, aturan bukti, pemeriksaan ulang, dan tugas terkait. Pengaturan yang ada tetap tersimpan.|Phân công, quy tắc bằng chứng, kiểm tra lại và việc liên quan. Giữ nguyên cài đặt hiện có.|การมอบหมาย กฎหลักฐาน การตรวจซ้ำ และงานที่เชื่อมโยง คงการตั้งค่าเดิมไว้|分工、证据规则、复检和关联任务。保留现有设置。
+Automation preview|Pratinjau otomatisasi|Xem trước tự động hóa|ดูตัวอย่างระบบอัตโนมัติ|自动化预览
+Needs attention|Perlu dilengkapi|Cần bổ sung|ต้องตรวจสอบ|需要完善
+Ready for review|Siap ditinjau|Sẵn sàng xem xét|พร้อมตรวจทาน|可供审核
+Untitled check|Pemeriksaan tanpa nama|Kiểm tra chưa có tên|การตรวจที่ยังไม่มีชื่อ|未命名检查
+Complete these before approval|Lengkapi sebelum persetujuan|Hoàn tất trước khi duyệt|กรอกให้ครบก่อนอนุมัติ|批准前请完善以下内容
+You can save an incomplete draft. Approval requires all highlighted fields to be completed.|Draf yang belum lengkap dapat disimpan. Lengkapi semua kolom yang ditandai sebelum persetujuan.|Có thể lưu bản nháp chưa hoàn tất. Điền đủ các trường được đánh dấu trước khi duyệt.|บันทึกฉบับร่างที่ยังไม่ครบได้ ต้องกรอกช่องที่ระบุก่อนอนุมัติ|可以保存未完成的草稿。批准前须填写所有标注字段。
+A record exists|Catatan tersedia|Có bản ghi|มีบันทึก|存在记录
+Within limits|Dalam batas|Trong giới hạn|อยู่ในช่วงที่กำหนด|在限值内
+Matches a required result|Sesuai hasil yang diperlukan|Khớp kết quả yêu cầu|ตรงกับผลที่ต้องการ|符合所需结果
+Enough records|Jumlah catatan cukup|Đủ bản ghi|จำนวนบันทึกเพียงพอ|记录数量充足
+Change stays within limits|Perubahan dalam batas|Thay đổi trong giới hạn|การเปลี่ยนแปลงอยู่ในช่วง|变化在限值内
+Follows a required order|Mengikuti urutan yang diperlukan|Theo đúng thứ tự|ตามลำดับที่กำหนด|遵循所需顺序
+Review notes or photos|Tinjau catatan atau foto|Xem ghi chú hoặc ảnh|ตรวจบันทึกหรือภาพ|审核记录或照片
+This only checks that a record exists. Choose Within limits to check a measurement against your targets.|Ini hanya memeriksa adanya catatan. Pilih Dalam batas untuk membandingkan pengukuran dengan sasaran.|Chỉ kiểm tra bản ghi có tồn tại. Chọn Trong giới hạn để so sánh số đo với mục tiêu.|ตรวจเพียงว่ามีบันทึก เลือก อยู่ในช่วงที่กำหนด เพื่อเทียบค่ากับเป้าหมาย|此方式仅检查是否有记录。选择“在限值内”才能将测量值与目标比较。
+Enter a lower or upper limit approved for your farm.|Masukkan batas bawah atau atas yang disetujui tambak.|Nhập giới hạn dưới hoặc trên đã được trang trại phê duyệt.|กรอกค่าต่ำสุดหรือสูงสุดที่ฟาร์มอนุมัติ|填写农场批准的下限或上限。
+The lower limit must not exceed the upper limit.|Batas bawah tidak boleh melebihi batas atas.|Giới hạn dưới không được lớn hơn giới hạn trên.|ค่าต่ำสุดต้องไม่เกินค่าสูงสุด|下限不能大于上限。
+Describe the required result or order.|Jelaskan hasil atau urutan yang diperlukan.|Mô tả kết quả hoặc thứ tự yêu cầu.|อธิบายผลหรือลำดับที่ต้องการ|说明所需结果或顺序。
+For notes or photos, choose Review notes or photos and describe what staff must show.|Untuk catatan atau foto, pilih Tinjau catatan atau foto dan jelaskan bukti yang diperlukan.|Đối với ghi chú hoặc ảnh, chọn Xem ghi chú hoặc ảnh và mô tả nội dung cần thể hiện.|สำหรับบันทึกหรือภาพ เลือก ตรวจบันทึกหรือภาพ และอธิบายสิ่งที่ต้องแสดง|对于记录或照片，请选择“审核记录或照片”，并说明员工应提供什么。
+Dissolved oxygen (morning)|Oksigen terlarut (pagi)|Oxy hòa tan (sáng)|ออกซิเจนละลายน้ำ (เช้า)|溶解氧（早晨）
+Dissolved oxygen (evening)|Oksigen terlarut (sore)|Oxy hòa tan (chiều)|ออกซิเจนละลายน้ำ (เย็น)|溶解氧（傍晚）
+pH (morning)|pH (pagi)|pH (sáng)|pH (เช้า)|pH（早晨）
+pH (evening)|pH (sore)|pH (chiều)|pH (เย็น)|pH（傍晚）
+Temperature (morning)|Suhu (pagi)|Nhiệt độ (sáng)|อุณหภูมิ (เช้า)|水温（早晨）
+Temperature (evening)|Suhu (sore)|Nhiệt độ (chiều)|อุณหภูมิ (เย็น)|水温（傍晚）
+Salinity|Salinitas|Độ mặn|ความเค็ม|盐度
+Alkalinity|Alkalinitas|Độ kiềm|ความเป็นด่าง|碱度
+Ammonia|Amonia|Amoniac|แอมโมเนีย|氨
+Nitrite|Nitrit|Nitrit|ไนไตรต์|亚硝酸盐
+Water transparency (morning)|Kecerahan air (pagi)|Độ trong nước (sáng)|ความใสของน้ำ (เช้า)|水体透明度（早晨）
+Water transparency (evening)|Kecerahan air (sore)|Độ trong nước (chiều)|ความใสของน้ำ (เย็น)|水体透明度（傍晚）
+Water depth (morning)|Kedalaman air (pagi)|Độ sâu nước (sáng)|ความลึกน้ำ (เช้า)|水深（早晨）
+Water depth (evening)|Kedalaman air (sore)|Độ sâu nước (chiều)|ความลึกน้ำ (เย็น)|水深（傍晚）
+Water exchange (%)|Pergantian air (%)|Thay nước (%)|การเปลี่ยนน้ำ (%)|换水率（%）
+Weather observation|Pengamatan cuaca|Quan sát thời tiết|การสังเกตอากาศ|天气观察
+Sludge observation|Pengamatan lumpur|Quan sát bùn|การสังเกตตะกอน|底泥观察
+Surface scum observation|Pengamatan buih permukaan|Quan sát váng nước|การสังเกตฝ้าบนผิวน้ำ|水面浮沫观察
+Shrimp behaviour|Perilaku udang|Hành vi tôm|พฤติกรรมกุ้ง|虾的行为
+Notes or photos|Catatan atau foto|Ghi chú hoặc ảnh|บันทึกหรือภาพ|记录或照片
+Water parameter targets|Sasaran parameter air|Mục tiêu chất lượng nước|เป้าหมายคุณภาพน้ำ|水质参数目标
+These are SOP targets, not today's measurements. Open a check to change its limits.|Ini adalah sasaran SOP, bukan pengukuran hari ini. Buka pemeriksaan untuk mengubah batasnya.|Đây là mục tiêu SOP, không phải số đo hôm nay. Mở kiểm tra để sửa giới hạn.|นี่คือเป้าหมาย SOP ไม่ใช่ค่าที่วัดวันนี้ เปิดการตรวจเพื่อแก้ช่วงค่า|这些是 SOP 目标，并非今天的测量值。展开检查可修改限值。
+Target or check|Sasaran atau pemeriksaan|Mục tiêu hoặc kiểm tra|เป้าหมายหรือการตรวจ|目标或检查方式
+Edit targets|Edit sasaran|Sửa mục tiêu|แก้เป้าหมาย|修改目标
+No limits checked|Batas tidak diperiksa|Không kiểm tra giới hạn|ไม่ตรวจช่วงค่า|不检查限值
+Target not set|Sasaran belum diatur|Chưa đặt mục tiêu|ยังไม่กำหนดเป้าหมาย|尚未设置目标
+Change|Perubahan|Thay đổi|การเปลี่ยนแปลง|变化
+Lab pH|pH laboratorium|pH xét nghiệm|pH ห้องปฏิบัติการ|实验室 pH
+Lab salinity|Salinitas laboratorium|Độ mặn xét nghiệm|ความเค็มห้องปฏิบัติการ|实验室盐度
+Lab total ammonia nitrogen|Nitrogen amonia total laboratorium|Tổng nitơ amoniac xét nghiệm|ไนโตรเจนแอมโมเนียรวมห้องปฏิบัติการ|实验室总氨氮
+Lab un-ionized ammonia|Amonia tidak terionisasi laboratorium|Amoniac không ion hóa xét nghiệm|แอมโมเนียไม่แตกตัวห้องปฏิบัติการ|实验室非离子氨
+Lab nitrite|Nitrit laboratorium|Nitrit xét nghiệm|ไนไตรต์ห้องปฏิบัติการ|实验室亚硝酸盐
+Lab alkalinity|Alkalinitas laboratorium|Độ kiềm xét nghiệm|ความเป็นด่างห้องปฏิบัติการ|实验室碱度
+Other check methods|Metode pemeriksaan lain|Cách kiểm tra khác|วิธีตรวจอื่น|其他检查方式
+Item or equipment|Barang atau peralatan|Vật tư hoặc thiết bị|รายการหรืออุปกรณ์|物料或设备
+Daily|Harian|Hằng ngày|ทุกวัน|每天
+Weekly|Mingguan|Hằng tuần|ทุกสัปดาห์|每周
+By days of culture|Berdasarkan hari budidaya|Theo ngày nuôi|ตามวันเลี้ยง|按养殖日龄
+After an event|Setelah suatu kejadian|Sau một sự kiện|หลังเหตุการณ์|事件发生后
+At a production stage|Pada tahap produksi|Ở giai đoạn sản xuất|ในระยะการผลิต|在生产阶段
+When assigned manually|Saat ditugaskan secara manual|Khi được giao thủ công|เมื่อมอบหมายด้วยตนเอง|手动分配时
+No procedure content yet. Add the full instructions and reference tables staff need. Checks below do not replace the procedure.|Isi prosedur belum ada. Tambahkan instruksi lengkap dan tabel referensi yang diperlukan staf. Pemeriksaan di bawah tidak menggantikan prosedur.|Chưa có nội dung quy trình. Thêm hướng dẫn đầy đủ và bảng tham khảo cho nhân viên. Các kiểm tra bên dưới không thay thế quy trình.|ยังไม่มีเนื้อหาขั้นตอน เพิ่มคำแนะนำทั้งหมดและตารางอ้างอิงที่พนักงานต้องใช้ การตรวจด้านล่างไม่แทนขั้นตอนปฏิบัติ|尚无规程内容。请添加员工所需的完整说明和参考表格。下方的检查不能替代操作规程。
+Display language|Bahasa tampilan|Ngôn ngữ hiển thị|ภาษาที่แสดง|界面语言
+Changes app labels and navigation. Your SOP text stays in its original language.|Mengubah bahasa tampilan dan navigasi aplikasi. Teks SOP tetap dalam bahasa aslinya.|Đổi ngôn ngữ nhãn và điều hướng ứng dụng. Nội dung SOP giữ nguyên ngôn ngữ gốc.|เปลี่ยนข้อความและเมนูของแอป เนื้อหา SOP ยังคงเป็นภาษาต้นฉบับ|更改应用界面和导航语言。SOP 内容保留原始语言。
+Require this check before entering a stage|Wajibkan pemeriksaan ini sebelum masuk tahap|Yêu cầu kiểm tra trước khi vào giai đoạn|ต้องผ่านการตรวจนี้ก่อนเข้าสู่ระยะ|进入阶段前必须通过此检查
+Does not block stage changes|Tidak membatasi tahap|Không chặn chuyển giai đoạn|ไม่ขัดขวางการเปลี่ยนระยะ|不阻止阶段变更
+Choose a stage only if this check must pass before the pond can enter it. Otherwise leave stage changes unblocked.|Pilih tahap hanya jika pemeriksaan ini harus lulus sebelum kolam memasuki tahap tersebut. Jika tidak, biarkan perubahan tahap tanpa pembatasan.|Chỉ chọn giai đoạn nếu ao phải vượt qua kiểm tra này trước khi vào giai đoạn đó. Nếu không, giữ chuyển giai đoạn không bị chặn.|เลือกระยะเฉพาะเมื่อบ่อต้องผ่านการตรวจนี้ก่อนเข้า หากไม่จำเป็น ให้เปลี่ยนระยะได้ตามปกติ|仅在池塘进入该阶段前必须通过此检查时选择阶段，否则不限制阶段变更。
+Sun|Min|CN|อา.|周日
+Mon|Sen|T2|จ.|周一
+Tue|Sel|T3|อ.|周二
+Wed|Rab|T4|พ.|周三
+Thu|Kam|T5|พฤ.|周四
+Fri|Jum|T6|ศ.|周五
+Sat|Sab|T7|ส.|周六
+This source does not support that condition.|Catatan ini tidak mendukung metode pemeriksaan tersebut.|Nguồn này không hỗ trợ cách kiểm tra đó.|แหล่งข้อมูลนี้ไม่รองรับวิธีตรวจดังกล่าว|此来源不支持该检查方式。
+Specify the analytical basis.|Tentukan dasar pengukuran sesuai hasil alat atau laboratorium.|Chọn cơ sở đo theo kết quả thiết bị hoặc xét nghiệm.|ระบุฐานการวัดตามอุปกรณ์หรือผลห้องปฏิบัติการ|请按仪器或实验室结果填写测量口径。
+Sampling mean body weight|Bobot rata-rata hasil sampling|Khối lượng trung bình khi lấy mẫu|น้ำหนักเฉลี่ยจากการสุ่มตัวอย่าง|取样平均体重
+Sampling feed observation|Pengamatan pakan saat sampling|Quan sát thức ăn khi lấy mẫu|การสังเกตอาหารขณะสุ่มตัวอย่าง|取样时的饲料观察
+Logged daily feed total|Total pakan harian tercatat|Tổng thức ăn hằng ngày đã ghi|ปริมาณอาหารรวมต่อวันที่บันทึก|记录的每日投喂总量
+Recorded mortality|Kematian tercatat|Số chết đã ghi|จำนวนตายที่บันทึก|记录的死亡数量
+Confirmed lab status|Status hasil laboratorium terkonfirmasi|Trạng thái xét nghiệm đã xác nhận|สถานะผลห้องปฏิบัติการที่ยืนยัน|已确认的实验室状态
+Recorded inventory stock|Stok persediaan tercatat|Tồn kho đã ghi|สต็อกที่บันทึก|记录的库存
+Recorded treatment usage|Penggunaan bahan perawatan tercatat|Lượng vật tư xử lý đã ghi|การใช้สารบำบัดที่บันทึก|记录的处理材料用量
+Maintenance record|Catatan pemeliharaan peralatan|Bản ghi bảo trì|บันทึกการบำรุงรักษา|维护记录
+Recorded harvest biomass|Biomassa panen tercatat|Sinh khối thu hoạch đã ghi|ชีวมวลเก็บเกี่ยวที่บันทึก|记录的收获生物量
+Recorded cycle state|Status siklus tercatat|Trạng thái vụ nuôi đã ghi|สถานะรอบเลี้ยงที่บันทึก|记录的养殖周期状态
+salinity|Salinitas|Độ mặn|ความเค็ม|盐度
+Edit|Ubah|Sửa|แก้ไข|修改
+Block technician / manager|Teknisi blok / manajer|Kỹ thuật viên khu / quản lý|ช่างประจำบล็อก / ผู้จัดการ|区块技术员／经理
+Enter a title of at most 200 characters.|Masukkan judul maksimal 200 karakter.|Nhập tiêu đề tối đa 200 ký tự.|กรอกชื่อไม่เกิน 200 ตัวอักษร|请输入不超过200字的标题。
+Description is too long.|Deskripsi terlalu panjang.|Mô tả quá dài.|คำอธิบายยาวเกินไป|说明过长。
+Choose a supported original language.|Pilih bahasa asli yang tersedia.|Chọn ngôn ngữ gốc được hỗ trợ.|เลือกภาษาต้นฉบับที่รองรับ|请选择支持的原始语言。
+An SOP needs between 1 and 60 steps.|SOP harus memiliki 1 sampai 60 pemeriksaan.|SOP cần từ 1 đến 60 bước.|SOP ต้องมี 1 ถึง 60 ขั้นตอน|SOP须包含1至60个步骤。
+Choose scope, severity, and stages.|Pilih cakupan, tingkat keparahan, dan tahapan.|Chọn phạm vi, mức độ nghiêm trọng và giai đoạn.|เลือกขอบเขต ระดับความรุนแรง และระยะ|请选择范围、严重程度和阶段。
+Invalid schedule.|Jadwal tidak valid. Periksa waktu dan frekuensi.|Lịch không hợp lệ. Kiểm tra thời gian và tần suất.|กำหนดเวลาไม่ถูกต้อง ตรวจเวลาและความถี่|排程无效，请检查时间和频率。
+Choose an event.|Pilih kejadian pemicu.|Chọn sự kiện kích hoạt.|เลือกเหตุการณ์ที่กระตุ้น|请选择触发事件。
+Invalid weekdays.|Pilihan hari tidak valid.|Ngày trong tuần không hợp lệ.|วันในสัปดาห์ไม่ถูกต้อง|星期选项无效。
+Invalid DOC/event window.|Rentang hari budidaya atau jeda kejadian tidak valid.|Khoảng ngày nuôi hoặc sự kiện không hợp lệ.|ช่วงวันเลี้ยงหรือเหตุการณ์ไม่ถูกต้อง|养殖日龄或事件时间范围无效。
+Choose a supported check.|Pilih pemeriksaan yang tersedia.|Chọn kiểm tra được hỗ trợ.|เลือกการตรวจที่รองรับ|请选择支持的检查。
+Limits must be finite numbers.|Batas harus berupa angka yang valid.|Giới hạn phải là số hợp lệ.|ค่าจำกัดต้องเป็นตัวเลขที่ถูกต้อง|限值必须是有效数值。
+Invalid evidence count/freshness.|Jumlah atau batas usia bukti tidak valid.|Số lượng hoặc tuổi bằng chứng không hợp lệ.|จำนวนหรืออายุหลักฐานไม่ถูกต้อง|证据数量或有效期无效。
+Invalid stage gate.|Pilih tahap produksi yang tersedia.|Chọn giai đoạn sản xuất được hỗ trợ.|เลือกระยะการผลิตที่รองรับ|请选择支持的生产阶段。
+Farm procedure|Prosedur tambak|Quy trình trang trại|ขั้นตอนฟาร์ม|农场规程
+Procedure sections|Bagian prosedur|Phần quy trình|ส่วนขั้นตอน|规程章节
+Checks|Pemeriksaan|Kiểm tra|การตรวจ|检查
+Review draft|Tinjau draf|Xem xét bản nháp|ตรวจทานฉบับร่าง|审核草稿
+Draft needs review|Draf perlu dilengkapi|Bản nháp cần xem xét|ต้องตรวจทานฉบับร่าง|草稿需要审核
+Procedure content missing|Isi prosedur belum ada|Thiếu nội dung quy trình|ยังไม่มีเนื้อหาขั้นตอน|缺少规程内容
+No readable procedure sections yet.|Belum ada bagian prosedur yang dapat dibaca.|Chưa có phần quy trình có thể đọc.|ยังไม่มีส่วนขั้นตอนที่อ่านได้|尚无可阅读的规程章节。
+items to complete before approval.|hal perlu dilengkapi sebelum persetujuan.|mục cần hoàn tất trước khi duyệt.|รายการต้องกรอกก่อนอนุมัติ|项内容须在批准前完善。
+More actions|Tindakan lainnya|Thao tác khác|การดำเนินการเพิ่มเติม|更多操作
+Complete the highlighted fields in the draft before approving.|Lengkapi kolom yang ditandai dalam draf sebelum menyetujui.|Điền các trường được đánh dấu trong bản nháp trước khi duyệt.|กรอกช่องที่ระบุในฉบับร่างก่อนอนุมัติ|批准前请填写草稿中标注的字段。
 `;
 const text: Record<string, string[]> = Object.fromEntries(
   rows

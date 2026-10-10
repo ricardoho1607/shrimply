@@ -8,6 +8,7 @@ import {
   type SopTarget,
 } from "./contracts";
 import { sopField } from "./registry";
+import { validateSopContent } from "./content";
 export const finiteSopNumber = (value: unknown): number | null => {
   if (typeof value !== "number" && typeof value !== "string") return null;
   if (
@@ -34,6 +35,8 @@ export function validateSop(definition: SopDefinition): string[] {
     errors.push("Description is too long.");
   if (!["en", "id", "vi", "th", "zh"].includes(definition.language))
     errors.push("Choose a supported original language.");
+  if (definition.content !== undefined)
+    errors.push(...validateSopContent(definition.content));
   if (
     definition.attachments &&
     (!Array.isArray(definition.attachments) ||
@@ -70,7 +73,10 @@ export function validateSop(definition: SopDefinition): string[] {
       !["daily", "weekly", "doc", "event", "stage", "manual"].includes(
         s.trigger.kind,
       ) ||
-      !/^([01]\d|2[0-3]):[0-5]\d$/.test(s.trigger.at)
+      typeof s.trigger.at !== "string" ||
+      ((["daily", "weekly", "doc"].includes(s.trigger.kind) ||
+        s.trigger.at !== "") &&
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(s.trigger.at))
     ) {
       errors.push(prefix + "Invalid schedule.");
       continue;
@@ -209,17 +215,10 @@ export function validateSop(definition: SopDefinition): string[] {
     )
       errors.push(prefix + "Invalid evidence count/freshness.");
     if (
-      s.check.operator === "narrative" &&
-      (!s.check.rubric?.trim() || s.check.field !== "manual")
-    )
-      errors.push(prefix + "Narrative checks need a manual evidence rubric.");
-    if (
       (s.check.operator === "equals" || s.check.operator === "sequence") &&
       !s.check.value.trim()
     )
       errors.push(prefix + "Specify the required value or sequence.");
-    if (!s.correctiveInstructions?.trim())
-      errors.push(prefix + "Provide corrective guidance.");
     if (s.gateStage && !SOP_STAGES.includes(s.gateStage))
       errors.push(prefix + "Invalid stage gate.");
     for (const links of [s.dependsOn, s.onPass, s.onFail])

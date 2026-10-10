@@ -3,6 +3,7 @@ import { sopText } from "../../../../../shared/sop/uiCopy";
 import { useAuth } from "@/contexts/AuthContext";
 import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
+import AccessibleDialog from "@/components/AccessibleDialog";
 import { useSopWorkspace } from "@/hooks/useSopWorkspace";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { sopCopy } from "../../../../../shared/sop/copy";
@@ -21,6 +22,7 @@ function TodoPageContent() {
     { currentLanguage } = useLanguage(),
     c = sopCopy(currentLanguage);
   const ui = (value: string) => sopText(value, currentLanguage);
+  const [messageTone, setMessageTone] = useState<"status" | "error">("status");
   const [status, setStatus] = useState("active"),
     [person, setPerson] = useState(""),
     [pond, setPond] = useState(""),
@@ -94,8 +96,10 @@ function TodoPageContent() {
   const run = async (fn: () => Promise<unknown>) => {
     try {
       setMessage("");
+      setMessageTone("status");
       return await fn();
     } catch (e) {
+      setMessageTone("error");
       setMessage(e instanceof Error ? e.message : "Unable to save.");
       return null;
     }
@@ -109,7 +113,7 @@ function TodoPageContent() {
       (!person || t.assigneeId === person) &&
       (!pond || t.target.id === pond) &&
       (!block || t.target.blockId === block) &&
-      (!urgency || t.step?.severity === urgency) &&
+      (!urgency || (t.severity || t.step?.severity) === urgency) &&
       (!date ||
         new Intl.DateTimeFormat("en-CA", {
           timeZone: w.timeZone || "UTC",
@@ -120,10 +124,28 @@ function TodoPageContent() {
       (!adoption || t.adoptionId === adoption) &&
       (!issue || t.issueId === issue),
   );
+  const filterCount = [
+    person,
+    pond,
+    block,
+    urgency,
+    date,
+    adoption,
+    issue,
+  ].filter(Boolean).length;
+  const clearFilters = () => {
+    setPerson("");
+    setPond("");
+    setBlock("");
+    setUrgency("");
+    setDate("");
+    setAdoption("");
+    setIssue("");
+  };
   if (client.loading)
     return <section className="sop-shell">{c.loading}</section>;
   return (
-    <section className="sop-shell">
+    <section className="sop-shell todo-shell">
       <header className="sop-heading">
         <div>
           <p className="sop-eyebrow">{ui("SHRIMPLY • DAILY WORK")}</p>
@@ -135,7 +157,12 @@ function TodoPageContent() {
         </Link>
       </header>
       {(message || client.error) && (
-        <div role="alert" className="sop-alert">
+        <div
+          role={client.error || messageTone === "error" ? "alert" : "status"}
+          className={
+            client.error || messageTone === "error" ? "sop-alert" : "sop-notice"
+          }
+        >
           {message || client.error}
         </div>
       )}
@@ -144,83 +171,120 @@ function TodoPageContent() {
           {client.pending.length} · {c.pending}
         </p>
       )}
-      <div className="sop-toolbar">
-        <button className="sop-primary" onClick={() => setManual(true)}>
-          {c.manual}
-        </button>
-        <button onClick={() => void client.refresh()}>{c.refresh}</button>
+      <div className="todo-action-bar">
+        <div
+          className="todo-status-tabs"
+          role="group"
+          aria-label={ui("Status")}
+        >
+          {[
+            ["active", "Active work"],
+            ["completed", "completed"],
+            ["all", "All tasks"],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              aria-pressed={status === value}
+              onClick={() => setStatus(value)}
+            >
+              {ui(label)}
+            </button>
+          ))}
+        </div>
+        <div className="sop-toolbar">
+          <button disabled={client.busy} onClick={() => void client.refresh()}>
+            {c.refresh}
+          </button>
+          <button className="sop-primary" onClick={() => setManual(true)}>
+            + {c.manual}
+          </button>
+        </div>
       </div>
-      <div className="sop-grid">
-        <label className="sop-field">
-          {ui("Status")}
-          <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            {[
-              "active",
-              "all",
-              "open",
-              "scheduled",
-              "submitted",
-              "needs_review",
-              "completed",
-              "waived",
-              "cancelled",
-            ].map((s) => (
-              <option key={s} value={s}>{ui(s)}</option>
-            ))}
-          </select>
-        </label>
-        <label className="sop-field">
-          {ui("Responsible person")}
-          <select value={person} onChange={(e) => setPerson(e.target.value)}>
-            <option value="">{ui("All people")}</option>
-            {w.members.map((m) => (
-              <option value={m.id} key={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="sop-field">
-          {ui("Pond")}
-          <select value={pond} onChange={(e) => setPond(e.target.value)}>
-            <option value="">{ui("All ponds")}</option>
-            {w.physicalPonds.map((p) => (
-              <option value={p.id} key={p.id}>
-                {p.pondName}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="sop-field">
-          {ui("Block")}
-          <select value={block} onChange={(e) => setBlock(e.target.value)}>
-            <option value="">{ui("All blocks")}</option>
-            {w.blocks.map((b) => (
-              <option value={b.id} key={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="sop-field">
-          {ui("Urgency")}
-          <select value={urgency} onChange={(e) => setUrgency(e.target.value)}>
-            {["", "low", "warning", "critical"].map((s) => (
-              <option key={s} value={s}>
-                {ui(s || "All urgency levels")}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="sop-field">
-          {ui("Due date")}
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-        </label>
-      </div>
+      <details className="todo-filters">
+        <summary>
+          {ui("Filters")}{" "}
+          {filterCount > 0 && <span className="sop-status">{filterCount}</span>}
+        </summary>
+        <div className="sop-grid">
+          <label className="sop-field">
+            {ui("Status")}
+            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+              {[
+                "active",
+                "all",
+                "open",
+                "scheduled",
+                "submitted",
+                "needs_review",
+                "completed",
+                "waived",
+                "cancelled",
+              ].map((s) => (
+                <option key={s} value={s}>
+                  {ui(s === "all" ? "All tasks" : s)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="sop-field">
+            {ui("Responsible person")}
+            <select value={person} onChange={(e) => setPerson(e.target.value)}>
+              <option value="">{ui("All people")}</option>
+              {w.members.map((m) => (
+                <option value={m.id} key={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="sop-field">
+            {ui("Pond")}
+            <select value={pond} onChange={(e) => setPond(e.target.value)}>
+              <option value="">{ui("All ponds")}</option>
+              {w.physicalPonds.map((p) => (
+                <option value={p.id} key={p.id}>
+                  {p.pondName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="sop-field">
+            {ui("Block")}
+            <select value={block} onChange={(e) => setBlock(e.target.value)}>
+              <option value="">{ui("All blocks")}</option>
+              {w.blocks.map((b) => (
+                <option value={b.id} key={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="sop-field">
+            {ui("Urgency")}
+            <select
+              value={urgency}
+              onChange={(e) => setUrgency(e.target.value)}
+            >
+              {["", "low", "warning", "critical"].map((s) => (
+                <option key={s} value={s}>
+                  {ui(s || "All urgency levels")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="sop-field">
+            {ui("Due date")}
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </label>
+        </div>
+        {filterCount > 0 && (
+          <button onClick={clearFilters}>{ui("Clear filters")}</button>
+        )}
+      </details>
       {!!(adoption || issue) && (
         <button
           onClick={() => {
@@ -231,38 +295,95 @@ function TodoPageContent() {
           {ui("Clear SOP / issue filter")}
         </button>
       )}
+      <div className="todo-list-heading">
+        <h2>{ui("Assigned work")}</h2>
+        <span>
+          {tasks.length} {ui("tasks")}
+        </span>
+      </div>
       {!tasks.length && (
-        <article className="sop-card">
-          <h2>{ui("No tasks match these filters")}</h2>
-          <p>{ui("Adopt a procedure or create a manual task to begin.")}</p>
+        <article className="sop-card todo-empty">
+          <span className="todo-empty-symbol" aria-hidden="true">
+            ✓
+          </span>
+          <h3>
+            {ui(
+              !w.tasks.length
+                ? "No assigned work yet"
+                : "No tasks match these filters",
+            )}
+          </h3>
+          <p>
+            {ui(
+              !w.tasks.length
+                ? "Adopt a procedure or create a manual task to begin."
+                : "Choose another status or clear filters to see more work.",
+            )}
+          </p>
+          {!w.tasks.length ? (
+            <div className="sop-toolbar">
+              <Link href="/dashboard/sops" className="sop-button">
+                {c.sops}
+              </Link>
+              <button className="sop-primary" onClick={() => setManual(true)}>
+                {c.manual}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                clearFilters();
+                setStatus("all");
+              }}
+            >
+              {ui("Show all tasks")}
+            </button>
+          )}
         </article>
       )}
       {tasks.map((t) => (
-        <article className="sop-card" key={t.id}>
-          <div className="sop-toolbar">
-            <h2>{t.title}</h2>
-            <span className="sop-status">{ui(t.status)}</span>
-            {t.dueAt < clock &&
-              !["completed", "waived", "cancelled"].includes(t.status) && (
-                <span className="sop-status">{ui("Overdue")}</span>
-              )}
+        <article className="sop-card todo-task-card" key={t.id}>
+          <div className="todo-task-heading">
+            <h3>{t.title}</h3>
+            <div className="todo-task-badges">
+              <span className="sop-status">{ui(t.status)}</span>
+              {t.dueAt < clock &&
+                !["completed", "waived", "cancelled"].includes(t.status) && (
+                  <span className="sop-status todo-overdue">
+                    {ui("Overdue")}
+                  </span>
+                )}
+            </div>
           </div>
-          <p>
-            {t.target.name} ·{" "}
-            {w.members.find((m) => m.id === t.assigneeId)?.name ||
-              ui("Assigned staff")}{" "}
-            ·{" "}
-            {new Date(t.dueAt).toLocaleString(currentLanguage, {
-              timeZone: w.timeZone || "UTC",
-            })}
-          </p>
-          <p>{t.instructions}</p>
-          <p>
+          <dl className="todo-task-meta">
+            <div>
+              <dt>{ui("Target")}</dt>
+              <dd>{t.target.name}</dd>
+            </div>
+            <div>
+              <dt>{ui("Responsible person")}</dt>
+              <dd>
+                {w.members.find((m) => m.id === t.assigneeId)?.name ||
+                  ui("Assigned staff")}
+              </dd>
+            </div>
+            <div>
+              <dt>{ui("Due time")}</dt>
+              <dd>
+                {new Date(t.dueAt).toLocaleString(currentLanguage, {
+                  timeZone: w.timeZone || "UTC",
+                })}
+              </dd>
+            </div>
+          </dl>
+          <p className="todo-task-instructions">{t.instructions}</p>
+          <p className="todo-task-result">
             {ui("Parameter result:")} {ui(t.result)}
           </p>
           {client.pending.includes(t.id) && <p>{c.pending}</p>}
           <div className="sop-toolbar">
             <button
+              className="sop-primary"
               onClick={() => {
                 setSelected(t);
                 setNotes(t.notes);
@@ -276,9 +397,14 @@ function TodoPageContent() {
             >
               {c.review}
             </button>
-            {t.adoptionId && <Link href={`/dashboard/sops`}>{c.sops}</Link>}
+            {t.adoptionId && (
+              <Link className="sop-button" href={`/dashboard/sops`}>
+                {c.sops}
+              </Link>
+            )}
             {t.target.pondId && (
               <Link
+                className="sop-button"
                 href={`/dashboard/ponds/detail?id=${encodeURIComponent(t.target.pondId)}`}
               >
                 {ui("Open pond")}
@@ -318,10 +444,10 @@ function TodoPageContent() {
         </details>
       )}
       {selected && (
-        <section
-          role="dialog"
-          aria-modal="true"
-          aria-label={ui("Task evidence")}
+        <AccessibleDialog
+          title={ui("Task evidence")}
+          onClose={() => setSelected(null)}
+          busy={client.busy}
           className="sop-dialog"
         >
           <div className="sop-card">
@@ -331,9 +457,11 @@ function TodoPageContent() {
               <p>
                 {ui("Evidence:")} {selected.step.check.field} ·{" "}
                 {selected.step.check.unit} ·{" "}
-                {ui(selected.step.check.exactTime
-                  ? "Exact observation time required"
-                  : "Recorded date accepted")}
+                {ui(
+                  selected.step.check.exactTime
+                    ? "Exact observation time required"
+                    : "Recorded date accepted",
+                )}
               </p>
             )}
             <label className="sop-field">
@@ -404,7 +532,9 @@ function TodoPageContent() {
                   setMessage(
                     result.pending
                       ? c.pending
-                      : ui("Evidence submitted. Source records determine automatic checks."),
+                      : ui(
+                          "Evidence submitted. Source records determine automatic checks.",
+                        ),
                   );
                   setSelected(null);
                 })
@@ -438,16 +568,20 @@ function TodoPageContent() {
                 }
               >
                 <summary>
-                  {ui(selected.purpose === "recheck" &&
-                  selected.status === "needs_review"
-                    ? "Recovery requires manager sign-off"
-                    : "Manager decisions")}
+                  {ui(
+                    selected.purpose === "recheck" &&
+                      selected.status === "needs_review"
+                      ? "Recovery requires manager sign-off"
+                      : "Manager decisions",
+                  )}
                 </summary>
                 {["pass", "fail", "not_applicable"].map((result) => (
                   <button
                     key={result}
                     onClick={() => {
-                      const reason = window.prompt(`${ui("Reason for")} ${ui(result)}`);
+                      const reason = window.prompt(
+                        `${ui("Reason for")} ${ui(result)}`,
+                      );
                       if (reason)
                         void run(async () => {
                           await client.command({
@@ -468,7 +602,9 @@ function TodoPageContent() {
                   <button
                     key={action}
                     onClick={() => {
-                      const reason = window.prompt(`${ui("Reason to")} ${ui(action)}`);
+                      const reason = window.prompt(
+                        `${ui("Reason to")} ${ui(action)}`,
+                      );
                       if (!reason) return;
                       let dueAt: number | undefined;
                       if (action === "postpone") {
@@ -490,7 +626,7 @@ function TodoPageContent() {
                       });
                     }}
                   >
-                    {action}
+                    {ui(action)}
                   </button>
                 ))}
                 <label className="sop-field">
@@ -521,13 +657,13 @@ function TodoPageContent() {
             )}
             <button onClick={() => setSelected(null)}>{ui("Close")}</button>
           </div>
-        </section>
+        </AccessibleDialog>
       )}
       {manual && (
-        <section
-          role="dialog"
-          aria-modal="true"
-          aria-label={ui("Create farm task")}
+        <AccessibleDialog
+          title={ui("Create farm task")}
+          onClose={() => setManual(false)}
+          busy={client.busy}
           className="sop-dialog"
         >
           <div className="sop-card">
@@ -539,7 +675,9 @@ function TodoPageContent() {
                 onChange={(e) => setManualSeverity(e.target.value)}
               >
                 {["low", "warning", "critical"].map((value) => (
-                  <option key={value} value={value}>{ui(value)}</option>
+                  <option key={value} value={value}>
+                    {ui(value)}
+                  </option>
                 ))}
               </select>
             </label>
@@ -579,7 +717,9 @@ function TodoPageContent() {
                 }}
               >
                 {["company", "block", "pond"].map((s) => (
-                  <option key={s} value={s}>{ui(s)}</option>
+                  <option key={s} value={s}>
+                    {ui(s)}
+                  </option>
                 ))}
               </select>
             </label>
@@ -613,31 +753,33 @@ function TodoPageContent() {
                 onChange={(e) => setDue(e.target.value)}
               />
             </label>
-            <button
-              className="sop-primary"
-              disabled={client.busy || !title.trim() || !due}
-              onClick={() =>
-                void run(async () => {
-                  await client.command({
-                    action: "manualTask",
-                    severity: manualSeverity,
-                    title,
-                    instructions,
-                    scope: manualScope,
-                    targetId: manualTarget,
-                    assigneeId: assignee || undefined,
-                    dueAt: Date.parse(due),
-                  });
-                  setManual(false);
-                  setTitle("");
-                })
-              }
-            >
-              {ui("Create task")}
-            </button>
-            <button onClick={() => setManual(false)}>{ui("Close")}</button>
+            <div className="sop-toolbar">
+              <button
+                className="sop-primary"
+                disabled={client.busy || !title.trim() || !due}
+                onClick={() =>
+                  void run(async () => {
+                    await client.command({
+                      action: "manualTask",
+                      severity: manualSeverity,
+                      title,
+                      instructions,
+                      scope: manualScope,
+                      targetId: manualTarget,
+                      assigneeId: assignee || undefined,
+                      dueAt: Date.parse(due),
+                    });
+                    setManual(false);
+                    setTitle("");
+                  })
+                }
+              >
+                {ui("Create task")}
+              </button>
+              <button onClick={() => setManual(false)}>{ui("Close")}</button>
+            </div>
           </div>
-        </section>
+        </AccessibleDialog>
       )}
     </section>
   );

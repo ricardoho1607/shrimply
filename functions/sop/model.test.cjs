@@ -25,6 +25,7 @@ test("SOP JSON uses the shared Meta adapter, strict schema and private inline PD
     title: "Synthetic fixture",
     description: "",
     language: "en",
+    content: require("./fixtures/water-content.json"),
     steps: [],
   };
   const actual = await generateSopJson({
@@ -107,4 +108,35 @@ test("narrative schema rejects extra authority fields and requires cited structu
     { ...judgment, activate: true },
   ])
     assert.throws(() => validateNarrativeJudgment(invalid));
+});
+
+test("long document generation gets a larger budget while narrative judgments retain their short budget", async (t) => {
+  const {
+    generateSopJson,
+    SOP_DRAFT_FORMAT,
+    SOP_NARRATIVE_FORMAT,
+  } = require("./model");
+  const { SOP_DOCUMENT_TIMEOUT_MS } = require("../../shared/sop/timing.ts");
+  const timeouts = [];
+  t.mock.method(AbortSignal, "timeout", (milliseconds) => {
+    timeouts.push(milliseconds);
+    return new AbortController().signal;
+  });
+  for (const format of [SOP_DRAFT_FORMAT, SOP_NARRATIVE_FORMAT]) {
+    await assert.rejects(
+      generateSopJson({
+        apiKey: "fixture",
+        prompt: "Fixture",
+        format,
+        fetchImpl: async () => {
+          throw new DOMException("Timed out", "TimeoutError");
+        },
+      }),
+      {
+        code: "deadline-exceeded",
+        message: "SOP generation timed out. Try generating the draft again.",
+      },
+    );
+  }
+  assert.deepEqual(timeouts, [SOP_DOCUMENT_TIMEOUT_MS, 90000]);
 });

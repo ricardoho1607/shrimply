@@ -48,6 +48,34 @@ const evaluate = (items, s = step()) =>
     now,
     timeZone: "UTC",
   });
+test("corrective guidance and manual evidence descriptions are optional without changing check results", () => {
+  const s = step();
+  s.correctiveInstructions = "";
+  const definition = {
+    title: "Farm procedure",
+    description: "",
+    language: "id",
+    steps: [s],
+  };
+  assert.deepEqual(validateSop(definition), []);
+  assert.equal(evaluate([evidence({ value: 4 })], s).result, "fail");
+  s.check = {
+    ...s.check,
+    field: "manual",
+    operator: "narrative",
+    unit: "",
+    exactTime: false,
+    rubric: "",
+  };
+  assert.deepEqual(validateSop(definition), []);
+  assert.equal(
+    evaluate(
+      [evidence({ field: "manual", unit: "", value: "Observation recorded" })],
+      s,
+    ).result,
+    "needs_review",
+  );
+});
 test("missing, estimated, wrong-cycle, malformed, and date-only evidence cannot pass an exact measurement check", () => {
   for (const items of [
     [],
@@ -86,7 +114,7 @@ test("analytical bases are not silently interchangeable", () => {
     "insufficient_evidence",
   );
 });
-test("validation requires farm limits and corrective guidance and rejects cyclic workflows", () => {
+test("validation requires limits for range checks and rejects cyclic workflows", () => {
   assert.equal(
     validateSop({
       title: "SOP",
@@ -101,8 +129,15 @@ test("validation requires farm limits and corrective guidance and rejects cyclic
       title: "SOP",
       description: "",
       language: "en",
-      steps: [emptySopStep()],
-    }).length,
+      steps: [
+        {
+          ...step(),
+          check: { ...step().check, operator: "range", min: null, max: null },
+        },
+      ],
+    }).some((issue) =>
+      issue.includes("Set a farm-approved minimum or maximum."),
+    ),
   );
   const a = step(),
     b = { ...step(), id: "step-2" };
@@ -352,4 +387,40 @@ test("shared DOC schedules cannot silently omit work when ponds have different s
       steps: [s],
     }).some((error) => error.includes("DOC schedules require pond scope")),
   );
+});
+
+test("on-demand checks do not need a clock time, while calendar schedules still require one", () => {
+  for (const kind of ["manual", "event", "stage"]) {
+    const s = step();
+    s.trigger = { ...s.trigger, kind, at: "", event: "harvest" };
+    const definition = {
+      title: "Source schedule",
+      description: "",
+      language: "id",
+      steps: [s],
+    };
+    assert.deepEqual(validateSop(definition), []);
+    assert.equal(
+      scheduledOccurrence(s, target, now, now - 86400000, "UTC"),
+      null,
+    );
+    s.trigger.at = "not-a-time";
+    assert.ok(
+      validateSop(definition).some((issue) =>
+        issue.includes("Invalid schedule"),
+      ),
+    );
+  }
+  for (const kind of ["daily", "weekly", "doc"]) {
+    const s = step();
+    s.trigger = { ...s.trigger, kind, at: "" };
+    assert.ok(
+      validateSop({
+        title: "Clock schedule",
+        description: "",
+        language: "id",
+        steps: [s],
+      }).some((issue) => issue.includes("Invalid schedule")),
+    );
+  }
 });

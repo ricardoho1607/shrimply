@@ -4,7 +4,8 @@ import { fromByteArray } from "base64-js";
 import type { SopAttachment } from "../../shared/sop/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
-import { getFunctions, httpsCallable } from "firebase/functions";
+import { getFunctions } from "firebase/functions";
+import { callSopFunction } from "../../shared/sop/callable";
 import { ref, uploadBytes, getBytes } from "firebase/storage";
 import { db, storage } from "@/config/firebase";
 import { useAuth } from "../../context/AuthContext";
@@ -38,10 +39,7 @@ export function useSopWorkspace(): SopClient {
     .join(",");
   const call = useCallback(
     async (name: string, data: Record<string, unknown>) =>
-      (await httpsCallable(getFunctions(db.app), name)(data)).data as Record<
-        string,
-        unknown
-      >,
+      callSopFunction(getFunctions(db.app), name, data),
     [],
   );
   const refresh = useCallback(async () => {
@@ -219,11 +217,18 @@ export function useSopWorkspace(): SopClient {
     }
   };
   const assist = async (data: Record<string, unknown>) => {
+    if (!uid || !companyId) throw new Error("Select your farm first.");
+    const captured = identity.current;
     setBusy(true);
     try {
-      return await call("assistSop", { ...data, companyId });
+      const result = await call("assistSop", { ...data, companyId });
+      if (identity.current !== captured)
+        throw new Error(
+          "Your farm changed. Open the SOP in the current farm and retry.",
+        );
+      return result;
     } finally {
-      setBusy(false);
+      if (identity.current === captured) setBusy(false);
     }
   };
   const upload = async (file: unknown, taskId = "") => {
@@ -237,8 +242,11 @@ export function useSopWorkspace(): SopClient {
     if ((asset.size || 0) > 10 * 1024 * 1024)
       throw new Error("Files must be at most 10 MB.");
     const contentType = asset.mimeType || "image/jpeg";
-    if (taskId && !(await isWorkspaceOnline()))
-      return { path: asset.uri, name: asset.name, contentType };
+    if (!(await isWorkspaceOnline())) {
+      if (taskId && taskId !== "guidance")
+        return { path: asset.uri, name: asset.name, contentType };
+      throw new Error("Connect to upload SOP guidance.");
+    }
     const path = `companies/${companyId}/sopAttachments/${uid}/sop-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const blob = await (await fetch(asset.uri)).blob();
     await uploadBytes(ref(storage, path), blob, {
@@ -295,15 +303,6 @@ export function useSopWorkspace(): SopClient {
     });
   };
   return {
-    versions: async (sopId, cursor) =>
-      (await call("getSopVersions", {
-        companyId,
-        sopId,
-        cursor,
-      })) as unknown as {
-        items: import("../../shared/sop/client").SopVersion[];
-        nextCursor: string;
-      },
     workspace,
     loadMore,
     openAttachment,

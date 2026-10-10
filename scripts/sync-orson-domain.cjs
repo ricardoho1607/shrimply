@@ -40,6 +40,8 @@ function compile(name) {
   "sop/contracts",
   "sop/registry",
   "sop/engine",
+  "sop/translation",
+  "sop/timing",
   "dailyFeedTransaction",
   "financeIntegrity",
   "harvestProfitability",

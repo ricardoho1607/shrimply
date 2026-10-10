@@ -40,7 +40,7 @@ exports.checkSopStageGate = onCall(async (request) =>
     request.data?.stage,
   ),
 );
-exports.sopCommand = onCall({ timeoutSeconds: 120 }, async (request) => {
+async function command(request) {
   if (!request.auth?.uid)
     throw new (require("firebase-functions/v2/https").HttpsError)(
       "unauthenticated",
@@ -67,7 +67,12 @@ exports.sopCommand = onCall({ timeoutSeconds: 120 }, async (request) => {
       request.auth.token?.platformRole === "owner",
   };
   return service().command(request.auth.uid, data);
-});
+}
+exports.sopCommand = onCall({ timeoutSeconds: 120 }, command);
+exports.deleteSop = onCall(
+  { timeoutSeconds: 120 },
+  require("./delete").createDeleteSopHandler(command),
+);
 exports.runSopScheduler = onSchedule(
   {
     schedule: "every 1 minutes",

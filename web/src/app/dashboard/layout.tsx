@@ -783,8 +783,8 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                   type="button"
                   onClick={handleSignOut}
                   className="sidebar-link"
-                  aria-label={getString(t.auth.signOut, 'Logout')}
-                  title={getString(t.auth.signOut, 'Logout')}
+                  aria-label={getString(t.sidebar.signOut, getString(t.auth.signOut, 'Logout'))}
+                  title={getString(t.sidebar.signOut, getString(t.auth.signOut, 'Logout'))}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -803,7 +803,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                   }}
                 >
                   <DashboardIcon name="logout" />
-                  <span className="sidebar-item-label">{getString(t.auth.signOut, 'Logout')}</span>
+                  <span className="sidebar-item-label">{getString(t.sidebar.signOut, getString(t.auth.signOut, 'Logout'))}</span>
                 </button>
               )}
             </div>

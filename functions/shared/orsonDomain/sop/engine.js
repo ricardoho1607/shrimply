@@ -10,6 +10,7 @@ exports.sopConflicts = sopConflicts;
 exports.assessNarrative = assessNarrative;
 const contracts_1 = require("./contracts");
 const registry_1 = require("./registry");
+const content_1 = require("./content");
 const finiteSopNumber = (value) => {
     if (typeof value !== "number" && typeof value !== "string")
         return null;
@@ -32,6 +33,8 @@ function validateSop(definition) {
         errors.push("Description is too long.");
     if (!["en", "id", "vi", "th", "zh"].includes(definition.language))
         errors.push("Choose a supported original language.");
+    if (definition.content !== undefined)
+        errors.push(...(0, content_1.validateSopContent)(definition.content));
     if (definition.attachments &&
         (!Array.isArray(definition.attachments) ||
             definition.attachments.length > 10))
@@ -59,7 +62,10 @@ function validateSop(definition) {
             errors.push(prefix + "Choose scope, severity, and stages.");
         if (!s.trigger ||
             !["daily", "weekly", "doc", "event", "stage", "manual"].includes(s.trigger.kind) ||
-            !/^([01]\d|2[0-3]):[0-5]\d$/.test(s.trigger.at)) {
+            typeof s.trigger.at !== "string" ||
+            ((["daily", "weekly", "doc"].includes(s.trigger.kind) ||
+                s.trigger.at !== "") &&
+                !/^([01]\d|2[0-3]):[0-5]\d$/.test(s.trigger.at))) {
             errors.push(prefix + "Invalid schedule.");
             continue;
         }
@@ -154,14 +160,9 @@ function validateSop(definition) {
             !Number.isInteger(s.check.freshnessMinutes) ||
             s.check.freshnessMinutes < 1)
             errors.push(prefix + "Invalid evidence count/freshness.");
-        if (s.check.operator === "narrative" &&
-            (!s.check.rubric?.trim() || s.check.field !== "manual"))
-            errors.push(prefix + "Narrative checks need a manual evidence rubric.");
         if ((s.check.operator === "equals" || s.check.operator === "sequence") &&
             !s.check.value.trim())
             errors.push(prefix + "Specify the required value or sequence.");
-        if (!s.correctiveInstructions?.trim())
-            errors.push(prefix + "Provide corrective guidance.");
         if (s.gateStage && !contracts_1.SOP_STAGES.includes(s.gateStage))
             errors.push(prefix + "Invalid stage gate.");
         for (const links of [s.dependsOn, s.onPass, s.onFail])

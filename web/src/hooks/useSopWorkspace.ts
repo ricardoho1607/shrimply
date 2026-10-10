@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
-import { getFunctions, httpsCallable } from "firebase/functions";
-import { ref, uploadBytes, getBlob } from "firebase/storage";
+import { getFunctions } from "firebase/functions";
+import { callSopFunction } from "../../../shared/sop/callable";
+import { ref, uploadBytes, getBlob, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -38,10 +39,7 @@ export function useSopWorkspace(): SopClient {
   const key = `shrimply:sop:${uid}:${companyId}`;
   const call = useCallback(
     async (name: string, payload: Record<string, unknown>) =>
-      (await httpsCallable(getFunctions(db.app), name)(payload)).data as Record<
-        string,
-        unknown
-      >,
+      callSopFunction(getFunctions(db.app), name, payload),
     [],
   );
   const refresh = useCallback(async () => {
@@ -261,11 +259,18 @@ export function useSopWorkspace(): SopClient {
     }
   };
   const assist = async (data: Record<string, unknown>) => {
+    if (!uid || !companyId) throw new Error("Select your farm first.");
+    const captured = identity.current;
     setBusy(true);
     try {
-      return await call("assistSop", { ...data, companyId });
+      const result = await call("assistSop", { ...data, companyId });
+      if (identity.current !== captured)
+        throw new Error(
+          "Your farm changed. Open the SOP in the current farm and retry.",
+        );
+      return result;
     } finally {
-      setBusy(false);
+      if (identity.current === captured) setBusy(false);
     }
   };
   const upload = async (file: unknown, taskId = "") => {
@@ -318,7 +323,22 @@ export function useSopWorkspace(): SopClient {
       [cursorKey[kind]]: result.nextCursor,
     }));
   };
-  const openAttachment = async (attachment: SopAttachment) => {
+  const openAttachment = async (
+    attachment: SopAttachment,
+    download = false,
+  ) => {
+    if (download) {
+      // A direct source link does not require browser byte-download CORS.
+      // Firebase authorizes metadata access before returning the existing URL.
+      const url = await getDownloadURL(ref(storage, attachment.path));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = attachment.name;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.click();
+      return;
+    }
     const tab = window.open("", "_blank");
     if (tab) tab.opener = null;
     try {
@@ -341,15 +361,6 @@ export function useSopWorkspace(): SopClient {
     }
   };
   return {
-    versions: async (sopId, cursor) =>
-      (await call("getSopVersions", {
-        companyId,
-        sopId,
-        cursor,
-      })) as unknown as {
-        items: import("../../../shared/sop/client").SopVersion[];
-        nextCursor: string;
-      },
     workspace,
     loadMore,
     openAttachment,

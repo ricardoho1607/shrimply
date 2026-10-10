@@ -10,19 +10,9 @@ export type SopStage = (typeof SOP_STAGES)[number];
 export type SopScope = "pond" | "block" | "company";
 export type SopSeverity = "low" | "warning" | "critical";
 export type SopResult =
-  | "pass"
-  | "fail"
-  | "insufficient_evidence"
-  | "needs_review"
-  | "not_applicable";
+  "pass" | "fail" | "insufficient_evidence" | "needs_review" | "not_applicable";
 export type SopOperator =
-  | "present"
-  | "range"
-  | "equals"
-  | "count"
-  | "trend"
-  | "sequence"
-  | "narrative";
+  "present" | "range" | "equals" | "count" | "trend" | "sequence" | "narrative";
 export interface SopTrigger {
   kind: "daily" | "weekly" | "doc" | "event" | "stage" | "manual";
   at: string;
@@ -69,7 +59,26 @@ export interface SopStep {
   requireAttachment: boolean;
   gateStage: SopStage | "";
 }
+/** Readable source guidance is independent of supported automated checks. */
+export interface SopContentTable {
+  title: string;
+  columns: string[];
+  rows: { cells: string[] }[];
+}
+export interface SopContentSection {
+  id: string;
+  title: string;
+  body: string;
+  sourcePages: number[];
+  tables: SopContentTable[];
+}
+export interface SopContent {
+  sections: SopContentSection[];
+  /** Explicit omissions remain visible and block approval until resolved. */
+  omissions: string[];
+}
 export interface SopDefinition {
+  content?: SopContent;
   attachments?: SopAttachment[];
   title: string;
   description: string;
