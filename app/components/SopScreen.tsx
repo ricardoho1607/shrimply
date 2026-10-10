@@ -1,4 +1,10 @@
 import {
+  adoptionPonds,
+  adoptionPreview,
+  confirmedAdoption,
+  existingSopAdoption,
+} from "../../shared/sop/adoption";
+import {
   SOP_INTERFACE_LANGUAGES,
   sopMeasurementLabel,
   sopCheckModeLabel,
@@ -45,6 +51,7 @@ import {
   emptySopStep,
   SOP_STAGES,
   SOP_TEMPLATES,
+  type SopAdoption,
   type SopDefinition,
   type SopStep,
   type SopTask,
@@ -158,8 +165,10 @@ function Choices({
   selected,
   onChange,
   id,
+  disabled = false,
 }: {
   id?: string;
+  disabled?: boolean;
   label: string;
   values: { id: string; title: string }[];
   selected: string[];
@@ -174,11 +183,16 @@ function Choices({
           {values.map((v) => (
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityState={{ selected: selected.includes(v.id) }}
+              accessibilityState={{
+                selected: selected.includes(v.id),
+                disabled,
+              }}
+              disabled={disabled}
               key={v.id}
               style={[
                 styles.choice,
                 selected.includes(v.id) && styles.selectedChoice,
+                disabled && { opacity: 0.5 },
               ]}
               onPress={() => onChange(v.id)}
             >
@@ -275,6 +289,9 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
     [lifetime, setLifetime] = useState("cycle"),
     [recipients, setRecipients] = useState<string[]>([]),
     [preview, setPreview] = useState<Record<string, unknown> | null>(null);
+  const [adoptingMembership, setAdoptingMembership] =
+    useState<SopAdoption | null>(null);
+  const [adoptionError, setAdoptionError] = useState("");
   const [task, setTask] = useState<SopTask | null>(null),
     [notes, setNotes] = useState(""),
     [observedAt, setObservedAt] = useState(""),
@@ -431,14 +448,29 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
         : d,
     );
   const beginAdoption = (s: SopDocument) => {
-    setAdopting(s);
+    const existing = existingSopAdoption(w.adoptions, s.id);
+    setAdoptingMembership(existing || null);
+    setAdopting(
+      existing
+        ? {
+            ...s,
+            definition: existing.definition,
+            approvedVersionId: existing.versionId,
+          }
+        : s,
+    );
+    setAdoptionError("");
+    setLifetime(existing?.lifetime || "cycle");
+    setRecipients(existing?.recipients || []);
     setManager(
-      w.members.find((m) => ["owner", "co-owner", "manager"].includes(m.role))
-        ?.id || "",
+      existing?.managerId ||
+        w.members.find((m) => ["owner", "co-owner", "manager"].includes(m.role))
+          ?.id ||
+        "",
     );
     setPreview(null);
-    setPonds([]);
-    setBlocks([]);
+    setPonds(existing?.pondIds || []);
+    setBlocks(existing?.blockIds || []);
   };
   const filtered = w.tasks.filter(
     (t) =>
@@ -754,7 +786,11 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                                   }
                                 />
                                 <Button
-                                  title={c.adopt}
+                                  title={
+                                    existingSopAdoption(w.adoptions, s.id)
+                                      ? ui("Manage adoption")
+                                      : c.adopt
+                                  }
                                   onPress={() => beginAdoption(s)}
                                 />
                               </>
@@ -2040,35 +2076,34 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
           {adopting && (
             <View style={styles.card}>
               <Text style={styles.subheading}>
-                {c.adopt}: {adopting.title}
+                {ui(adoptingMembership ? "Manage adoption" : "Adopt SOP")}:{" "}
+                {adopting.title}
               </Text>
               <Choices
+                disabled={client.busy}
                 label={ui("Blocks (follow membership)")}
                 values={w.blocks.map((b) => ({ id: b.id, title: b.name }))}
                 selected={blocks}
                 onChange={(id) => {
-                  setBlocks(toggle(blocks, id));
+                  setBlocks((current) => toggle(current, id));
                   setPreview(null);
                 }}
               />
               <Choices
+                disabled={client.busy}
                 label={ui("Selected ponds")}
-                values={[
-                  ...w.physicalPonds,
-                  ...w.ponds
-                    .filter(
-                      (p) =>
-                        !w.physicalPonds.some((q) => q.id === p.physicalPondId),
-                    )
-                    .map((p) => ({ ...p, id: p.physicalPondId })),
-                ].map((p) => ({ id: p.id, title: p.pondName }))}
+                values={adoptionPonds(w).map((p) => ({
+                  id: p.id,
+                  title: `${p.name} · ${ui(p.activeCycle ? "Active cycle" : "Preparation / no active cycle")}`,
+                }))}
                 selected={ponds}
                 onChange={(id) => {
-                  setPonds(toggle(ponds, id));
+                  setPonds((current) => toggle(current, id));
                   setPreview(null);
                 }}
               />
               <Choices
+                disabled={client.busy || !!adoptingMembership}
                 label={ui("Lifetime")}
                 values={vals(["cycle", "standing"])}
                 selected={[lifetime]}
@@ -2078,6 +2113,7 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                 }}
               />
               <Choices
+                disabled={client.busy}
                 label={ui("Accountable manager")}
                 values={w.members
                   .filter((m) =>
@@ -2091,32 +2127,79 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                 }}
               />
               <Choices
+                disabled={client.busy}
                 label={ui("Escalation recipients")}
                 values={w.members.map((m) => ({ id: m.id, title: m.name }))}
                 selected={recipients}
                 onChange={(id) => {
-                  setRecipients(toggle(recipients, id));
+                  setRecipients((current) => toggle(current, id));
                   setPreview(null);
                 }}
               />
+              <Text style={styles.text}>
+                {
+                  adoptionPonds(w).filter(
+                    (p) => ponds.includes(p.id) || blocks.includes(p.blockId),
+                  ).length
+                }{" "}
+                {ui("ponds selected")}
+              </Text>
+              <Text style={styles.text}>
+                {ui(
+                  "Work follows existing pond/block assignments. The accountable manager receives unassigned work.",
+                )}
+              </Text>
               <Text style={styles.text}>{w.timeZone}</Text>
+              {!!adoptionError && (
+                <Text accessibilityRole="alert" style={styles.alert}>
+                  {ui(adoptionError)}
+                </Text>
+              )}
               <Button
-                title={c.preview}
-                disabled={client.busy}
+                title={ui("Review adoption")}
+                disabled={
+                  client.busy ||
+                  (!ponds.length &&
+                    !blocks.length &&
+                    !adopting.definition.steps.some(
+                      (s) => s.scope === "company",
+                    )) ||
+                  !manager ||
+                  !w.timeZone
+                }
                 onPress={() =>
-                  void run(async () =>
-                    setPreview(
-                      await client.command({
-                        action: "previewAdoption",
-                        sopId: adopting.id,
-                        blockIds: blocks,
-                        pondIds: ponds,
-                        lifetime,
-                        managerId: manager,
-                        recipients,
-                      }),
-                    ),
-                  )
+                  void (async () => {
+                    setAdoptionError("");
+                    setPreview(null);
+                    try {
+                      setPreview(
+                        adoptionPreview(
+                          await client.command({
+                            action: adoptingMembership
+                              ? "previewMembership"
+                              : "previewAdoption",
+                            ...(adoptingMembership
+                              ? {
+                                  adoptionId: adoptingMembership.id,
+                                  expectedRevision: adoptingMembership.revision,
+                                }
+                              : { sopId: adopting.id }),
+                            blockIds: blocks,
+                            pondIds: ponds,
+                            lifetime,
+                            managerId: manager,
+                            recipients,
+                          }),
+                        ) as unknown as Record<string, unknown>,
+                      );
+                    } catch (e) {
+                      setAdoptionError(
+                        e instanceof Error
+                          ? e.message
+                          : "Unable to review adoption.",
+                      );
+                    }
+                  })()
                 }
               />
               {preview && (
@@ -2126,10 +2209,13 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                       id: string;
                       name: string;
                       stage: string;
+                      assigneeId: string;
                     }[]
                   ).map((t) => (
                     <Text key={t.id} style={styles.text}>
-                      {t.name} · {t.stage}
+                      {t.name} · {ui(t.stage)} · {ui("Assigned to")}{" "}
+                      {w.members.find((m) => m.id === t.assigneeId)?.name ||
+                        t.assigneeId}
                     </Text>
                   ))}
                   {(preview.conflicts as string[]).map((e) => (
@@ -2138,30 +2224,67 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                     </Text>
                   ))}
                   <Button
-                    title={c.activate}
+                    title={ui(
+                      adoptingMembership
+                        ? "Apply reviewed changes"
+                        : "Accept and activate",
+                    )}
                     disabled={
                       client.busy || (preview.conflicts as string[]).length > 0
                     }
                     onPress={() =>
-                      void run(async () => {
-                        await client.command({
-                          action: "activate",
-                          sopId: adopting.id,
-                          expectedVersionId: preview.versionId,
-                          blockIds: blocks,
-                          pondIds: ponds,
-                          lifetime,
-                          managerId: manager,
-                          recipients,
-                        });
-                        setAdopting(null);
-                        setTab("adopted");
-                      })
+                      void (async () => {
+                        setAdoptionError("");
+                        try {
+                          const result = await client.command({
+                            action: adoptingMembership
+                              ? "refreshMembership"
+                              : "activate",
+                            ...(adoptingMembership
+                              ? {
+                                  adoptionId: adoptingMembership.id,
+                                  expectedRevision: adoptingMembership.revision,
+                                }
+                              : { sopId: adopting.id }),
+                            expectedVersionId: preview.versionId,
+                            ...(preview.targetSignature
+                              ? {
+                                  expectedTargetSignature:
+                                    preview.targetSignature,
+                                }
+                              : {}),
+                            blockIds: blocks,
+                            pondIds: ponds,
+                            lifetime,
+                            managerId: manager,
+                            recipients,
+                          });
+                          confirmedAdoption(result);
+                          setAdopting(null);
+                          setTab("adopted");
+                          setMessage(
+                            ui(
+                              "Adoption saved. Open To-do to view assigned work. New tasks appear after the scheduler runs.",
+                            ),
+                          );
+                        } catch (e) {
+                          setPreview(null);
+                          setAdoptionError(
+                            e instanceof Error
+                              ? e.message
+                              : "Unable to activate adoption.",
+                          );
+                        }
+                      })()
                     }
                   />
                 </>
               )}
-              <Button title={ui("Close")} onPress={() => setAdopting(null)} />
+              <Button
+                title={ui("Close")}
+                disabled={client.busy}
+                onPress={() => setAdopting(null)}
+              />
             </View>
           )}
           {mode === "todo" && !task && !manual && (

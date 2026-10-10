@@ -16,6 +16,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import React, { useEffect, useRef, useState } from "react";
 import { SopContentEditor, SopContentView } from "@/components/SopContent";
 import { SopReader } from "@/components/SopReader";
+import SopAdoptionDialog from "@/components/SopAdoptionDialog";
+import { existingSopAdoption } from "../../../../../shared/sop/adoption";
 import {
   generateAndSaveSopDraft,
   saveSopDraft,
@@ -30,6 +32,7 @@ import {
   emptySopStep,
   SOP_STAGES,
   SOP_TEMPLATES,
+  type SopAdoption,
   type SopDefinition,
   type SopStep,
 } from "../../../../../shared/sop/contracts";
@@ -144,14 +147,11 @@ function SopsPageContent() {
     setSaveError("");
     setEditorTarget({ id: target });
   };
-  const [adopting, setAdopting] = useState<SopDocument | null>(null),
-    [blocks, setBlocks] = useState<string[]>([]),
-    [ponds, setPonds] = useState<string[]>([]),
-    [manager, setManager] = useState(""),
-    [recipients, setRecipients] = useState<string[]>([]),
-    [lifetime, setLifetime] = useState("cycle"),
-    [preview, setPreview] = useState<Record<string, unknown> | null>(null),
-    [companyScope, setCompanyScope] = useState(false);
+  const [adopting, setAdopting] = useState<{
+    sop: SopDocument;
+    adoption?: SopAdoption;
+  } | null>(null);
+  const [activatedAdoptionId, setActivatedAdoptionId] = useState("");
   const [stageTarget, setStageTarget] = useState(""),
     [stage, setStage] = useState("preparation"),
     [stageReason, setStageReason] = useState(""),
@@ -211,15 +211,19 @@ function SopsPageContent() {
     values.includes(value)
       ? values.filter((v) => v !== value)
       : [...values, value];
-  const startAdoption = (s: SopDocument) => {
-    setAdopting(s);
-    setBlocks([]);
-    setPonds([]);
-    setPreview(null);
-    setManager(
-      w.members.find((m) => ["owner", "co-owner", "manager"].includes(m.role))
-        ?.id || "",
-    );
+  const startAdoption = (sop: SopDocument, adoption?: SopAdoption) => {
+    setMessage("");
+    const existing = adoption || existingSopAdoption(w.adoptions, sop.id);
+    setAdopting({
+      sop: existing
+        ? {
+            ...sop,
+            definition: existing.definition,
+            approvedVersionId: existing.versionId,
+          }
+        : sop,
+      adoption: existing,
+    });
   };
   const summary = sopSummary(w),
     errors = definition ? validateSop(definition) : [];
@@ -602,7 +606,9 @@ function SopsPageContent() {
                               {c.publish}
                             </button>
                             <button onClick={() => startAdoption(s)}>
-                              {c.adopt}
+                              {existingSopAdoption(w.adoptions, s.id)
+                                ? ui("Manage adoption")
+                                : c.adopt}
                             </button>
                           </>
                         )}
@@ -808,6 +814,13 @@ function SopsPageContent() {
       )}
       {tab === "adopted" && (
         <>
+          {activatedAdoptionId && (
+            <p className="sop-notice">
+              <Link href={`/dashboard/todo?adoptionId=${activatedAdoptionId}`}>
+                {ui("Open assigned To-do")}
+              </Link>
+            </p>
+          )}
           {w.adoptions.map((ad) => (
             <article className="sop-card" key={ad.id}>
               <h2>{ad.title}</h2>
@@ -818,37 +831,38 @@ function SopsPageContent() {
                   : ui("Current cycle")}{" "}
                 · {ad.timeZone} · {ad.targets.length} {ui("targets")}
               </p>
+              <ul className="sop-target-review">
+                {ad.targets.map((target) => (
+                  <li key={`${target.scope}:${target.id}`}>
+                    <strong>{target.name}</strong>
+                    <span>
+                      {ui("Assigned to")}{" "}
+                      {w.members.find(
+                        (member) => member.id === target.assigneeId,
+                      )?.name || target.assigneeId}
+                    </span>
+                  </li>
+                ))}
+              </ul>
               <div className="sop-toolbar">
                 {w.manage && (
                   <>
                     <button
                       onClick={() =>
-                        void run(async () => {
-                          const result = await client.command({
-                            action: "previewMembership",
-                            adoptionId: ad.id,
-                            expectedRevision: ad.revision,
-                          });
-                          setMessage(
-                            `Targets: ${(result.targets as { name: string }[]).map((t) => t.name).join(", ")}\n${(result.conflicts as string[]).join("\n")}`,
-                          );
-                        })
-                      }
-                    >
-                      {ui("Preview membership")}
-                    </button>
-                    <button
-                      onClick={() =>
-                        void run(() =>
-                          client.command({
-                            action: "refreshMembership",
-                            adoptionId: ad.id,
-                            expectedRevision: ad.revision,
-                          }),
+                        startAdoption(
+                          {
+                            id: ad.sopId,
+                            title: ad.title,
+                            definition: ad.definition,
+                            revision: ad.revision,
+                            status: "approved",
+                            approvedVersionId: ad.versionId,
+                          },
+                          ad,
                         )
                       }
                     >
-                      {ui("Apply reviewed membership")}
+                      {ui("Manage adoption")}
                     </button>
                     <button
                       onClick={() =>
@@ -2101,199 +2115,24 @@ function SopsPageContent() {
         </fieldset>
       )}
       {adopting && (
-        <AccessibleDialog
-          title={ui("Adopt SOP")}
+        <SopAdoptionDialog
+          sop={adopting.sop}
+          adoption={adopting.adoption}
+          client={client}
+          ui={ui}
           onClose={() => setAdopting(null)}
-          busy={client.busy}
-          className="sop-dialog"
-        >
-          <div className="sop-card">
-            <h2>
-              {c.adopt}: {adopting.title}
-            </h2>
-            <p>
-              {ui(
-                "Review the current stage and farm targets. Work begins from activation.",
-              )}
-            </p>
-            <div className="sop-grid">
-              <Field group label={ui("Blocks (follow future membership)")}>
-                <div>
-                  {w.blocks.map((b) => (
-                    <label key={b.id}>
-                      <input
-                        type="checkbox"
-                        checked={blocks.includes(b.id)}
-                        onChange={() => {
-                          setBlocks(toggle(blocks, b.id));
-                          setPreview(null);
-                        }}
-                      />
-                      {b.name}
-                    </label>
-                  ))}
-                </div>
-              </Field>
-              <Field group label={ui("Selected ponds")}>
-                <div>
-                  {[
-                    ...w.physicalPonds,
-                    ...w.ponds
-                      .filter(
-                        (p) =>
-                          !w.physicalPonds.some(
-                            (q) => q.id === p.physicalPondId,
-                          ),
-                      )
-                      .map((p) => ({ ...p, id: p.physicalPondId })),
-                  ].map((p) => (
-                    <label key={p.id}>
-                      <input
-                        type="checkbox"
-                        checked={ponds.includes(p.id)}
-                        onChange={() => {
-                          setPonds(toggle(ponds, p.id));
-                          setPreview(null);
-                        }}
-                      />
-                      {p.pondName}
-                    </label>
-                  ))}
-                </div>
-              </Field>
-              <Field label={ui("Lifetime")}>
-                <select
-                  value={lifetime}
-                  onChange={(e) => {
-                    setLifetime(e.target.value);
-                    setPreview(null);
-                  }}
-                >
-                  <option value="cycle">{ui("Current cycle")}</option>
-                  <option value="standing">{ui("Standing procedure")}</option>
-                </select>
-              </Field>
-              <Field label={ui("Accountable manager")}>
-                <select
-                  value={manager}
-                  onChange={(e) => {
-                    setManager(e.target.value);
-                    setPreview(null);
-                  }}
-                >
-                  {w.members
-                    .filter((m) =>
-                      ["owner", "co-owner", "manager"].includes(m.role),
-                    )
-                    .map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                </select>
-              </Field>
-              <Field group label={ui("Escalation recipients")}>
-                <div>
-                  {w.members.map((m) => (
-                    <label key={m.id}>
-                      <input
-                        type="checkbox"
-                        checked={recipients.includes(m.id)}
-                        onChange={() => {
-                          setRecipients(toggle(recipients, m.id));
-                          setPreview(null);
-                        }}
-                      />
-                      {m.name}
-                    </label>
-                  ))}
-                </div>
-              </Field>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={companyScope}
-                  onChange={(e) => {
-                    setCompanyScope(e.target.checked);
-                    setPreview(null);
-                  }}
-                />{" "}
-                {ui("Include company tasks")}
-              </label>
-            </div>
-            <p>
-              {ui("Timezone:")}{" "}
-              {w.timeZone || ui("Set your company timezone before activation")}
-            </p>
-            <button
-              onClick={() =>
-                void run(async () =>
-                  setPreview(
-                    await client.command({
-                      action: "previewAdoption",
-                      sopId: adopting.id,
-                      blockIds: blocks,
-                      pondIds: ponds,
-                      managerId: manager,
-                      recipients,
-                      lifetime,
-                      companyScope,
-                    }),
-                  ),
-                )
-              }
-            >
-              {c.preview}
-            </button>
-            {preview && (
-              <div>
-                <h3>{ui("Targets")}</h3>
-                {(
-                  preview.targets as {
-                    id: string;
-                    name: string;
-                    stage: string;
-                  }[]
-                ).map((t) => (
-                  <p key={t.id}>
-                    {t.name} · {t.stage}
-                  </p>
-                ))}
-                {(preview.conflicts as string[]).map((e) => (
-                  <p className="sop-alert" key={e}>
-                    {e}
-                  </p>
-                ))}
-                <button
-                  className="sop-primary"
-                  disabled={
-                    client.busy || (preview.conflicts as string[]).length > 0
-                  }
-                  onClick={() =>
-                    void run(async () => {
-                      await client.command({
-                        action: "activate",
-                        sopId: adopting.id,
-                        expectedVersionId: preview.versionId,
-                        blockIds: blocks,
-                        pondIds: ponds,
-                        managerId: manager,
-                        recipients,
-                        lifetime,
-                        companyScope,
-                      });
-                      setAdopting(null);
-                      setTab("adopted");
-                    })
-                  }
-                >
-                  {c.activate}
-                </button>
-              </div>
-            )}
-            <button onClick={() => setAdopting(null)}>{ui("Close")}</button>
-          </div>
-        </AccessibleDialog>
+          onActivated={(adoptionId) => {
+            setAdopting(null);
+            setActivatedAdoptionId(adoptionId);
+            setTab("adopted");
+            setMessage(
+              ui(
+                "Adoption saved. Open To-do to view assigned work. New tasks appear after the scheduler runs.",
+              ),
+            );
+            setMessageTone("status");
+          }}
+        />
       )}
       {tab === "history" && w.nextIssueCursor && (
         <button onClick={() => void run(() => client.loadMore("issues"))}>

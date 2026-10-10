@@ -1,5 +1,44 @@
 /** Interface text only. Farm instructions and approved rules retain their original language. */
 const rows = `
+Manage adoption|Kelola penerapan|Quản lý áp dụng|จัดการการนำไปใช้|管理采用
+Cancel|Batal|Hủy|ยกเลิก|取消
+Confirm decision|Konfirmasi keputusan|Xác nhận quyết định|ยืนยันการตัดสินใจ|确认决定
+1. Select ponds|1. Pilih kolam|1. Chọn ao|1. เลือกบ่อ|1. 选择池塘
+2. Review responsibility|2. Tinjau penanggung jawab|2. Kiểm tra người phụ trách|2. ตรวจสอบผู้รับผิดชอบ|2. 核对负责人
+3. Confirm adoption|3. Konfirmasi penerapan|3. Xác nhận áp dụng|3. ยืนยันการนำไปใช้|3. 确认采用
+Search ponds|Cari kolam|Tìm ao|ค้นหาบ่อ|搜索池塘
+Select visible ponds|Pilih kolam yang ditampilkan|Chọn các ao đang hiển thị|เลือกบ่อที่แสดง|选择当前显示的池塘
+Clear selection|Hapus pilihan|Xóa lựa chọn|ล้างการเลือก|清除选择
+ponds selected|kolam terpilih|ao đã chọn|บ่อที่เลือก|个池塘已选择
+Active cycle|Siklus aktif|Vụ nuôi đang hoạt động|รอบการเลี้ยงที่ใช้งาน|进行中的养殖周期
+Preparation / no active cycle|Persiapan / belum ada siklus aktif|Chuẩn bị / chưa có vụ đang hoạt động|เตรียมบ่อ / ยังไม่มีรอบที่ใช้งาน|准备阶段 / 无进行中的周期
+Select whole blocks|Pilih seluruh blok|Chọn toàn bộ khu|เลือกทั้งบล็อก|选择整个区块
+Selected through block|Dipilih melalui blok|Được chọn theo khu|เลือกผ่านบล็อก|通过区块选择
+Assigned to|Ditugaskan kepada|Giao cho|มอบหมายให้|分配给
+Accept and activate|Terima dan aktifkan|Chấp nhận và kích hoạt|ยอมรับและเปิดใช้งาน|接受并启用
+Apply reviewed changes|Terapkan perubahan yang ditinjau|Áp dụng thay đổi đã xem xét|ใช้การเปลี่ยนแปลงที่ตรวจสอบแล้ว|应用已核对的更改
+Review adoption|Tinjau penerapan|Xem xét áp dụng|ตรวจสอบการนำไปใช้|核对采用设置
+Reviewing…|Meninjau…|Đang xem xét…|กำลังตรวจสอบ…|正在核对…
+Saving…|Menyimpan…|Đang lưu…|กำลังบันทึก…|正在保存…
+No matching ponds.|Tidak ada kolam yang cocok.|Không có ao phù hợp.|ไม่พบบ่อที่ตรงกัน|没有匹配的池塘。
+Choose manager|Pilih manajer|Chọn quản lý|เลือกผู้จัดการ|选择管理人员
+Open assigned To-do|Buka tugas yang ditugaskan|Mở công việc được giao|เปิดงานที่มอบหมาย|打开已分配的待办
+Choose ponds, review their assignments, then activate work.|Pilih kolam, tinjau penugasannya, lalu aktifkan tugas.|Chọn ao, xem phân công rồi kích hoạt công việc.|เลือกบ่อ ตรวจสอบการมอบหมาย แล้วเปิดใช้งานงาน|选择池塘，核对现有分配，然后启用任务。
+You can select more than one pond. Existing pond assignments determine who receives the work.|Anda dapat memilih lebih dari satu kolam. Penugasan kolam yang ada menentukan penerima tugas.|Có thể chọn nhiều ao. Phân công ao hiện có quyết định người nhận việc.|เลือกได้หลายบ่อ การมอบหมายบ่อที่มีอยู่กำหนดผู้รับงาน|可以选择多个池塘。任务接收人由现有池塘分配决定。
+Applies to each selected pond’s active cycle. Unstocked ponds need a standing procedure.|Berlaku untuk siklus aktif setiap kolam terpilih. Kolam yang belum ditebar memerlukan prosedur berkelanjutan.|Áp dụng cho vụ đang hoạt động của từng ao đã chọn. Ao chưa thả cần quy trình thường trực.|ใช้กับรอบที่ใช้งานของแต่ละบ่อ บ่อที่ยังไม่ลงลูกกุ้งต้องใช้ขั้นตอนต่อเนื่อง|适用于每个所选池塘的当前周期。尚未投苗的池塘需要长期规程。
+Includes preparation and follows these ponds into future cycles.|Mencakup persiapan dan mengikuti kolam ini ke siklus berikutnya.|Bao gồm chuẩn bị và tiếp tục áp dụng cho các vụ sau.|รวมการเตรียมบ่อและติดตามบ่อเหล่านี้ในรอบต่อไป|包括准备阶段，并继续适用于这些池塘的后续周期。
+Block selection follows future pond membership.|Pilihan blok mengikuti keanggotaan kolam di masa depan.|Lựa chọn khu theo dõi các ao được thêm sau này.|การเลือกบล็อกติดตามสมาชิกบ่อในอนาคต|选择区块后，后续加入区块的池塘也适用。
+These ponds have no active cycle. Choose Standing procedure to include them:|Kolam ini belum memiliki siklus aktif. Pilih Prosedur berkelanjutan untuk menyertakannya:|Các ao này chưa có vụ đang hoạt động. Chọn Quy trình thường trực để bao gồm:|บ่อเหล่านี้ยังไม่มีรอบที่ใช้งาน เลือกขั้นตอนต่อเนื่องเพื่อรวมบ่อ:|以下池塘没有进行中的周期。请选择长期规程以包含它们：
+Work goes to the technician already assigned to the pond’s block. The accountable manager receives work when no technician is assigned.|Tugas diberikan kepada teknisi yang sudah ditugaskan pada blok kolam. Jika belum ada teknisi, tugas diberikan kepada manajer penanggung jawab.|Công việc giao cho kỹ thuật viên đã phụ trách khu của ao. Nếu chưa có kỹ thuật viên, quản lý chịu trách nhiệm nhận việc.|งานส่งให้ช่างเทคนิคที่รับผิดชอบบล็อกของบ่อ หากไม่มีช่างเทคนิค งานจะส่งให้ผู้จัดการที่รับผิดชอบ|任务交给已分配到池塘所在区块的技术员。未分配技术员时，由负责的管理人员接收任务。
+Work follows existing pond/block assignments. The accountable manager receives unassigned work.|Tugas mengikuti penugasan kolam/blok yang ada. Tugas tanpa teknisi diberikan kepada manajer penanggung jawab.|Công việc theo phân công ao/khu hiện có. Quản lý nhận việc chưa được phân công.|งานตามการมอบหมายบ่อ/บล็อกที่มีอยู่ ผู้จัดการรับงานที่ยังไม่มอบหมาย|任务沿用现有池塘/区块分配。未分配的任务由负责的管理人员接收。
+The accountable manager is always included.|Manajer penanggung jawab selalu disertakan.|Luôn bao gồm quản lý chịu trách nhiệm.|รวมผู้จัดการที่รับผิดชอบเสมอ|始终包含负责的管理人员。
+This SOP also includes company work.|SOP ini juga mencakup tugas perusahaan.|SOP này cũng bao gồm công việc công ty.|SOP นี้รวมงานระดับบริษัทด้วย|此 SOP 也包含公司级任务。
+Individual check assignments in this SOP take precedence over pond assignments.|Penugasan pemeriksaan khusus pada SOP ini didahulukan daripada penugasan kolam.|Phân công riêng cho từng kiểm tra trong SOP được ưu tiên hơn phân công ao.|การมอบหมายตรวจสอบรายข้อใน SOP มีลำดับก่อนการมอบหมายบ่อ|此 SOP 中单项检查的分配优先于池塘分配。
+Tasks begin from the saved production stage. Written-evidence checks require review; measurement checks use saved source records.|Tugas dimulai dari tahap produksi yang tersimpan. Bukti tertulis memerlukan tinjauan; pemeriksaan pengukuran menggunakan catatan sumber tersimpan.|Công việc bắt đầu từ giai đoạn đã lưu. Bằng chứng viết cần được duyệt; kiểm tra số đo dùng hồ sơ nguồn đã lưu.|งานเริ่มจากระยะการผลิตที่บันทึกไว้ หลักฐานบันทึกต้องได้รับการตรวจสอบ ส่วนค่าที่วัดใช้ข้อมูลต้นทางที่บันทึกแล้ว|任务从已保存的生产阶段开始。书面证据检查需要审核；测量检查使用已保存的来源记录。
+Adoption saved. Open To-do to view assigned work. New tasks appear after the scheduler runs.|Penerapan tersimpan. Buka Tugas untuk melihat pekerjaan. Tugas baru muncul setelah penjadwal berjalan.|Đã lưu áp dụng. Mở Công việc để xem việc được giao. Việc mới xuất hiện sau khi lịch chạy.|บันทึกการนำไปใช้แล้ว เปิดงานเพื่อดูงานที่มอบหมาย งานใหม่จะแสดงหลังตัวจัดกำหนดการทำงาน|采用设置已保存。打开待办查看已分配工作。调度器运行后会显示新任务。
+Pond assignments or production stages changed. Review adoption again.|Penugasan kolam atau tahap produksi berubah. Tinjau penerapan kembali.|Phân công ao hoặc giai đoạn đã thay đổi. Xem xét áp dụng lại.|การมอบหมายบ่อหรือระยะการผลิตเปลี่ยนไป โปรดตรวจสอบอีกครั้ง|池塘分配或生产阶段已更改。请重新核对采用设置。
+Unable to review adoption.|Tidak dapat meninjau penerapan.|Không thể xem xét áp dụng.|ไม่สามารถตรวจสอบการนำไปใช้|无法核对采用设置。
+Unable to activate adoption.|Tidak dapat mengaktifkan penerapan.|Không thể kích hoạt áp dụng.|ไม่สามารถเปิดใช้งานการนำไปใช้|无法启用采用设置。
 Record a measurement|Catat pengukuran|Ghi nhận phép đo|บันทึกค่าที่วัด|记录测量值
 outside target|Di luar sasaran|Ngoài mục tiêu|นอกเป้าหมาย|超出目标
 Select a warning to open the field that needs attention.|Pilih peringatan untuk membuka kolom yang perlu dilengkapi.|Chọn cảnh báo để mở trường cần bổ sung.|เลือกคำเตือนเพื่อเปิดช่องที่ต้องแก้ไข|选择警告以打开需要补充的字段。

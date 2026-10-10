@@ -353,7 +353,10 @@ function createSopService(db, storage) {
     for (const p of pondIds)
       if (
         !selected.some((x) => x.id === p) ||
-        (!physical.some((x) => x.id === p) && !ponds.some((x) => x.id === p))
+        (!physical.some((x) => x.id === p) &&
+          !ponds.some((x) =>
+            [x.id, x.physicalPondId, x.previousCyclePondId].includes(p),
+          ))
       )
         fail("not-found", "Selected pond no longer exists.");
     const managerId = id(input.managerId);
@@ -376,7 +379,13 @@ function createSopService(db, storage) {
           (x.physicalPondId || x.previousCyclePondId || x.id) === p.id &&
           x.cycleStatus !== "ended",
       );
-      if (input.lifetime === "cycle" && !active) continue;
+      if (input.lifetime === "cycle" && !active) {
+        if (allowEmptyMembership) continue;
+        fail(
+          "failed-precondition",
+          `${p.pondName || p.id} has no active cycle. Choose a standing procedure to include preparation ponds.`,
+        );
+      }
       const block = blocks.find((b) => b.id === p.blockId),
         stage =
           stages.find((s) => s.id === p.id)?.stage ||
@@ -982,6 +991,19 @@ function createSopService(db, storage) {
         if (!zone)
           fail("failed-precondition", "Set the company timezone first.");
         const preview = await resolveTargets(tx, ref, settings, definition, c);
+        const targetSignature = hash(
+          [...preview.targets].sort((a, b) =>
+            `${a.scope}:${a.id}`.localeCompare(`${b.scope}:${b.id}`),
+          ),
+        );
+        if (
+          input.expectedTargetSignature &&
+          input.expectedTargetSignature !== targetSignature
+        )
+          fail(
+            "failed-precondition",
+            "Pond assignments or production stages changed. Review adoption again.",
+          );
         const recipients = [
           ...new Set([
             preview.managerId,
@@ -1010,6 +1032,7 @@ function createSopService(db, storage) {
           definition,
           versionId,
           generatedSteps: definition.steps.length,
+          targetSignature,
         };
         if (input.action === "previewUpdate" && input.adoptionId) {
           const pending = await tx.get(

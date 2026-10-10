@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import AccessibleDialog from "@/components/AccessibleDialog";
+import SopManagerDecision from "@/components/SopManagerDecision";
 import { useSopWorkspace } from "@/hooks/useSopWorkspace";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { sopCopy } from "../../../../../shared/sop/copy";
@@ -575,60 +576,13 @@ function TodoPageContent() {
                       : "Manager decisions",
                   )}
                 </summary>
-                {["pass", "fail", "not_applicable"].map((result) => (
-                  <button
-                    key={result}
-                    onClick={() => {
-                      const reason = window.prompt(
-                        `${ui("Reason for")} ${ui(result)}`,
-                      );
-                      if (reason)
-                        void run(async () => {
-                          await client.command({
-                            action: "review",
-                            taskId: selected.id,
-                            expectedRevision: selected.revision,
-                            result,
-                            reason,
-                          });
-                          setSelected(null);
-                        });
-                    }}
-                  >
-                    {ui("Review as")} {ui(result)}
-                  </button>
-                ))}
-                {["waive", "cancel", "postpone"].map((action) => (
-                  <button
-                    key={action}
-                    onClick={() => {
-                      const reason = window.prompt(
-                        `${ui("Reason to")} ${ui(action)}`,
-                      );
-                      if (!reason) return;
-                      let dueAt: number | undefined;
-                      if (action === "postpone") {
-                        const value = window.prompt(
-                          ui("New deadline (ISO date and time)"),
-                        );
-                        if (!value) return;
-                        dueAt = Date.parse(value);
-                      }
-                      void run(async () => {
-                        await client.command({
-                          action,
-                          taskId: selected.id,
-                          expectedRevision: selected.revision,
-                          reason,
-                          dueAt,
-                        });
-                        setSelected(null);
-                      });
-                    }}
-                  >
-                    {ui(action)}
-                  </button>
-                ))}
+                <SopManagerDecision
+                  key={selected.id}
+                  task={selected}
+                  client={client}
+                  ui={ui}
+                  onSaved={() => setSelected(null)}
+                />
                 <label className="sop-field">
                   {ui("Reassign")}
                   <select

@@ -57,6 +57,7 @@ test.before(async () => {
       rules: fs.readFileSync(path.resolve("firestore.rules"), "utf8"),
     },
   });
+  await env.clearFirestore();
   adminApp = initializeApp(
     { projectId, storageBucket: `${projectId}.appspot.com` },
     "sop-integration",
@@ -167,8 +168,17 @@ test("date-only evidence cannot pass; out-of-range saved measurement creates one
     cycleStatus: "active",
     samplings: [{ id: "water", date: "2026-10-08", doMorning: 4 }],
   };
-  await db.doc("companies/farm/ponds/pond").set(p);
-  await runtime.project("farm", "ponds", "pond", p, "event-1", clock);
+  // Firestore's update time is the source-event ordering fence. A fixed
+  // observation clock must not make these newly saved events look stale.
+  const dateOnlySaved = await db.doc("companies/farm/ponds/pond").set(p);
+  await runtime.project(
+    "farm",
+    "ponds",
+    "pond",
+    p,
+    "event-1",
+    dateOnlySaved.writeTime.toMillis(),
+  );
   let routine = (await get("tasks")).find((t) => t.purpose === "routine");
   await runtime.evaluateTask("farm", routine.id, clock);
   assert.equal(
@@ -178,8 +188,15 @@ test("date-only evidence cannot pass; out-of-range saved measurement creates one
   p.samplings[0].observedAtByField = {
     doMorning: new Date(clock).toISOString(),
   };
-  await db.doc("companies/farm/ponds/pond").set(p);
-  await runtime.project("farm", "ponds", "pond", p, "event-2", clock);
+  const timedSaved = await db.doc("companies/farm/ponds/pond").set(p);
+  await runtime.project(
+    "farm",
+    "ponds",
+    "pond",
+    p,
+    "event-2",
+    timedSaved.writeTime.toMillis(),
+  );
   await runtime.evaluateTask("farm", routine.id, clock);
   await runtime.evaluateTask("farm", routine.id, clock);
   assert.equal((await get("sopIssues")).length, 1);
@@ -212,8 +229,15 @@ test("recovery and corrective evidence require critical manager sign-off", async
   const p = (await db.doc("companies/farm/ponds/pond").get()).data();
   p.samplings[0].doMorning = 6;
   p.samplings[0].observedAtByField.doMorning = new Date(clock).toISOString();
-  await db.doc("companies/farm/ponds/pond").set(p);
-  await runtime.project("farm", "ponds", "pond", p, "event-3", clock);
+  const recoverySaved = await db.doc("companies/farm/ponds/pond").set(p);
+  await runtime.project(
+    "farm",
+    "ponds",
+    "pond",
+    p,
+    "event-3",
+    recoverySaved.writeTime.toMillis(),
+  );
   await runtime.evaluateTask("farm", recheck.id, clock);
   const issue = (await get("sopIssues"))[0];
   assert.equal(issue.status, "closure_review");
@@ -239,7 +263,15 @@ test("recovery and corrective evidence require critical manager sign-off", async
   await runtime.evaluateTask("farm", recheck.id, clock);
   assert.equal((await get("sopIssues"))[0].status, "closed");
   p.samplings[0].doMorning = null;
-  await runtime.project("farm", "ponds", "pond", p, "retracted", clock + 1);
+  const retractedSaved = await db.doc("companies/farm/ponds/pond").set(p);
+  await runtime.project(
+    "farm",
+    "ponds",
+    "pond",
+    p,
+    "retracted",
+    retractedSaved.writeTime.toMillis(),
+  );
   await runtime.evaluateTask("farm", recheck.id, clock);
   assert.equal((await get("sopIssues"))[0].status, "open");
 });
@@ -407,9 +439,18 @@ test("dynamic blocks inherit work and scheduler catch-up never duplicates occurr
     ].sort(),
     ["2026-10-08", "2026-10-09", "2026-10-10", "2026-10-11"],
   );
-  const count = (await get("tasks")).length;
+  // Newly overdue checks may legitimately create corrective/recheck work on
+  // the next tick. Scheduled routine occurrences themselves must stay unique.
+  const routineIds = async () =>
+    (await get("tasks"))
+      .filter(
+        (task) => task.adoptionId === adoptionId && task.purpose === "routine",
+      )
+      .map((task) => task.id)
+      .sort();
+  const ids = await routineIds();
   await runtime.tickAdoption("farm", adoptionId, clock);
-  assert.equal((await get("tasks")).length, count);
+  assert.deepEqual(await routineIds(), ids);
 });
 test("private evidence files respect assignment and published guidance is copied without farm evidence", async () => {
   const task = (await get("tasks")).find(

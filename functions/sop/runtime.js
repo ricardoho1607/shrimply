@@ -4,11 +4,25 @@ const {
   evaluateSopStep,
   farmDate,
   localInstant,
+  validateSop,
 } = require("../shared/orsonDomain/sop/engine");
 const { hash, projectEvidence } = require("./evidence");
 const { currentEvidence } = require("./currentEvidence");
 const { rows } = require("./service");
 const terminal = (task) => ["waived", "cancelled"].includes(task.status);
+function isFullyValidManualOnly(definition) {
+  try {
+    return (
+      !!definition &&
+      Array.isArray(definition.steps) &&
+      definition.steps.length > 0 &&
+      validateSop(definition).length === 0 &&
+      definition.steps.every((step) => step.check.field === "manual")
+    );
+  } catch {
+    return false;
+  }
+}
 function createSopRuntime(db) {
   const base = (id) => db.collection("companies").doc(id);
   function taskFrom(
@@ -108,8 +122,8 @@ function createSopRuntime(db) {
     if (!snap.exists || snap.data().status !== "active") return;
     const ad = { id: adId, ...snap.data() };
     if (
-      !ad.baselineReconciledAt ||
-      now - ad.baselineReconciledAt > 6 * 3600000
+      !isFullyValidManualOnly(ad.definition) &&
+      (!ad.baselineReconciledAt || now - ad.baselineReconciledAt > 6 * 3600000)
     ) {
       for (const kind of [
         "ponds",
@@ -1280,4 +1294,4 @@ function createSopRuntime(db) {
     refreshAssignments,
   };
 }
-module.exports = { createSopRuntime };
+module.exports = { createSopRuntime, isFullyValidManualOnly };
