@@ -246,6 +246,8 @@ Withdraw|Tarik publikasi|Rút lại|ถอน|撤回
 Withdraw own publication|Tarik publikasi sendiri|Rút bài đăng của mình|ถอนการเผยแพร่ของตนเอง|撤回自己的发布
 Unlist|Hapus dari daftar|Ẩn khỏi danh sách|นำออกจากรายการ|取消公开展示
 Mark read|Tandai dibaca|Đánh dấu đã đọc|ทำเครื่องหมายว่าอ่านแล้ว|标为已读
+Read|Sudah dibaca|Đã đọc|อ่านแล้ว|已读
+Marking an alert read acknowledges it. Complete or review the task separately in To-do.|Menandai pemberitahuan sebagai dibaca berarti Anda telah melihatnya. Selesaikan atau tinjau tugas secara terpisah di To-do.|Đánh dấu đã đọc xác nhận bạn đã xem thông báo. Hoàn thành hoặc xem xét công việc riêng trong To-do.|การทำเครื่องหมายว่าอ่านแล้วเป็นการยืนยันว่าได้รับทราบแจ้งเตือน ให้ทำงานให้เสร็จหรือตรวจสอบงานแยกต่างหากใน To-do|将提醒标为已读表示您已知悉。请在待办事项中另行完成或审核任务。
 SOP notifications|Notifikasi SOP|Thông báo SOP|การแจ้งเตือน SOP|SOP 通知
 Enable mobile reminders|Aktifkan pengingat seluler|Bật nhắc nhở di động|เปิดการเตือนบนมือถือ|启用手机提醒
 Routine quiet hours start (HH:MM)|Awal jam tenang (HH:MM)|Bắt đầu giờ yên lặng (HH:MM)|เริ่มเวลางดรบกวน (HH:MM)|常规免打扰开始（HH:MM）

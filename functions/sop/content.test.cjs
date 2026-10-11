@@ -69,6 +69,72 @@ const fixture = () => ({
   ],
 });
 
+test("one invalid imported rule cannot turn valid pond-record checks into manual tasks", (t) => {
+  t.mock.method(console, "warn", () => {});
+  const input = fixture();
+  const recorded = emptySopStep("record-ph");
+  recorded.check = { ...recorded.check, field: "water.phMorning", unit: "", operator: "present" };
+  input.steps.push(recorded);
+  input.steps[0].check.field = "water.unsupported";
+  const { definition, warnings } = require("./draftValidation").prepareGeneratedSopDraft(input);
+  assert.equal(definition.steps[1].check.field, "water.phMorning");
+  assert.equal(definition.steps[1].check.operator, "present");
+  assert.equal(definition.steps[0].check.field, "manual");
+  assert.ok(warnings.length, "The unsupported rule still requires review");
+});
+
+test("explicit ten-day source recurrence survives import as DOC 10, 20, 30 rather than daily work", () => {
+  const input = fixture();
+  input.steps[0].instructions = "Lakukan cek kesehatan dan sampling kering minimal 10 hari sekali.";
+  const { definition } = require("./draftValidation").prepareGeneratedSopDraft(input);
+  const step = definition.steps[0];
+  assert.equal(step.trigger.kind, "doc");
+  assert.equal(step.trigger.everyDays, 10);
+  assert.equal(step.trigger.docFrom, 10);
+  assert.equal(step.trigger.at, "00:00");
+  assert.equal(step.trigger.windowMinutes, 1440);
+  const { scheduledOccurrence, localInstant } = require("../../shared/sop/engine.ts");
+  const target = { scope: "pond", stage: "growout", pondId: "pond", stockingDate: "2026-10-01" };
+  const activated = localInstant("2026-10-01", "00:00", "UTC");
+  for (let day = 1; day <= 30; day++) {
+    const now = activated + day * 86400000 + 12 * 3600000;
+    assert.equal(!!scheduledOccurrence(step, target, now, activated, "UTC"), day % 10 === 0, `DOC ${day}`);
+  }
+});
+
+test("source recurrence keeps explicit first DOC and leaves ambiguous or preparation timing for review", () => {
+  const { applySourceRecurrence, sourceRepeatDays } = require("./sourceRecurrence");
+  assert.equal(sourceRepeatDays("Repeat every 10 days."), 10);
+  assert.equal(sourceRepeatDays("Cek setiap 10 hari."), 10);
+  for (const text of ["1-2 hari sekali", "1 - 2 hari sekali", "1–2 hari sekali", "DOC 10", "every 5 days or every 10 days"])
+    assert.equal(sourceRepeatDays(text), null, text);
+  const input = fixture();
+  input.steps[0].instructions = "Mulai DOC30, setiap 5 hari.";
+  input.steps[0].trigger = { ...input.steps[0].trigger, kind: "doc", docFrom: 30, docTo: 120, at: "07:00", windowMinutes: 120 };
+  const before = JSON.stringify(input);
+  const result = applySourceRecurrence(input);
+  assert.equal(JSON.stringify(input), before);
+  assert.equal(result.steps[0].trigger.docFrom, 30);
+  assert.equal(result.steps[0].trigger.everyDays, 5);
+  assert.equal(result.steps[0].trigger.at, "07:00");
+  input.steps[0].stages = ["preparation"];
+  assert.deepEqual(applySourceRecurrence(input), input);
+});
+
+test("whole-day recording checks end on their farm date across daylight-saving changes", () => {
+  const { scheduledOccurrence, localInstant, farmDate } = require("../../shared/sop/engine.ts");
+  const step = emptySopStep();
+  step.trigger = { ...step.trigger, at: "00:00", windowMinutes: 1440 };
+  const target = { scope: "pond", stage: "growout", pondId: "pond", stockingDate: "2026-01-01" };
+  const zone = "Australia/Melbourne";
+  for (const date of ["2026-04-05", "2026-10-04", "2026-10-11"]) {
+    const start = localInstant(date, "00:00", zone);
+    const occurrence = scheduledOccurrence(step, target, localInstant(date, "12:00", zone), start, zone);
+    assert.equal(farmDate(occurrence.due, zone), date);
+    assert.notEqual(farmDate(occurrence.due + 1, zone), date);
+  }
+});
+
 test("source tables and procedures survive model output, draft saving, reload and reader rendering", async () => {
   const { generateSopJson, SOP_DRAFT_FORMAT } = require("./model");
   const { SopReader } = require("../../web/src/components/SopReader.tsx");

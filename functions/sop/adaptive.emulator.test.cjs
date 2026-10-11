@@ -844,7 +844,10 @@ test("source changes awaiting projection cannot receive an authoritative pass", 
     },
   ];
   await sourceRef.set(source);
-  await runtime.project("farm", "ponds", "pond", source, "source-valid", clock);
+  // Baseline reconciliation uses committed update times; this later write
+  // must not be rejected as an older event from the synthetic farm clock.
+  const committedAt = (await sourceRef.get()).updateTime.toMillis();
+  await runtime.project("farm", "ponds", "pond", source, "source-valid", committedAt);
   const projected = (await get("sopEvidence")).filter(
     (e) =>
       e.sourcePath === "ponds/pond" &&

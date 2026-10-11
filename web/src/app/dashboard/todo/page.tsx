@@ -422,12 +422,16 @@ function TodoPageContent() {
       {w.notifications.length > 0 && (
         <details className="sop-card">
           <summary>{ui("SOP notifications")}</summary>
+          <p>{ui("Marking an alert read acknowledges it. Complete or review the task separately in To-do.")}</p>
           {w.notifications.map((n) => (
             <div key={n.id}>
               <strong>{n.title}</strong>
               <p>{n.message}</p>
-              {!n.read && (
+              {n.read ? (
+                <span className="sop-status">{ui("Read")}</span>
+              ) : (
                 <button
+                  disabled={client.busy}
                   onClick={() =>
                     void run(() =>
                       client.command({

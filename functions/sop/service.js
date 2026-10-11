@@ -1,4 +1,5 @@
 "use strict";
+const { isDeepStrictEqual } = require("node:util");
 const {
   filterPondRecordsForUser,
   getPondTechnicianId,
@@ -1356,8 +1357,12 @@ function createSopService(db, storage) {
                       step,
                       versionId,
                       revision: t.data().revision + 1,
-                      status: "open",
-                      result: "insufficient_evidence",
+                      // Unchanged checks retain submitted evidence and manager review.
+                      // Changed rules must be evaluated against the new definition.
+                      status: isDeepStrictEqual(step, t.data().step)
+                        ? t.data().status : "open",
+                      result: isDeepStrictEqual(step, t.data().step)
+                        ? t.data().result : "insufficient_evidence",
                       migrationFrom: t.data().versionId,
                       migratedAt: now,
                     }

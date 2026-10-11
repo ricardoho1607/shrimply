@@ -256,3 +256,86 @@ test("two ponds follow independent H-20 plans, then actual DOC and retain cancel
     "No growout reminders before actual stocking",
   );
 });
+
+
+test("daily pond records complete only their matching pond and cycle, and deletion revokes stale completion", async (t) => {
+  const f = await fixture(), runtime = createSopRuntime(db);
+  const now = Date.parse("2026-11-02T12:00:00Z");
+  const realNow = Date.now;
+  Date.now = () => now;
+  t.after(() => { Date.now = realNow; });
+  const pond = (id) => ({ physicalPondId: id, pondCycleId: `cycle-${id}`,
+    cycleStatus: "active", docStart: "2026-11-01", cycleStartMode: "new", samplings: [] });
+  for (const id of ["a", "b"]) {
+    await f.ref.collection("ponds").doc(`stocked-${id}`).set(pond(id));
+    await f.ref.collection("physicalPonds").doc(id).update({ activePondId: `stocked-${id}` });
+  }
+  const recording = (field, unit) => {
+    const step = emptySopStep(field.replaceAll(".", "-"));
+    return { ...step, title: field, stages: ["growout"],
+      trigger: { ...step.trigger, kind: "daily", at: "00:00", windowMinutes: 1440 },
+      check: { ...step.check, field, unit, operator: "present", exactTime: false, freshnessMinutes: 1440 },
+      requireNotes: false, requireAttachment: false };
+  };
+  const health = timedStep("dry-health", ["growout"], 10, 365);
+  health.trigger.everyDays = 10;
+  const draft = await f.command("saveDraft", { definition: { title: "Daily saved records", description: "", language: "en",
+    steps: [recording("water.phMorning", ""), recording("water.doMorning", "mg/L"), recording("feeding.totalDailyFeed", "kg"), health] } });
+  await f.command("approve", { sopId: draft.sopId, expectedRevision: 1 });
+  const settings = { sopId: draft.sopId, pondIds: ["a", "b"], blockIds: [], lifetime: "standing", companyScope: false, managerId: f.owner, timeZone: "UTC" };
+  const preview = await f.command("previewAdoption", settings);
+  const ad = await f.command("activate", { ...settings, expectedVersionId: preview.versionId, expectedTargetSignature: preview.targetSignature });
+  const tick = () => runtime.tickAdoption(f.companyId, ad.adoptionId, now);
+  const tasks = async () => (await f.ref.collection("tasks").get()).docs.map(d => d.data()).filter(row => row.purpose === "routine");
+  await tick();
+  assert.equal((await tasks()).length, 6);
+  assert.ok(!(await tasks()).some(row => row.step.id === "dry-health"), "DOC1 cannot create a DOC10 health task");
+  const saved = { ...pond("a"), samplings: [{ id: "real-record", date: "2026-11-02", phMorning: 7.9, doMorning: 5.5, feedData: { totalDailyFeed: 12 } }] };
+  await f.ref.collection("ponds").doc("stocked-a").set(saved);
+  await runtime.project(f.companyId, "ponds", "stocked-a", saved, "saved-record", now);
+  await tick();
+  let rows = await tasks();
+  assert.equal(rows.filter(row => row.target.id === "a" && row.status === "completed").length, 3);
+  assert.equal(rows.filter(row => row.target.id === "b" && row.status === "open").length, 3);
+  // A historical cycle on the same physical pond cannot satisfy current-cycle work.
+  const oldCycle = { ...saved, physicalPondId: "b", pondCycleId: "old-cycle-b", cycleStatus: "closed" };
+  await f.ref.collection("ponds").doc("old-b").set(oldCycle);
+  await runtime.project(f.companyId, "ponds", "old-b", oldCycle, "wrong-cycle", now);
+  await tick();
+  assert.equal((await tasks()).filter(row => row.target.id === "b" && row.status === "completed").length, 0);
+  await f.ref.collection("ponds").doc("stocked-a").set(pond("a"));
+  await runtime.project(f.companyId, "ponds", "stocked-a", pond("a"), "deleted-record", now);
+  await tick();
+  rows = await tasks();
+  assert.equal(rows.filter(row => row.target.id === "a" && row.status === "completed").length, 0);
+});
+
+
+test("updating unrelated SOP rules preserves an unchanged task awaiting manager review", async () => {
+  const f = await fixture(), runtime = createSopRuntime(db);
+  await f.ref.collection("ponds").doc("stocked-a").set({ physicalPondId: "a", pondCycleId: "cycle-a", cycleStatus: "active", docStart: "2026-10-10" });
+  await f.ref.collection("physicalPonds").doc("a").update({ activePondId: "stocked-a" });
+  const step = { ...timedStep("seed-review", ["growout"], 1, 365) };
+  step.trigger.kind = "manual";
+  const definition = { title: "Review preservation", description: "", language: "en", steps: [step] };
+  const draft = await f.command("saveDraft", { definition });
+  await f.command("approve", { sopId: draft.sopId, expectedRevision: 1 });
+  const settings = { sopId: draft.sopId, pondIds: ["a"], blockIds: [], lifetime: "standing", companyScope: false, managerId: f.owner, timeZone: "UTC" };
+  const preview = await f.command("previewAdoption", settings);
+  const ad = await f.command("activate", { ...settings, expectedVersionId: preview.versionId, expectedTargetSignature: preview.targetSignature });
+  await runtime.tickAdoption(f.companyId, ad.adoptionId, Date.now());
+  const task = (await f.ref.collection("tasks").get()).docs[0];
+  assert.ok(task);
+  await task.ref.update({ status: "needs_review", result: "needs_review", notes: "Submitted seed evidence", submissionId: "submission-1" });
+  await f.command("saveDraft", { sopId: draft.sopId, expectedRevision: 1, definition: { ...definition, description: "Updated guidance" } });
+  await f.command("approve", { sopId: draft.sopId, expectedRevision: 2 });
+  const current = (await f.ref.collection("sopAdoptions").doc(ad.adoptionId).get()).data();
+  await f.command("migrate", { ...settings, adoptionId: ad.adoptionId, expectedRevision: current.revision, confirmMigration: true });
+  const migrated = (await task.ref.get()).data();
+  assert.equal(migrated.status, "needs_review");
+  assert.equal(migrated.result, "needs_review");
+  assert.equal(migrated.notes, "Submitted seed evidence");
+  assert.equal(migrated.submissionId, "submission-1");
+  assert.equal(migrated.versionId, "v2");
+  assert.equal((await task.ref.collection("revisions").get()).size, 1);
+});

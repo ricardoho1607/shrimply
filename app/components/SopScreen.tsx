@@ -2544,13 +2544,21 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                   </Text>
                 </View>
               )}
+              {w.notifications.length > 0 && (
+                <Text style={styles.text}>
+                  {ui("Marking an alert read acknowledges it. Complete or review the task separately in To-do.")}
+                </Text>
+              )}
               {w.notifications.map((n) => (
                 <View key={n.id} style={styles.card}>
                   <Text style={styles.label}>{n.title}</Text>
                   <Text style={styles.text}>{n.message}</Text>
-                  {!n.read && (
+                  {n.read ? (
+                    <Text style={styles.text}>{ui("Read")}</Text>
+                  ) : (
                     <Button
                       title={ui("Mark read")}
+                      disabled={client.busy}
                       onPress={() =>
                         void run(() =>
                           client.command({

@@ -550,8 +550,12 @@ export function scheduledOccurrence(
       0
   )
     return null;
-  const start = localInstant(date, step.trigger.at, timeZone),
-    due = start + step.trigger.windowMinutes * 60000;
+  const start = localInstant(date, step.trigger.at, timeZone);
+  const nextDate = new Date(dateMs + 86400000).toISOString().slice(0, 10);
+  // A whole farm day ends at local midnight, including 23/25-hour DST days.
+  const due = step.trigger.at === "00:00" && step.trigger.windowMinutes === 1440
+    ? localInstant(nextDate, "00:00", timeZone) - 1
+    : start + step.trigger.windowMinutes * 60000;
   if (now < start || due < activatedAt) return null;
   return { key: date, start: Math.max(start, activatedAt), due };
 }
