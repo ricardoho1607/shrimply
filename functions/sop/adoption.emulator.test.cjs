@@ -371,7 +371,7 @@ test("measured checks and inactive measured branches still reconcile history; in
     const tracked = trackHistory(f.companyId);
     await tracked.runtime.tickAdoption(f.companyId, id, f.now);
     assert.ok(tracked.reads.includes("waterObservations"));
-    assert.ok(tracked.reads.includes("assets"));
+    assert.ok(!tracked.reads.includes("assets"), "Water checks do not replay unrelated equipment history");
     assert.equal(
       (await f.base.collection("sopAdoptions").doc(id).get()).data()
         .baselineReconciledAt,

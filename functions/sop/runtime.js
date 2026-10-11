@@ -10,6 +10,7 @@ const {
   validateSop,
 } = require("../shared/orsonDomain/sop/engine");
 const { hash, projectEvidence } = require("./evidence");
+const { SOP_FIELDS } = require("../shared/orsonDomain/sop/registry");
 const { currentEvidence } = require("./currentEvidence");
 const { rows } = require("./service");
 const {
@@ -139,16 +140,32 @@ function createSopRuntime(db) {
       !isFullyValidManualOnly(ad.definition) &&
       (!ad.baselineReconciledAt || now - ad.baselineReconciledAt > 6 * 3600000)
     ) {
-      for (const kind of [
-        "ponds",
-        "waterObservations",
-        "feeds",
-        "additives",
-        "harvestRecords",
-        "labReports",
-      ]) {
+      const sources = new Set(["ponds"]);
+      for (const step of ad.definition.steps) {
+        const field = SOP_FIELDS.find((field) => field.key === step.check.field);
+        if (field && field.key !== "manual")
+          for (const source of field.sources || [field.source]) sources.add(source);
+        if (step.check.field.startsWith("water.")) sources.add("waterObservations");
+        if (step.trigger.event === "harvest") sources.add("harvestRecords");
+      }
+      if (validateSop(ad.definition).length)
+        for (const kind of ["waterObservations", "feeds", "additives", "harvestRecords", "labReports", "assets"]) sources.add(kind);
+      const pondOnly = ad.targets.length > 0 && ad.targets.every((target) => target.scope === "pond");
+      for (const kind of [...sources].filter((kind) => kind !== "assets")) {
         const source = await ref.collection(kind).get();
-        for (const doc of source.docs)
+        for (const doc of source.docs) {
+          const data = doc.data();
+          // Shared checks retain their existing company/block reconciliation.
+          // Pond checks need current adopted cycles, not unrelated farm history.
+          if (pondOnly && kind === "ponds" && !ad.targets.some((target) =>
+            target.pondId ? target.pondId === doc.id :
+              target.id === (data.physicalPondId || data.previousCyclePondId || doc.id) &&
+              target.cycleId === (data.pondCycleId || data.cycleId || doc.id)
+          )) continue;
+          if (pondOnly && kind === "waterObservations" && !ad.targets.some((target) =>
+            target.id === (data.physicalPondId || data.pondId) &&
+            target.cycleId === data.cycleId
+          )) continue;
           await project(
             companyId,
             kind,
@@ -157,20 +174,23 @@ function createSopRuntime(db) {
             `baseline-${ad.id}-${doc.id}`,
             doc.updateTime.toMillis(),
           );
+        }
       }
-      const assets = await db
-        .collection("assets")
-        .where("companyId", "==", companyId)
-        .get();
-      for (const doc of assets.docs)
-        await project(
-          companyId,
-          "assets",
-          doc.id,
-          doc.data(),
-          `baseline-${ad.id}-${doc.id}`,
-          doc.updateTime.toMillis(),
-        );
+      if (sources.has("assets")) {
+        const assets = await db
+          .collection("assets")
+          .where("companyId", "==", companyId)
+          .get();
+        for (const doc of assets.docs)
+          await project(
+            companyId,
+            "assets",
+            doc.id,
+            doc.data(),
+            `baseline-${ad.id}-${doc.id}`,
+            doc.updateTime.toMillis(),
+          );
+      }
       await adRef.update({ baselineReconciledAt: now });
     }
     const [stageSnap, pondSnap, taskSnap, cycleSnap, blockSnap, companySnap] =

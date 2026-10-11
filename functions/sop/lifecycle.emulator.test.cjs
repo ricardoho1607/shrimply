@@ -270,6 +270,8 @@ test("daily pond records complete only their matching pond and cycle, and deleti
     await f.ref.collection("ponds").doc(`stocked-${id}`).set(pond(id));
     await f.ref.collection("physicalPonds").doc(id).update({ activePondId: `stocked-${id}` });
   }
+  await f.ref.collection("ponds").doc("unrelated-history").set({ physicalPondId: "outside", pondCycleId: "old-cycle", cycleStatus: "ended", docStart: "2025-01-01", samplings: [{ id: "old", date: "2025-01-02", phMorning: 8 }] });
+  await f.ref.collection("labReports").doc("unneeded-lab").set({ status: "confirmed", sampleDate: "2026-11-02", pondResults: [{ pondId: "stocked-a", physicalPondId: "a", pondCycleId: "cycle-a", status: "confirmed", waterQuality: { phLab: 8 } }] });
   const recording = (field, unit) => {
     const step = emptySopStep(field.replaceAll(".", "-"));
     return { ...step, title: field, stages: ["growout"],
@@ -289,6 +291,9 @@ test("daily pond records complete only their matching pond and cycle, and deleti
   const tasks = async () => (await f.ref.collection("tasks").get()).docs.map(d => d.data()).filter(row => row.purpose === "routine");
   await tick();
   assert.equal((await tasks()).length, 6);
+  const projected = (await f.ref.collection("sopEvidence").get()).docs.map(d => d.data());
+  assert.ok(!projected.some(e => ["ponds/unrelated-history", "labReports/unneeded-lab"].includes(e.sourcePath)), "Water reminders cannot replay unrelated pond or unneeded lab history");
+  assert.equal((await f.ref.collection("sopAdoptions").doc(ad.adoptionId).get()).data().baselineReconciledAt, now);
   assert.ok(!(await tasks()).some(row => row.step.id === "dry-health"), "DOC1 cannot create a DOC10 health task");
   const saved = { ...pond("a"), samplings: [{ id: "real-record", date: "2026-11-02", phMorning: 7.9, doMorning: 5.5, feedData: { totalDailyFeed: 12 } }] };
   await f.ref.collection("ponds").doc("stocked-a").set(saved);
