@@ -1,9 +1,11 @@
 "use client";
-import { sopText } from "../../../../../shared/sop/uiCopy";
+import { sopMeasurementLabel } from "../../../../../shared/sop/editor";
+import { sopText, sopTaskTitle } from "../../../../../shared/sop/uiCopy";
 import { useAuth } from "@/contexts/AuthContext";
 import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import AccessibleDialog from "@/components/AccessibleDialog";
+import { SopTodoList } from "@/components/SopTodoList";
 import SopManagerDecision from "@/components/SopManagerDecision";
 import { useSopWorkspace } from "@/hooks/useSopWorkspace";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -151,7 +153,7 @@ function TodoPageContent() {
         <div>
           <p className="sop-eyebrow">{ui("SHRIMPLY • DAILY WORK")}</p>
           <h1>{c.todo}</h1>
-          <p>{ui("Assigned work, evidence, and corrective follow-up.")}</p>
+          <p>{ui("Choose a pond. Do the task. Save your work.")}</p>
         </div>
         <Link className="sop-button" href="/dashboard/sops">
           {c.sops}
@@ -164,7 +166,7 @@ function TodoPageContent() {
             client.error || messageTone === "error" ? "sop-alert" : "sop-notice"
           }
         >
-          {message || client.error}
+          {ui(message || client.error)}
         </div>
       )}
       {!!client.pending.length && (
@@ -179,9 +181,9 @@ function TodoPageContent() {
           aria-label={ui("Status")}
         >
           {[
-            ["active", "Active work"],
-            ["completed", "completed"],
-            ["all", "All tasks"],
+            ["active", "To do"],
+            ["completed", "Done"],
+            ["all", "Everything"],
           ].map(([value, label]) => (
             <button
               key={value}
@@ -203,7 +205,7 @@ function TodoPageContent() {
       </div>
       <details className="todo-filters">
         <summary>
-          {ui("Filters")}{" "}
+          {ui("Find a task")}{" "}
           {filterCount > 0 && <span className="sop-status">{filterCount}</span>}
         </summary>
         <div className="sop-grid">
@@ -342,78 +344,24 @@ function TodoPageContent() {
           )}
         </article>
       )}
-      {tasks.map((t) => (
-        <article className="sop-card todo-task-card" key={t.id}>
-          <div className="todo-task-heading">
-            <h3>{t.title}</h3>
-            <div className="todo-task-badges">
-              <span className="sop-status">{ui(t.status)}</span>
-              {t.dueAt < clock &&
-                !["completed", "waived", "cancelled"].includes(t.status) && (
-                  <span className="sop-status todo-overdue">
-                    {ui("Overdue")}
-                  </span>
-                )}
-            </div>
-          </div>
-          <dl className="todo-task-meta">
-            <div>
-              <dt>{ui("Target")}</dt>
-              <dd>{t.target.name}</dd>
-            </div>
-            <div>
-              <dt>{ui("Responsible person")}</dt>
-              <dd>
-                {w.members.find((m) => m.id === t.assigneeId)?.name ||
-                  ui("Assigned staff")}
-              </dd>
-            </div>
-            <div>
-              <dt>{ui("Due time")}</dt>
-              <dd>
-                {new Date(t.dueAt).toLocaleString(currentLanguage, {
-                  timeZone: w.timeZone || "UTC",
-                })}
-              </dd>
-            </div>
-          </dl>
-          <p className="todo-task-instructions">{t.instructions}</p>
-          <p className="todo-task-result">
-            {ui("Parameter result:")} {ui(t.result)}
-          </p>
-          {client.pending.includes(t.id) && <p>{c.pending}</p>}
-          <div className="sop-toolbar">
-            <button
-              className="sop-primary"
-              onClick={() => {
-                setSelected(t);
-                setNotes(t.notes);
-                setObservedAt(
-                  t.evidenceObservedAt
-                    ? new Date(t.evidenceObservedAt).toISOString()
-                    : "",
-                );
-                setAttachments(t.attachments);
-              }}
-            >
-              {c.review}
-            </button>
-            {t.adoptionId && (
-              <Link className="sop-button" href={`/dashboard/sops`}>
-                {c.sops}
-              </Link>
-            )}
-            {t.target.pondId && (
-              <Link
-                className="sop-button"
-                href={`/dashboard/ponds/detail?id=${encodeURIComponent(t.target.pondId)}`}
-              >
-                {ui("Open pond")}
-              </Link>
-            )}
-          </div>
-        </article>
-      ))}
+      <SopTodoList
+        tasks={tasks}
+        language={currentLanguage}
+        timeZone={w.timeZone || "UTC"}
+        clock={clock}
+        pending={client.pending}
+        members={w.members}
+        onOpen={(t) => {
+          setSelected(t);
+          setNotes(t.notes);
+          setObservedAt(
+            t.evidenceObservedAt
+              ? new Date(t.evidenceObservedAt).toISOString()
+              : "",
+          );
+          setAttachments(t.attachments);
+        }}
+      />
       {w.nextTaskCursor && (
         <button onClick={() => void run(() => client.loadMore("tasks"))}>
           {ui("Load older tasks")}
@@ -422,11 +370,15 @@ function TodoPageContent() {
       {w.notifications.length > 0 && (
         <details className="sop-card">
           <summary>{ui("SOP notifications")}</summary>
-          <p>{ui("Marking an alert read acknowledges it. Complete or review the task separately in To-do.")}</p>
+          <p>
+            {ui(
+              "Marking an alert read acknowledges it. Complete or review the task separately in To-do.",
+            )}
+          </p>
           {w.notifications.map((n) => (
             <div key={n.id}>
-              <strong>{n.title}</strong>
-              <p>{n.message}</p>
+              <strong>{ui(n.title)}</strong>
+              <p>{ui(n.message)}</p>
               {n.read ? (
                 <span className="sop-status">{ui("Read")}</span>
               ) : (
@@ -450,18 +402,24 @@ function TodoPageContent() {
       )}
       {selected && (
         <AccessibleDialog
-          title={ui("Task evidence")}
+          title={ui("Your task")}
           onClose={() => setSelected(null)}
           busy={client.busy}
           className="sop-dialog"
         >
           <div className="sop-card">
-            <h2>{selected.title}</h2>
+            <h2>
+              {sopTaskTitle(selected.title, selected.purpose, currentLanguage)}
+            </h2>
             <p>{selected.instructions}</p>
             {selected.step && (
               <p>
-                {ui("Evidence:")} {selected.step.check.field} ·{" "}
-                {selected.step.check.unit} ·{" "}
+                {ui("Evidence:")}{" "}
+                {sopMeasurementLabel(
+                  selected.step.check.field,
+                  currentLanguage,
+                )}{" "}
+                · {selected.step.check.unit} ·{" "}
                 {ui(
                   selected.step.check.exactTime
                     ? "Exact observation time required"
@@ -469,26 +427,39 @@ function TodoPageContent() {
                 )}
               </p>
             )}
-            <label className="sop-field">
-              {ui("When performed (ISO time)")}
-              <input
-                value={observedAt}
-                onChange={(e) => setObservedAt(e.target.value)}
-                placeholder={ui("2026-10-08T06:30+07:00")}
-              />
-            </label>
+            <p>
+              <strong>{ui("When did you do it?")}</strong>
+            </p>
+            <p>
+              {Number.isFinite(Date.parse(observedAt))
+                ? new Date(observedAt).toLocaleString(currentLanguage, {
+                    timeZone: w.timeZone || "UTC",
+                  })
+                : ui("Tap Just now if you have just finished.")}
+            </p>
             <button onClick={() => setObservedAt(new Date().toISOString())}>
-              {ui("Use current time")}
+              {ui("Just now")}
             </button>
+            <details>
+              <summary>{ui("Choose another time")}</summary>
+              <label className="sop-field">
+                {ui("When performed (ISO time)")}
+                <input
+                  value={observedAt}
+                  onChange={(e) => setObservedAt(e.target.value)}
+                  placeholder="2026-10-08T06:30+07:00"
+                />
+              </label>
+            </details>
             <label className="sop-field">
-              {c.notes}
+              {ui("What did you do?")}
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
               />
             </label>
             <label className="sop-field">
-              {c.attachment}
+              {ui("Add a photo or file")}
               <input
                 type="file"
                 multiple
@@ -545,7 +516,7 @@ function TodoPageContent() {
                 })
               }
             >
-              {c.submit}
+              {ui("Save my work")}
             </button>
             {selected.step?.check.field === "manual" && (
               <button
@@ -556,7 +527,9 @@ function TodoPageContent() {
                       mode: "assess",
                       taskId: selected.id,
                     });
-                    setMessage(`${result.result}: ${result.explanation}`);
+                    setMessage(
+                      `${ui(String(result.result ?? ""))}: ${ui(String(result.explanation ?? ""))}`,
+                    );
                     await client.refresh();
                   })
                 }

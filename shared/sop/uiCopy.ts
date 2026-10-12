@@ -532,11 +532,186 @@ No readable procedure sections yet.|Belum ada bagian prosedur yang dapat dibaca.
 items to complete before approval.|hal perlu dilengkapi sebelum persetujuan.|mục cần hoàn tất trước khi duyệt.|รายการต้องกรอกก่อนอนุมัติ|项内容须在批准前完善。
 More actions|Tindakan lainnya|Thao tác khác|การดำเนินการเพิ่มเติม|更多操作
 Complete the highlighted fields in the draft before approving.|Lengkapi kolom yang ditandai dalam draf sebelum menyetujui.|Điền các trường được đánh dấu trong bản nháp trước khi duyệt.|กรอกช่องที่ระบุในฉบับร่างก่อนอนุมัติ|批准前请填写草稿中标注的字段。
+All|Semua|Tất cả|ทั้งหมด|全部
+Corrective action|Tindakan perbaikan|Hành động khắc phục|การแก้ไข|纠正措施
+Recheck|Pemeriksaan ulang|Kiểm tra lại|ตรวจซ้ำ|复查
+Farm task assigned|Tugas tambak ditugaskan|Đã giao công việc trang trại|มอบหมายงานฟาร์มแล้ว|已分配农场任务
+SOP corrective action required|SOP memerlukan tindakan perbaikan|SOP cần hành động khắc phục|SOP ต้องดำเนินการแก้ไข|SOP 需要采取纠正措施
+SOP recovery needs manager sign-off|Pemulihan SOP memerlukan persetujuan manajer|Phục hồi SOP cần quản lý xác nhận|การฟื้นตัวตาม SOP ต้องให้ผู้จัดการยืนยัน|SOP 恢复需要经理确认
+SOP recovery evidence changed|Bukti pemulihan SOP berubah|Bằng chứng phục hồi SOP đã thay đổi|หลักฐานการฟื้นตัวตาม SOP เปลี่ยนไป|SOP 恢复证据已更改
+Unresolved SOP issue requires attention|Masalah SOP yang belum selesai perlu ditangani|Vấn đề SOP chưa giải quyết cần được xử lý|ปัญหา SOP ที่ยังไม่แก้ไขต้องได้รับการดูแล|未解决的 SOP 问题需要处理
+SOP follow-up assigned|Tindak lanjut SOP ditugaskan|Đã giao công việc theo dõi SOP|มอบหมายงานติดตาม SOP แล้ว|已分配 SOP 后续任务
+Open To-do to review the assigned farm work.|Buka Tugas untuk meninjau pekerjaan tambak yang ditugaskan.|Mở Công việc để xem việc trang trại được giao.|เปิดงานเพื่อดูงานฟาร์มที่มอบหมาย|打开待办查看已分配的农场工作。
+Open To-do to review your farm work.|Buka Tugas untuk meninjau pekerjaan tambak Anda.|Mở Công việc để xem công việc trang trại của bạn.|เปิดงานเพื่อดูงานฟาร์มของคุณ|打开待办查看您的农场工作。
+SOP evidence needs human review|Bukti SOP memerlukan tinjauan manusia|Bằng chứng SOP cần người xem xét|หลักฐาน SOP ต้องให้คนตรวจสอบ|SOP 证据需要人工审核
+Review submitted evidence against the approved rubric.|Tinjau bukti yang dikirim sesuai kriteria yang disetujui.|Xem xét bằng chứng đã nộp theo tiêu chí đã duyệt.|ตรวจสอบหลักฐานที่ส่งตามเกณฑ์ที่อนุมัติ|根据已批准的标准审核提交的证据。
+An adopted SOP was withdrawn|SOP yang diterapkan telah ditarik|SOP đã áp dụng bị rút lại|SOP ที่นำมาใช้ถูกถอนแล้ว|已采用的 SOP 已被撤回
+Review the source withdrawal and your farm copy.|Tinjau penarikan sumber dan salinan tambak Anda.|Xem xét việc rút tài liệu nguồn và bản sao của trang trại.|ตรวจสอบการถอนต้นฉบับและสำเนาของฟาร์ม|查看来源撤回情况和农场副本。
+Critical SOP issues|Masalah SOP kritis|Vấn đề SOP nghiêm trọng|ปัญหา SOP วิกฤต|严重 SOP 问题
+Farm task reminders|Pengingat tugas tambak|Nhắc công việc trang trại|การเตือนงานฟาร์ม|农场任务提醒
+Use mobile notification permissions.|Gunakan izin notifikasi di aplikasi seluler.|Sử dụng quyền thông báo trên điện thoại.|ใช้สิทธิ์การแจ้งเตือนบนมือถือ|请在手机应用中设置通知权限。
+Notification permission was not granted. In-app tasks remain available.|Izin notifikasi tidak diberikan. Tugas tetap tersedia di aplikasi.|Chưa cấp quyền thông báo. Công việc vẫn có trong ứng dụng.|ไม่ได้รับสิทธิ์แจ้งเตือน งานยังแสดงในแอป|未授予通知权限。仍可在应用中查看任务。
+This native build is missing its EAS project ID.|Versi aplikasi ini belum memiliki ID proyek EAS.|Bản ứng dụng này thiếu mã dự án EAS.|แอปรุ่นนี้ไม่มีรหัสโครงการ EAS|此应用版本缺少 EAS 项目 ID。
+Mobile SOP notifications enabled.|Notifikasi SOP seluler diaktifkan.|Đã bật thông báo SOP trên điện thoại.|เปิดการแจ้งเตือน SOP บนมือถือแล้ว|已启用手机 SOP 通知。
+Conflicting or unordered observations require human review; date-only records cannot establish order within a day.|Pengamatan yang bertentangan atau tidak berurutan memerlukan tinjauan manusia; catatan bertanggal tanpa waktu tidak dapat menentukan urutan dalam satu hari.|Quan sát mâu thuẫn hoặc không theo thứ tự cần người xem xét; bản ghi chỉ có ngày không xác định được thứ tự trong ngày.|ข้อมูลที่ขัดแย้งหรือไม่เรียงตามเวลาต้องให้คนตรวจสอบ บันทึกที่มีเฉพาะวันที่ไม่สามารถระบุลำดับภายในวันได้|冲突或无序的观察记录需要人工审核；仅有日期的记录无法确定当天的先后顺序。
+Submitted evidence requires assessment against the approved instructions.|Bukti yang dikirim perlu dinilai sesuai instruksi yang disetujui.|Bằng chứng đã nộp cần được đánh giá theo hướng dẫn đã duyệt.|หลักฐานที่ส่งต้องได้รับการประเมินตามคำแนะนำที่อนุมัติ|提交的证据需要根据已批准的指示进行评估。
+Missing qualifying evidence for this target, cycle, measurement window, unit, or analytical basis.|Belum ada bukti yang memenuhi sasaran, siklus, rentang pengukuran, satuan, atau dasar analisis ini.|Thiếu bằng chứng phù hợp với đối tượng, vụ nuôi, khoảng đo, đơn vị hoặc cơ sở phân tích này.|ไม่มีหลักฐานที่ตรงกับเป้าหมาย รอบเลี้ยง ช่วงวัด หน่วย หรือเกณฑ์วิเคราะห์นี้|缺少符合此目标、周期、测量时段、单位或分析依据的证据。
+Invalid numeric source evidence.|Angka pada bukti sumber tidak valid.|Số liệu trong bằng chứng nguồn không hợp lệ.|ค่าตัวเลขในหลักฐานต้นทางไม่ถูกต้อง|来源证据中的数值无效。
+A measured numeric value is required.|Nilai angka hasil pengukuran diperlukan.|Cần giá trị số đã đo.|ต้องมีค่าตัวเลขที่วัดได้|需要测得的数值。
+Qualifying records meet the approved check.|Catatan yang memenuhi syarat sesuai dengan pemeriksaan yang disetujui.|Bản ghi phù hợp đáp ứng kiểm tra đã duyệt.|บันทึกที่เข้าเกณฑ์ผ่านการตรวจที่อนุมัติ|符合条件的记录满足已批准的检查要求。
+The procedure was recorded, but its result is outside the approved target.|Prosedur telah dicatat, tetapi hasilnya di luar sasaran yang disetujui.|Đã ghi nhận quy trình nhưng kết quả nằm ngoài mục tiêu đã duyệt.|บันทึกขั้นตอนแล้ว แต่ผลอยู่นอกเป้าหมายที่อนุมัติ|已记录规程，但结果超出已批准的目标。
+Reviewed written evidence.|Bukti tertulis telah ditinjau.|Đã xem xét bằng chứng bằng văn bản.|ตรวจสอบหลักฐานบันทึกแล้ว|已审核书面证据。
+A source record changed; server verification is pending.|Catatan sumber berubah; menunggu verifikasi server.|Bản ghi nguồn đã thay đổi; đang chờ máy chủ xác minh.|บันทึกต้นทางเปลี่ยนไป กำลังรอเซิร์ฟเวอร์ตรวจสอบ|来源记录已更改，正在等待服务器验证。
+Evidence was submitted against changed rules, assignment, or a previously closed critical issue. A manager must review it.|Bukti dikirim setelah perubahan aturan, penugasan, atau masalah kritis yang pernah ditutup. Manajer harus meninjaunya.|Bằng chứng được nộp khi quy tắc, phân công thay đổi hoặc liên quan vấn đề nghiêm trọng đã đóng. Quản lý phải xem xét.|หลักฐานถูกส่งภายใต้กฎหรือการมอบหมายที่เปลี่ยนไป หรือเกี่ยวข้องกับปัญหาวิกฤตที่เคยปิดแล้ว ผู้จัดการต้องตรวจสอบ|提交的证据涉及已更改的规则、分配或此前已关闭的严重问题，必须由经理审核。
+A newer evidence revision is awaiting evaluation.|Revisi bukti terbaru menunggu penilaian.|Phiên bản bằng chứng mới hơn đang chờ đánh giá.|หลักฐานฉบับใหม่กำลังรอการประเมิน|较新的证据版本正在等待评估。
+AI assessment unavailable; human review required.|Penilaian AI tidak tersedia; tinjauan manusia diperlukan.|Không có đánh giá AI; cần người xem xét.|ไม่สามารถประเมินด้วย AI ต้องให้คนตรวจสอบ|AI 评估不可用，需要人工审核。
+SOP AI limit reached. Try again shortly.|Batas penggunaan AI SOP tercapai. Coba lagi sebentar.|Đã đạt giới hạn AI SOP. Vui lòng thử lại sau ít phút.|ถึงขีดจำกัด AI ของ SOP แล้ว โปรดลองอีกครั้งในอีกสักครู่|已达到 SOP AI 使用限额，请稍后重试。
+SOP evaluator is queued.|Penilaian SOP masuk antrean.|Đánh giá SOP đang xếp hàng.|การประเมิน SOP อยู่ในคิว|SOP 评估已排队。
+Invalid identifier.|Identitas tidak valid.|Mã định danh không hợp lệ.|รหัสไม่ถูกต้อง|标识符无效。
+Invalid text.|Teks tidak valid.|Văn bản không hợp lệ.|ข้อความไม่ถูกต้อง|文本无效。
+SOP is too large.|SOP terlalu besar.|SOP quá lớn.|SOP มีขนาดใหญ่เกินไป|SOP 过大。
+Selected block no longer exists.|Blok yang dipilih sudah tidak ada.|Khu đã chọn không còn tồn tại.|บล็อกที่เลือกไม่มีแล้ว|所选区块已不存在。
+Selected pond no longer exists.|Kolam yang dipilih sudah tidak ada.|Ao đã chọn không còn tồn tại.|บ่อที่เลือกไม่มีแล้ว|所选池塘已不存在。
+Choose a current owner or manager as accountable manager.|Pilih pemilik atau manajer aktif sebagai penanggung jawab.|Chọn chủ hoặc quản lý hiện tại làm người chịu trách nhiệm.|เลือกเจ้าของหรือผู้จัดการปัจจุบันเป็นผู้รับผิดชอบ|请选择现任所有者或经理作为负责人。
+Select an applicable pond, block, or company scope.|Pilih cakupan kolam, blok, atau perusahaan yang sesuai.|Chọn phạm vi ao, khu hoặc công ty phù hợp.|เลือกขอบเขตบ่อ บล็อก หรือบริษัทที่เหมาะสม|请选择适用的池塘、区块或公司范围。
+An adoption supports at most 200 targets; split it into separate blocks.|Satu penerapan mendukung maksimal 200 sasaran; bagi menjadi beberapa blok.|Một lần áp dụng hỗ trợ tối đa 200 đối tượng; hãy chia thành các khu riêng.|การนำไปใช้หนึ่งครั้งรองรับสูงสุด 200 เป้าหมาย โปรดแยกเป็นบล็อก|一次采用最多支持 200 个目标，请分成多个区块。
+Unknown SOP command.|Perintah SOP tidak dikenal.|Lệnh SOP không xác định.|ไม่รู้จักคำสั่ง SOP|未知的 SOP 操作。
+You cannot record pond events.|Anda tidak memiliki izin mencatat kejadian kolam.|Bạn không có quyền ghi sự kiện ao.|คุณไม่มีสิทธิ์บันทึกเหตุการณ์บ่อ|您无权记录池塘事件。
+An owner or manager must approve this action.|Tindakan ini harus disetujui pemilik atau manajer.|Chủ hoặc quản lý phải duyệt thao tác này.|เจ้าของหรือผู้จัดการต้องอนุมัติการดำเนินการนี้|此操作必须由所有者或经理批准。
+Command is too large.|Perintah terlalu besar.|Lệnh quá lớn.|คำสั่งมีขนาดใหญ่เกินไป|操作请求过大。
+This operation ID was used with different input.|ID operasi ini sudah digunakan dengan masukan berbeda.|Mã thao tác này đã được dùng với dữ liệu khác.|รหัสการดำเนินการนี้ถูกใช้กับข้อมูลอื่นแล้ว|此操作 ID 已用于其他输入。
+Company access changed.|Akses perusahaan berubah.|Quyền truy cập công ty đã thay đổi.|สิทธิ์เข้าถึงบริษัทเปลี่ยนไป|公司访问权限已更改。
+Manager authority changed.|Wewenang manajer berubah.|Quyền quản lý đã thay đổi.|อำนาจผู้จัดการเปลี่ยนไป|经理权限已更改。
+Your session was revoked.|Sesi Anda dicabut.|Phiên đăng nhập của bạn đã bị thu hồi.|เซสชันของคุณถูกยกเลิก|您的会话已被撤销。
+Farm permission changed.|Izin tambak berubah.|Quyền trang trại đã thay đổi.|สิทธิ์ฟาร์มเปลี่ยนไป|农场权限已更改。
+Recording permission changed.|Izin pencatatan berubah.|Quyền ghi dữ liệu đã thay đổi.|สิทธิ์บันทึกเปลี่ยนไป|记录权限已更改。
+This item changed. Refresh and review it again.|Item ini berubah. Muat ulang dan tinjau kembali.|Mục này đã thay đổi. Tải lại và xem xét lại.|รายการนี้เปลี่ยนไป โปรดรีเฟรชแล้วตรวจสอบอีกครั้ง|此项目已更改，请刷新后重新审核。
+Publication is unavailable.|Publikasi tidak tersedia.|Tài liệu đăng không khả dụng.|ไม่สามารถใช้เอกสารที่เผยแพร่ได้|发布内容不可用。
+SOP not found.|SOP tidak ditemukan.|Không tìm thấy SOP.|ไม่พบ SOP|未找到 SOP。
+You may delete or restore your own drafts.|Anda dapat menghapus atau memulihkan draf milik sendiri.|Bạn có thể xóa hoặc khôi phục bản nháp của mình.|คุณลบหรือกู้คืนได้เฉพาะฉบับร่างของคุณ|您只能删除或恢复自己的草稿。
+This SOP is not in Deleted SOPs.|SOP ini tidak ada dalam SOP yang dihapus.|SOP này không nằm trong SOP đã xóa.|SOP นี้ไม่อยู่ในรายการ SOP ที่ลบ|此 SOP 不在已删除列表中。
+This SOP cannot be deleted.|SOP ini tidak dapat dihapus.|Không thể xóa SOP này.|ไม่สามารถลบ SOP นี้ได้|无法删除此 SOP。
+Too many publications to withdraw in one change.|Terlalu banyak publikasi untuk ditarik sekaligus.|Quá nhiều tài liệu để rút lại trong một lần.|มีเอกสารมากเกินไปที่จะถอนในครั้งเดียว|一次撤回的发布内容过多。
+Restore this SOP before editing it.|Pulihkan SOP ini sebelum mengubahnya.|Khôi phục SOP này trước khi sửa.|กู้คืน SOP นี้ก่อนแก้ไข|请先恢复此 SOP 再编辑。
+You may edit your own drafts.|Anda hanya dapat mengubah draf milik sendiri.|Bạn chỉ có thể sửa bản nháp của mình.|คุณแก้ไขได้เฉพาะฉบับร่างของคุณ|您只能编辑自己的草稿。
+Guidance must be uploaded in this company.|Panduan harus diunggah di perusahaan ini.|Hướng dẫn phải được tải lên trong công ty này.|ต้องอัปโหลดคำแนะนำในบริษัทนี้|指导文件必须上传至本公司。
+Select a file explicitly uploaded as company guidance.|Pilih berkas yang diunggah sebagai panduan perusahaan.|Chọn tệp được tải lên làm hướng dẫn công ty.|เลือกไฟล์ที่อัปโหลดเป็นคำแนะนำของบริษัท|请选择明确作为公司指导文件上传的文件。
+Restore this SOP before approving or publishing it.|Pulihkan SOP ini sebelum menyetujui atau menerbitkannya.|Khôi phục SOP này trước khi duyệt hoặc đăng.|กู้คืน SOP นี้ก่อนอนุมัติหรือเผยแพร่|请先恢复此 SOP 再批准或发布。
+Guidance changed during publication. Refresh and retry.|Panduan berubah saat penerbitan. Muat ulang dan coba lagi.|Hướng dẫn thay đổi khi đăng. Tải lại và thử lại.|คำแนะนำเปลี่ยนระหว่างเผยแพร่ โปรดรีเฟรชและลองใหม่|发布期间指导内容已更改，请刷新后重试。
+Approve this version before publication.|Setujui versi ini sebelum menerbitkannya.|Duyệt phiên bản này trước khi đăng.|อนุมัติฉบับนี้ก่อนเผยแพร่|请先批准此版本再发布。
+Publication not found.|Publikasi tidak ditemukan.|Không tìm thấy tài liệu đăng.|ไม่พบเอกสารที่เผยแพร่|未找到发布内容。
+You cannot withdraw another farm’s SOP.|Anda tidak dapat menarik SOP tambak lain.|Bạn không thể rút SOP của trang trại khác.|คุณไม่สามารถถอน SOP ของฟาร์มอื่น|您不能撤回其他农场的 SOP。
+Adoption not found.|Penerapan tidak ditemukan.|Không tìm thấy lần áp dụng.|ไม่พบการนำไปใช้|未找到采用记录。
+Approve the farm SOP first.|Setujui SOP tambak terlebih dahulu.|Duyệt SOP trang trại trước.|อนุมัติ SOP ของฟาร์มก่อน|请先批准农场 SOP。
+Choose an approved SOP or publication.|Pilih SOP atau publikasi yang disetujui.|Chọn SOP hoặc tài liệu đăng đã duyệt.|เลือก SOP หรือเอกสารเผยแพร่ที่อนุมัติแล้ว|请选择已批准的 SOP 或发布内容。
+The approved version changed. Preview it again.|Versi yang disetujui berubah. Pratinjau kembali.|Phiên bản đã duyệt thay đổi. Xem trước lại.|ฉบับที่อนุมัติเปลี่ยนไป โปรดดูตัวอย่างอีกครั้ง|已批准的版本已更改，请重新预览。
+Choose cycle or standing adoption.|Pilih penerapan per siklus atau berkelanjutan.|Chọn áp dụng theo vụ hoặc lâu dài.|เลือกการนำไปใช้ตามรอบหรือแบบต่อเนื่อง|请选择按周期或长期采用。
+Set a valid company timezone before activation.|Atur zona waktu perusahaan yang valid sebelum aktivasi.|Đặt múi giờ công ty hợp lệ trước khi kích hoạt.|ตั้งเขตเวลาบริษัทที่ถูกต้องก่อนเปิดใช้งาน|启用前请设置有效的公司时区。
+Set the company timezone first.|Atur zona waktu perusahaan terlebih dahulu.|Đặt múi giờ công ty trước.|ตั้งเขตเวลาบริษัทก่อน|请先设置公司时区。
+Escalation recipients must be current team members.|Penerima eskalasi harus anggota tim aktif.|Người nhận báo cáo cấp cao phải là thành viên hiện tại.|ผู้รับแจ้งปัญหาต่อเนื่องต้องเป็นสมาชิกทีมปัจจุบัน|升级通知接收人必须是当前团队成员。
+Step assignees must belong to this company.|Penerima tugas langkah harus anggota perusahaan ini.|Người được giao bước phải thuộc công ty này.|ผู้รับงานแต่ละขั้นตอนต้องอยู่ในบริษัทนี้|步骤负责人必须属于本公司。
+Split this adoption into smaller blocks for stage gates.|Bagi penerapan ini menjadi blok lebih kecil untuk persyaratan tahap.|Chia lần áp dụng thành khu nhỏ hơn để kiểm soát giai đoạn.|แบ่งการนำไปใช้นี้เป็นบล็อกเล็กลงสำหรับเงื่อนไขเปลี่ยนระยะ|请将此次采用拆分为较小区块以设置阶段条件。
+Review and confirm the migration.|Tinjau dan konfirmasi migrasi.|Xem xét và xác nhận chuyển đổi.|ตรวจสอบและยืนยันการย้าย|请审核并确认迁移。
+A current-cycle adoption needs an active pond. Choose standing for shared procedures without a pond cycle.|Penerapan siklus saat ini memerlukan kolam aktif. Pilih berkelanjutan untuk prosedur bersama tanpa siklus kolam.|Áp dụng theo vụ hiện tại cần ao đang hoạt động. Chọn lâu dài cho quy trình chung không có vụ ao.|การนำไปใช้ในรอบปัจจุบันต้องมีบ่อที่ใช้งาน เลือกแบบต่อเนื่องสำหรับขั้นตอนร่วมที่ไม่มีรอบบ่อ|当前周期采用需要有活动池塘，无池塘周期的通用规程请选择长期采用。
+Only managers can assign work to someone else.|Hanya manajer yang dapat menugaskan pekerjaan kepada orang lain.|Chỉ quản lý mới được giao việc cho người khác.|เฉพาะผู้จัดการเท่านั้นที่มอบหมายงานให้ผู้อื่นได้|只有管理人员可以向他人分配工作。
+Assignee is not a team member.|Penerima tugas bukan anggota tim.|Người được giao không phải thành viên nhóm.|ผู้รับงานไม่ใช่สมาชิกทีม|任务接收人不是团队成员。
+Choose a due time.|Pilih waktu tenggat.|Chọn thời hạn.|เลือกเวลากำหนดเสร็จ|请选择截止时间。
+Invalid task scope.|Cakupan tugas tidak valid.|Phạm vi công việc không hợp lệ.|ขอบเขตงานไม่ถูกต้อง|任务范围无效。
+Task scope no longer exists.|Cakupan tugas sudah tidak ada.|Phạm vi công việc không còn tồn tại.|ขอบเขตงานไม่มีแล้ว|任务范围已不存在。
+Task is outside your pond assignment.|Tugas di luar penugasan kolam Anda.|Công việc ngoài phạm vi ao được giao.|งานอยู่นอกบ่อที่คุณรับผิดชอบ|任务不在您的池塘分配范围内。
+Task title is required.|Judul tugas diperlukan.|Cần tiêu đề công việc.|ต้องมีชื่องาน|请填写任务标题。
+Task not found.|Tugas tidak ditemukan.|Không tìm thấy công việc.|ไม่พบงาน|未找到任务。
+Your pond assignment changed.|Penugasan kolam Anda berubah.|Phân công ao của bạn đã thay đổi.|การมอบหมายบ่อของคุณเปลี่ยนไป|您的池塘分配已更改。
+This task is outside your assignment.|Tugas ini di luar penugasan Anda.|Công việc này ngoài phạm vi được giao.|งานนี้อยู่นอกความรับผิดชอบของคุณ|此任务不在您的分配范围内。
+This task is no longer active.|Tugas ini sudah tidak aktif.|Công việc này không còn hoạt động.|งานนี้ไม่ได้ใช้งานแล้ว|此任务已不再有效。
+Use a valid observation time with timezone.|Gunakan waktu pengamatan yang valid dengan zona waktu.|Dùng thời gian quan sát hợp lệ có múi giờ.|ใช้เวลาสังเกตที่ถูกต้องพร้อมเขตเวลา|请使用包含时区的有效观察时间。
+Attach at most ten files.|Lampirkan maksimal sepuluh berkas.|Đính kèm tối đa mười tệp.|แนบไฟล์ได้สูงสุดสิบไฟล์|最多可附加十个文件。
+Invalid evidence attachment path.|Lokasi lampiran bukti tidak valid.|Đường dẫn tệp bằng chứng không hợp lệ.|เส้นทางไฟล์หลักฐานไม่ถูกต้อง|证据附件路径无效。
+Upload this evidence attachment for the selected task.|Unggah lampiran bukti untuk tugas yang dipilih.|Tải tệp bằng chứng này lên cho công việc đã chọn.|อัปโหลดไฟล์หลักฐานนี้สำหรับงานที่เลือก|请为所选任务上传此证据附件。
+Attachment exceeds 10 MB.|Lampiran melebihi 10 MB.|Tệp đính kèm vượt quá 10 MB.|ไฟล์แนบเกิน 10 MB|附件超过 10 MB。
+Required notes or attachments are missing.|Catatan atau lampiran yang diperlukan belum ada.|Thiếu ghi chú hoặc tệp đính kèm bắt buộc.|ไม่มีบันทึกหรือไฟล์แนบที่จำเป็น|缺少必需的备注或附件。
+Submit complete required evidence before approval.|Kirim seluruh bukti yang diperlukan sebelum persetujuan.|Nộp đủ bằng chứng bắt buộc trước khi duyệt.|ส่งหลักฐานที่จำเป็นให้ครบก่อนอนุมัติ|批准前请提交完整的必需证据。
+Complete the corrective action before closing the issue.|Selesaikan tindakan perbaikan sebelum menutup masalah.|Hoàn thành hành động khắc phục trước khi đóng vấn đề.|ดำเนินการแก้ไขให้เสร็จก่อนปิดปัญหา|关闭问题前请完成纠正措施。
+Choose a reviewed result.|Pilih hasil yang ditinjau.|Chọn kết quả đã xem xét.|เลือกผลที่ตรวจสอบแล้ว|请选择审核结果。
+Record your review reason.|Catat alasan tinjauan Anda.|Ghi lý do xem xét của bạn.|บันทึกเหตุผลการตรวจสอบ|请记录审核理由。
+Source evidence changed; wait for verification before sign-off.|Bukti sumber berubah; tunggu verifikasi sebelum persetujuan.|Bằng chứng nguồn đã thay đổi; chờ xác minh trước khi xác nhận.|หลักฐานต้นทางเปลี่ยนไป รอการตรวจสอบก่อนยืนยัน|来源证据已更改，请等待验证后再确认。
+A qualifying source record must pass this check before sign-off.|Catatan sumber yang memenuhi syarat harus lulus pemeriksaan sebelum persetujuan.|Bản ghi nguồn phù hợp phải đạt kiểm tra này trước khi xác nhận.|บันทึกต้นทางที่เข้าเกณฑ์ต้องผ่านการตรวจนี้ก่อนยืนยัน|确认前，符合条件的来源记录必须通过此检查。
+Qualifying recovery evidence is required.|Bukti pemulihan yang memenuhi syarat diperlukan.|Cần bằng chứng phục hồi phù hợp.|ต้องมีหลักฐานการฟื้นตัวที่เข้าเกณฑ์|需要符合条件的恢复证据。
+Record the required action evidence before approval.|Catat bukti tindakan yang diperlukan sebelum persetujuan.|Ghi bằng chứng hành động bắt buộc trước khi duyệt.|บันทึกหลักฐานการดำเนินการที่จำเป็นก่อนอนุมัติ|批准前请记录必需的行动证据。
+Assignee must be a team member.|Penerima tugas harus anggota tim.|Người được giao phải là thành viên nhóm.|ผู้รับงานต้องเป็นสมาชิกทีม|任务接收人必须是团队成员。
+An exception reason is required.|Alasan pengecualian diperlukan.|Cần lý do ngoại lệ.|ต้องมีเหตุผลข้อยกเว้น|请填写例外理由。
+Choose a later deadline.|Pilih tenggat yang lebih lambat.|Chọn hạn muộn hơn.|เลือกกำหนดเวลาที่ช้ากว่า|请选择更晚的截止时间。
+Choose a valid planned stocking date.|Pilih tanggal rencana tebar yang valid.|Chọn ngày dự kiến thả hợp lệ.|เลือกวันที่วางแผนลงลูกกุ้งที่ถูกต้อง|请选择有效的计划投苗日期。
+Pond no longer exists.|Kolam sudah tidak ada.|Ao không còn tồn tại.|บ่อไม่มีแล้ว|池塘已不存在。
+This pond is already stocked. Its actual stocking date controls DOC.|Kolam ini sudah ditebar. DOC mengikuti tanggal tebar sebenarnya.|Ao này đã thả. DOC dựa trên ngày thả thực tế.|บ่อนี้ลงลูกกุ้งแล้ว DOC อิงจากวันที่ลงจริง|此池塘已投苗，养殖日龄由实际投苗日期确定。
+Pond is outside your assignment.|Kolam di luar penugasan Anda.|Ao ngoài phạm vi được giao.|บ่ออยู่นอกความรับผิดชอบของคุณ|池塘不在您的分配范围内。
+Invalid production stage.|Tahap produksi tidak valid.|Giai đoạn sản xuất không hợp lệ.|ระยะการผลิตไม่ถูกต้อง|生产阶段无效。
+Stage prerequisites are incomplete. Record a manager exception to continue.|Prasyarat tahap belum lengkap. Catat pengecualian manajer untuk melanjutkan.|Chưa đủ điều kiện giai đoạn. Ghi ngoại lệ của quản lý để tiếp tục.|เงื่อนไขเปลี่ยนระยะยังไม่ครบ บันทึกข้อยกเว้นของผู้จัดการเพื่อดำเนินการต่อ|阶段前提条件尚未满足，请记录经理批准的例外后继续。
+Explain the unmet prerequisites.|Jelaskan prasyarat yang belum terpenuhi.|Giải thích điều kiện chưa đáp ứng.|อธิบายเงื่อนไขที่ยังไม่ครบ|请说明未满足的前提条件。
+Notification is not yours.|Notifikasi ini bukan untuk Anda.|Thông báo này không dành cho bạn.|การแจ้งเตือนนี้ไม่ใช่ของคุณ|此通知不属于您。
+Quiet hours must use HH:MM.|Waktu tenang harus menggunakan HH:MM.|Giờ yên lặng phải dùng HH:MM.|เวลางดแจ้งเตือนต้องใช้ HH:MM|免打扰时间必须使用 HH:MM 格式。
+Invalid push token.|Token notifikasi tidak valid.|Mã thông báo đẩy không hợp lệ.|โทเคนการแจ้งเตือนไม่ถูกต้อง|推送令牌无效。
+Reconciled a committed production event.|Menyelaraskan kejadian produksi yang tersimpan.|Đã đối chiếu sự kiện sản xuất đã lưu.|ปรับข้อมูลเหตุการณ์การผลิตที่บันทึกแล้วให้ตรงกัน|已核对保存的生产事件。
+Planned the next stocking date.|Merencanakan tanggal tebar berikutnya.|Đã lên kế hoạch ngày thả tiếp theo.|วางแผนวันที่ลงลูกกุ้งครั้งต่อไปแล้ว|已计划下次投苗日期。
+Use your own company upload.|Gunakan unggahan perusahaan Anda sendiri.|Dùng tệp tải lên của công ty bạn.|ใช้ไฟล์ที่อัปโหลดของบริษัทคุณ|请使用本公司上传的文件。
+Document exceeds 10 MB.|Dokumen melebihi 10 MB.|Tài liệu vượt quá 10 MB.|เอกสารเกิน 10 MB|文档超过 10 MB。
+Import PDF, DOCX, or plain text.|Impor PDF, DOCX, atau teks biasa.|Nhập PDF, DOCX hoặc văn bản thuần.|นำเข้า PDF, DOCX หรือข้อความธรรมดา|请导入 PDF、DOCX 或纯文本。
+Describe or upload your SOP.|Jelaskan atau unggah SOP Anda.|Mô tả hoặc tải SOP của bạn lên.|อธิบายหรืออัปโหลด SOP ของคุณ|请描述或上传您的 SOP。
+Source text exceeds 200,000 characters. Split it into chapters; no content was silently truncated.|Teks sumber melebihi 200.000 karakter. Bagi menjadi beberapa bab; tidak ada isi yang dipotong tanpa pemberitahuan.|Văn bản nguồn vượt quá 200.000 ký tự. Chia thành các chương; không có nội dung nào bị cắt âm thầm.|ข้อความต้นฉบับเกิน 200,000 ตัวอักษร โปรดแบ่งเป็นบท ไม่มีการตัดเนื้อหาโดยไม่แจ้ง|来源文本超过 200,000 字符，请分章节导入；未擅自截断任何内容。
+Unsupported language.|Bahasa tidak didukung.|Ngôn ngữ không được hỗ trợ.|ไม่รองรับภาษานี้|不支持此语言。
+Translation changed the approved workflow identity.|Terjemahan mengubah identitas alur kerja yang disetujui.|Bản dịch đã thay đổi định danh quy trình đã duyệt.|คำแปลเปลี่ยนรหัสขั้นตอนที่อนุมัติ|翻译更改了已批准的工作流程标识。
+Unsupported AI request.|Permintaan AI tidak didukung.|Yêu cầu AI không được hỗ trợ.|ไม่รองรับคำขอ AI นี้|不支持此 AI 请求。
+Task is outside your scope.|Tugas di luar cakupan Anda.|Công việc ngoài phạm vi của bạn.|งานอยู่นอกขอบเขตของคุณ|任务不在您的范围内。
+Block assignment changed.|Penugasan blok berubah.|Phân công khu đã thay đổi.|การมอบหมายบล็อกเปลี่ยนไป|区块分配已更改。
+Evidence changed during assessment.|Bukti berubah saat penilaian.|Bằng chứng thay đổi khi đánh giá.|หลักฐานเปลี่ยนระหว่างประเมิน|评估期间证据已更改。
+Observation times for SOP checks|Waktu pengamatan untuk pemeriksaan SOP|Thời gian quan sát cho kiểm tra SOP|เวลาสังเกตสำหรับการตรวจ SOP|SOP 检查的观察时间
+Observation time|Waktu pengamatan|Thời gian quan sát|เวลาสังเกต|观察时间
+Enter when each reading was measured, including timezone. Blank times retain date-only evidence.|Masukkan waktu setiap pengukuran beserta zona waktunya. Waktu kosong tetap menggunakan bukti bertanggal saja.|Nhập thời gian đo từng chỉ số, gồm múi giờ. Để trống sẽ giữ bằng chứng chỉ có ngày.|กรอกเวลาที่วัดแต่ละค่า รวมเขตเวลา ช่องเวลาที่ว่างจะคงหลักฐานแบบมีเฉพาะวันที่|请输入每项读数的测量时间及其时区。留空则保留仅含日期的证据。
+Create ponds before adopting pond procedures.|Buat kolam sebelum menerapkan prosedur kolam.|Tạo ao trước khi áp dụng quy trình ao.|สร้างบ่อก่อนนำขั้นตอนบ่อมาใช้|采用池塘规程前请先创建池塘。
+Ponds|Kolam|Ao|บ่อ|池塘
+The decision was not confirmed. Refresh before trying again.|Keputusan belum dikonfirmasi. Muat ulang sebelum mencoba lagi.|Quyết định chưa được xác nhận. Tải lại trước khi thử lại.|ยังไม่ได้ยืนยันการตัดสินใจ รีเฟรชก่อนลองใหม่|决定尚未确认，请刷新后再试。
+Unable to save the decision.|Tidak dapat menyimpan keputusan.|Không thể lưu quyết định.|ไม่สามารถบันทึกการตัดสินใจ|无法保存决定。
+Choose a pond. Do the task. Save your work.|Pilih kolam. Kerjakan tugas. Simpan hasilnya.|Chọn ao. Làm công việc. Lưu kết quả.|เลือกบ่อ ทำงาน แล้วบันทึกผล|选择池塘，完成任务，保存记录。
+Read a guide. Follow the steps.|Baca panduan. Ikuti langkahnya.|Đọc hướng dẫn. Làm theo từng bước.|อ่านคู่มือ แล้วทำตามขั้นตอน|阅读指南，按步骤操作。
+To do|Perlu dikerjakan|Cần làm|ต้องทำ|待完成
+Done|Selesai|Đã xong|เสร็จแล้ว|已完成
+Everything|Semua|Tất cả|ทั้งหมด|全部
+Later|Nanti|Để sau|ภายหลัง|稍后
+Waiting for review|Menunggu pemeriksaan|Chờ kiểm tra|รอตรวจสอบ|等待审核
+Not needed|Tidak perlu dikerjakan|Không cần làm|ไม่ต้องทำ|无需执行
+Stopped|Dihentikan|Đã dừng|หยุดแล้ว|已停止
+Past due|Lewat tenggat|Quá hạn|เลยกำหนด|已逾期
+Due|Tenggat|Hạn chót|กำหนดเสร็จ|截止时间
+Urgent — do this first|Mendesak — kerjakan ini dulu|Khẩn cấp — làm việc này trước|ด่วน — ทำงานนี้ก่อน|紧急，请优先处理
+Waiting to save|Menunggu tersimpan|Đang chờ lưu|รอบันทึก|等待保存
+Open task|Buka tugas|Mở công việc|เปิดงาน|打开任务
+View task|Lihat tugas|Xem công việc|ดูงาน|查看任务
+Enter readings|Isi hasil pengukuran|Nhập số đo|กรอกค่าที่วัด|填写读数
+Record pond readings|Catat pengukuran kolam|Ghi số đo của ao|บันทึกค่าที่วัดในบ่อ|记录池塘读数
+readings to enter|pengukuran perlu diisi|số đo cần nhập|ค่าที่ต้องกรอก|项读数待填写
+Save pond readings to finish these tasks automatically.|Simpan hasil pengukuran kolam agar tugas ini selesai otomatis.|Lưu số đo của ao để tự động hoàn thành các việc này.|บันทึกค่าที่วัดในบ่อเพื่อให้งานเหล่านี้เสร็จอัตโนมัติ|保存池塘读数后，这些任务将自动完成。
+View each check|Lihat tiap pemeriksaan|Xem từng kiểm tra|ดูการตรวจแต่ละรายการ|查看各项检查
+Instructions and details|Petunjuk dan rincian|Hướng dẫn và chi tiết|คำแนะนำและรายละเอียด|操作指示和详情
+Read farm guide|Baca panduan tambak|Đọc hướng dẫn trang trại|อ่านคู่มือฟาร์ม|阅读农场指南
+Read guide|Baca panduan|Đọc hướng dẫn|อ่านคู่มือ|阅读指南
+Find a task|Cari tugas|Tìm công việc|ค้นหางาน|查找任务
+Your task|Tugas Anda|Công việc của bạn|งานของคุณ|您的任务
+When did you do it?|Kapan Anda mengerjakannya?|Bạn làm lúc nào?|คุณทำเมื่อไร|您何时完成的？
+Save my work|Simpan hasil kerja|Lưu kết quả công việc|บันทึกงานของฉัน|保存工作记录
+More options|Pilihan lainnya|Tùy chọn khác|ตัวเลือกเพิ่มเติม|更多选项
+More actions and details|Tindakan lain dan rincian|Thao tác khác và chi tiết|การทำงานอื่นและรายละเอียด|更多操作和详情
+Messages|Pesan|Tin nhắn|ข้อความ|消息
+Just now|Baru saja|Vừa xong|เมื่อครู่|刚刚
+Choose another time|Pilih waktu lain|Chọn thời gian khác|เลือกเวลาอื่น|选择其他时间
+Tap Just now if you have just finished.|Tekan Baru saja jika Anda baru selesai.|Nhấn Vừa xong nếu bạn vừa hoàn thành.|กด เมื่อครู่ หากคุณเพิ่งทำเสร็จ|如果您刚刚完成，请点“刚刚”。
+What did you do?|Apa yang Anda kerjakan?|Bạn đã làm gì?|คุณทำอะไร|您做了什么？
+Add a photo or file|Tambah foto atau berkas|Thêm ảnh hoặc tệp|เพิ่มรูปหรือไฟล์|添加照片或文件
 `;
 const text: Record<string, string[]> = Object.fromEntries(
   rows
     .trim()
     .split("\n")
+    .filter(Boolean)
     .map((row) => {
       const [key, ...translations] = row.split("|");
       return [key, translations];
@@ -561,4 +736,21 @@ export function sopFieldLabel(key: string, language: string): string {
     escalationMinutes: "Escalation delay (minutes)",
   };
   return sopText(labels[key] || key, language);
+}
+
+/** Localize generated prefixes only; approved task titles remain source content. */
+export function sopTaskTitle(
+  title: string,
+  purpose: string | undefined,
+  language: string,
+): string {
+  const prefix =
+    purpose === "corrective"
+      ? "Corrective action"
+      : purpose === "recheck"
+        ? "Recheck"
+        : "";
+  return prefix && title.startsWith(`${prefix}: `)
+    ? `${sopText(prefix, language)}: ${title.slice(prefix.length + 2)}`
+    : title;
 }

@@ -5,6 +5,7 @@ import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../context/AuthContext";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { sopText } from "../../shared/sop/uiCopy";
 import { db } from "@/config/firebase";
 if (Platform.OS !== "web")
   Notifications.setNotificationHandler({
@@ -22,16 +23,17 @@ export async function enableSopPush(
     quietStart: "22:00",
     quietEnd: "06:00",
   },
+  language = "en",
 ) {
   if (Platform.OS === "web")
     return { enabled: false, reason: "Use mobile notification permissions." };
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("sop-critical", {
-      name: "Critical SOP issues",
+      name: sopText("Critical SOP issues", language),
       importance: Notifications.AndroidImportance.HIGH,
     });
     await Notifications.setNotificationChannelAsync("sop-routine", {
-      name: "Farm task reminders",
+      name: sopText("Farm task reminders", language),
       importance: Notifications.AndroidImportance.DEFAULT,
     });
   }

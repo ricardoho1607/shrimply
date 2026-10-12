@@ -241,40 +241,12 @@ function SopsPageContent() {
         <div>
           <p className="sop-eyebrow">{ui("SHRIMPLY • FARM WORKFLOWS")}</p>
           <h1>{c.sops}</h1>
-          <p>
-            {ui(
-              "Read farm procedures, review source documents, and manage approved workflows.",
-            )}
-          </p>
+          <p>{ui("Read a guide. Follow the steps.")}</p>
         </div>
         <Link href="/dashboard/todo" className="sop-button">
           {c.todo}
         </Link>
       </header>
-      <div className="sop-language-bar">
-        <Field label={ui("Display language")}>
-          <select
-            value={currentLanguage}
-            onChange={(e) => {
-              const language = SOP_INTERFACE_LANGUAGES.find(
-                (item) => item.code === e.target.value,
-              );
-              if (language) void setLanguage(language.code);
-            }}
-          >
-            {SOP_INTERFACE_LANGUAGES.map((language) => (
-              <option key={language.code} value={language.code}>
-                {language.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <p className="sop-muted">
-          {ui(
-            "Changes app labels and navigation. Your SOP text stays in its original language.",
-          )}
-        </p>
-      </div>
       {(client.error || message) &&
         !importError &&
         (!deleteError || (message || client.error) !== deleteError) && (
@@ -292,10 +264,7 @@ function SopsPageContent() {
       <div className="sop-tabs" role="group" aria-label={ui("SOP sections")}>
         {[
           ["library", c.library],
-          ["community", c.community],
           ["adopted", c.adopted],
-          ["dashboard", c.dashboard],
-          ["history", c.history],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -307,6 +276,49 @@ function SopsPageContent() {
           </button>
         ))}
       </div>
+      <details className="sop-extra-tools">
+        <summary>{ui("More options")}</summary>
+        <div className="sop-toolbar">
+          {[
+            ["community", c.community],
+            ["dashboard", c.dashboard],
+            ["history", c.history],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              aria-pressed={tab === id}
+              disabled={!!draftProgress}
+              onClick={() => setTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="sop-language-bar">
+          <Field label={ui("Display language")}>
+            <select
+              value={currentLanguage}
+              onChange={(e) => {
+                const language = SOP_INTERFACE_LANGUAGES.find(
+                  (item) => item.code === e.target.value,
+                );
+                if (language) void setLanguage(language.code);
+              }}
+            >
+              {SOP_INTERFACE_LANGUAGES.map((language) => (
+                <option key={language.code} value={language.code}>
+                  {language.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <p className="sop-muted">
+            {ui(
+              "Changes app labels and navigation. Your SOP text stays in its original language.",
+            )}
+          </p>
+        </div>
+      </details>
       {tab === "dashboard" && (
         <>
           <div className="sop-metrics">
@@ -373,7 +385,7 @@ function SopsPageContent() {
             <article className="sop-card" key={i.id}>
               <h2>{i.title}</h2>
               <p>
-                {i.target.name} · {i.severity} · {i.status}
+                {i.target.name} · {ui(i.severity)} · {ui(i.status)}
               </p>
               <p>
                 {i.rechecks} {ui("rechecks ·")}{" "}
@@ -381,7 +393,7 @@ function SopsPageContent() {
                   ? ui("Recovery verified")
                   : ui("Recovery evidence required")}
               </p>
-              {i.failureExplanation && <p>{i.failureExplanation}</p>}
+              {i.failureExplanation && <p>{ui(i.failureExplanation)}</p>}
               {i.openedAt && (
                 <p>
                   {ui("Opened")}:{" "}
@@ -469,32 +481,11 @@ function SopsPageContent() {
                       {ui(s.status)}
                     </span>
                   </div>
-                  <p className="sop-library-revision">
-                    {ui("revision")} {s.revision}
-                  </p>
                   {!!s.definition.description && (
                     <p className="sop-library-description">
                       {s.definition.description}
                     </p>
                   )}
-                  <dl className="sop-library-facts">
-                    <div>
-                      <dt>{ui("Procedure sections")}</dt>
-                      <dd>{card.readableSections}</dd>
-                    </div>
-                    <div>
-                      <dt>{ui("Checks")}</dt>
-                      <dd>{card.checks}</dd>
-                    </div>
-                    <div>
-                      <dt>{ui("Original language")}</dt>
-                      <dd>
-                        {SOP_INTERFACE_LANGUAGES.find(
-                          (language) => language.code === s.definition.language,
-                        )?.name || s.definition.language}
-                      </dd>
-                    </div>
-                  </dl>
                   {(!card.readableSections ||
                     (s.status === "draft" && card.issues > 0)) && (
                     <div className="sop-library-review">
@@ -531,12 +522,6 @@ function SopsPageContent() {
                       </p>
                     </div>
                   )}
-                  {s.source && (
-                    <p>
-                      {ui("Adapted from")} {s.source.author} ·{" "}
-                      {s.source.versionId}
-                    </p>
-                  )}
                   <div className="sop-library-actions">
                     <button
                       className="sop-primary"
@@ -545,78 +530,114 @@ function SopsPageContent() {
                         setReading(s);
                       }}
                     >
-                      {ui(s.status === "draft" ? "Review draft" : "Read SOP")}
+                      {ui(s.status === "draft" ? "Review draft" : "Read guide")}
                     </button>
-                    <button onClick={() => openEditor(s, "sop-editor-start")}>
-                      {ui("Edit SOP")}
-                    </button>
-                    {(w.manage ||
-                      (s.status === "draft" && s.createdBy === user?.uid)) && (
-                      <button
-                        className="sop-danger"
-                        disabled={client.busy}
-                        onClick={() => {
-                          setDeleting(s.id);
-                          setDeleteError("");
-                          setMessage("");
-                        }}
-                      >
-                        {ui(
-                          s.status === "draft" ? "Delete draft" : "Delete SOP",
-                        )}
-                      </button>
+                  </div>
+                  <details className="sop-guide-details">
+                    <summary>{ui("More actions and details")}</summary>
+                    <p className="sop-library-revision">
+                      {ui("revision")} {s.revision}
+                    </p>
+                    <dl className="sop-library-facts">
+                      <div>
+                        <dt>{ui("Procedure sections")}</dt>
+                        <dd>{card.readableSections}</dd>
+                      </div>
+                      <div>
+                        <dt>{ui("Checks")}</dt>
+                        <dd>{card.checks}</dd>
+                      </div>
+                      <div>
+                        <dt>{ui("Original language")}</dt>
+                        <dd>
+                          {SOP_INTERFACE_LANGUAGES.find(
+                            (language) =>
+                              language.code === s.definition.language,
+                          )?.name || s.definition.language}
+                        </dd>
+                      </div>
+                    </dl>
+                    {s.source && (
+                      <p>
+                        {ui("Adapted from")} {s.source.author} ·{" "}
+                        {s.source.versionId}
+                      </p>
                     )}
-                    {w.manage && (
-                      <>
-                        {s.status === "draft" && (
-                          <button
-                            disabled={client.busy || card.issues > 0}
-                            onClick={() =>
-                              void run(() =>
-                                client.command({
-                                  action: "approve",
-                                  sopId: s.id,
-                                  expectedRevision: s.revision,
-                                }),
-                              )
-                            }
-                          >
-                            {ui("Approve draft")}
-                          </button>
-                        )}
-                        {s.status === "draft" && card.issues > 0 && (
-                          <p className="sop-muted">
-                            {ui(
-                              "Complete the highlighted fields in the draft before approving.",
-                            )}
-                          </p>
-                        )}
-                        {s.approvedVersionId && s.status === "approved" && (
-                          <>
+                    <div className="sop-library-actions">
+                      <button onClick={() => openEditor(s, "sop-editor-start")}>
+                        {ui("Edit SOP")}
+                      </button>
+                      {(w.manage ||
+                        (s.status === "draft" &&
+                          s.createdBy === user?.uid)) && (
+                        <button
+                          className="sop-danger"
+                          disabled={client.busy}
+                          onClick={() => {
+                            setDeleting(s.id);
+                            setDeleteError("");
+                            setMessage("");
+                          }}
+                        >
+                          {ui(
+                            s.status === "draft"
+                              ? "Delete draft"
+                              : "Delete SOP",
+                          )}
+                        </button>
+                      )}
+                      {w.manage && (
+                        <>
+                          {s.status === "draft" && (
                             <button
-                              disabled={client.busy}
+                              disabled={client.busy || card.issues > 0}
                               onClick={() =>
                                 void run(() =>
                                   client.command({
-                                    action: "publish",
+                                    action: "approve",
                                     sopId: s.id,
                                     expectedRevision: s.revision,
                                   }),
                                 )
                               }
                             >
-                              {c.publish}
+                              {ui("Approve draft")}
                             </button>
-                            <button onClick={() => startAdoption(s)}>
-                              {existingSopAdoption(w.adoptions, s.id)
-                                ? ui("Manage adoption")
-                                : c.adopt}
-                            </button>
-                          </>
-                        )}
-                      </>
-                    )}
-                  </div>
+                          )}
+                          {s.status === "draft" && card.issues > 0 && (
+                            <p className="sop-muted">
+                              {ui(
+                                "Complete the highlighted fields in the draft before approving.",
+                              )}
+                            </p>
+                          )}
+                          {s.approvedVersionId && s.status === "approved" && (
+                            <>
+                              <button
+                                disabled={client.busy}
+                                onClick={() =>
+                                  void run(() =>
+                                    client.command({
+                                      action: "publish",
+                                      sopId: s.id,
+                                      expectedRevision: s.revision,
+                                    }),
+                                  )
+                                }
+                              >
+                                {c.publish}
+                              </button>
+                              <button onClick={() => startAdoption(s)}>
+                                {existingSopAdoption(w.adoptions, s.id)
+                                  ? ui("Manage adoption")
+                                  : c.adopt}
+                              </button>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </details>
                   {deleting === s.id && (
                     <section
                       className="sop-alert"
@@ -2153,7 +2174,9 @@ function SopsPageContent() {
             <ol>
               {definition.steps.map((s) => (
                 <li key={s.id}>
-                  <strong>{s.title}</strong> → {s.check.field} {ui("→ pass:")}{" "}
+                  <strong>{s.title}</strong> →{" "}
+                  {sopMeasurementLabel(s.check.field, currentLanguage)}{" "}
+                  {ui("→ pass:")}{" "}
                   {s.onPass
                     .map(
                       (id) => definition.steps.find((t) => t.id === id)?.title,

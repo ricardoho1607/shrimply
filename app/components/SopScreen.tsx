@@ -17,7 +17,8 @@ import {
   sopIssueLinks,
 } from "../../shared/sop/editor";
 import { sopLibrarySummary } from "../../shared/sop/library";
-import { sopText, sopFieldLabel } from "../../shared/sop/uiCopy";
+import { sopText, sopFieldLabel, sopTaskTitle } from "../../shared/sop/uiCopy";
+import { SopTodoList } from "./SopTodoList";
 import { SopFlowPreview } from "./SopFlowPreview";
 import { SopContentEditor, SopContentView } from "./SopContent";
 import { SopReader } from "./SopReader";
@@ -242,6 +243,12 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
   useEffect(() => {
     if (reading) scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, [reading]);
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (mode !== "todo") return;
+    const timer = setInterval(() => setClock(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, [mode]);
   const [todoFiltersOpen, setTodoFiltersOpen] = useState(false);
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [draftProgress, setDraftProgress] = useState<SopDraftProgress | null>(
@@ -560,18 +567,32 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
             </Text>
           )}
           {mode === "sops" && !definition && !adopting && !reading && (
-            <Choices
-              label=""
-              values={[
-                { id: "library", title: c.library },
-                { id: "community", title: c.community },
-                { id: "adopted", title: c.adopted },
-                { id: "dashboard", title: c.dashboard },
-                { id: "history", title: c.history },
-              ]}
-              selected={[tab]}
-              onChange={setTab}
-            />
+            <>
+              <Text style={styles.text}>
+                {ui("Read a guide. Follow the steps.")}
+              </Text>
+              <Choices
+                label=""
+                values={[
+                  { id: "library", title: c.library },
+                  { id: "adopted", title: c.adopted },
+                ]}
+                selected={[tab]}
+                onChange={setTab}
+              />
+              <SopEditorDisclosure title={ui("More options")}>
+                <Choices
+                  label=""
+                  values={[
+                    { id: "community", title: c.community },
+                    { id: "dashboard", title: c.dashboard },
+                    { id: "history", title: c.history },
+                  ]}
+                  selected={[tab]}
+                  onChange={setTab}
+                />
+              </SopEditorDisclosure>
+            </>
           )}
           {mode === "sops" &&
             tab === "library" &&
@@ -599,20 +620,21 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
                     });
                   }}
                 />
-                <Text style={styles.subheading}>{ui("Starter templates")}</Text>
-                {SOP_TEMPLATES.map((t) => (
-                  <View key={t.title} style={styles.card}>
-                    <Text style={styles.subheading}>{ui(t.title)}</Text>
-                    <Text style={styles.text}>{ui(t.description)}</Text>
-                    <Button
-                      title={ui("Customize template")}
-                      onPress={() => {
-                        setEditing(null);
-                        setDefinition(JSON.parse(JSON.stringify(t)));
-                      }}
-                    />
-                  </View>
-                ))}
+                <SopEditorDisclosure title={ui("Starter templates")}>
+                  {SOP_TEMPLATES.map((t) => (
+                    <View key={t.title} style={styles.card}>
+                      <Text style={styles.subheading}>{ui(t.title)}</Text>
+                      <Text style={styles.text}>{ui(t.description)}</Text>
+                      <Button
+                        title={ui("Customize template")}
+                        onPress={() => {
+                          setEditing(null);
+                          setDefinition(JSON.parse(JSON.stringify(t)));
+                        }}
+                      />
+                    </View>
+                  ))}
+                </SopEditorDisclosure>
                 {w.sops
                   .filter((s) => s.status !== "deleted")
                   .map((s) => {
@@ -635,33 +657,6 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
                             {s.definition.description}
                           </Text>
                         )}
-                        <View style={styles.libraryFacts}>
-                          <View>
-                            <Text style={styles.label}>
-                              {ui("Procedure sections")}
-                            </Text>
-                            <Text style={styles.libraryFactValue}>
-                              {card.readableSections}
-                            </Text>
-                          </View>
-                          <View>
-                            <Text style={styles.label}>{ui("Checks")}</Text>
-                            <Text style={styles.libraryFactValue}>
-                              {card.checks}
-                            </Text>
-                          </View>
-                          <View>
-                            <Text style={styles.label}>
-                              {ui("Original language")}
-                            </Text>
-                            <Text style={styles.libraryFactValue}>
-                              {SOP_INTERFACE_LANGUAGES.find(
-                                (language) =>
-                                  language.code === s.definition.language,
-                              )?.name || s.definition.language}
-                            </Text>
-                          </View>
-                        </View>
                         {(!card.readableSections ||
                           (s.status === "draft" && card.issues > 0)) && (
                           <View style={styles.libraryReview}>
@@ -686,119 +681,153 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
                             </Text>
                           </View>
                         )}
-                        <Text style={styles.muted}>
-                          {ui("revision")} {s.revision}
-                        </Text>
-                        {s.source && (
-                          <Text style={styles.text}>
-                            {s.source.author} · {s.source.versionId}
-                          </Text>
-                        )}
                         <Button
                           title={ui(
-                            s.status === "draft" ? "Review draft" : "Read SOP",
+                            s.status === "draft"
+                              ? "Review draft"
+                              : "Read guide",
                           )}
                           variant="primary"
                           onPress={() => setReading(s)}
                         />
-                        <Button
-                          title={ui("Edit SOP")}
-                          onPress={() => {
-                            setEditing(s);
-                            setDefinition(
-                              JSON.parse(JSON.stringify(s.definition)),
-                            );
-                          }}
-                        />
-                        {(w.manage ||
-                          (s.status === "draft" &&
-                            s.createdBy === user?.uid)) && (
-                          <Button
-                            title={ui(
-                              s.status === "draft"
-                                ? "Delete draft"
-                                : "Delete SOP",
-                            )}
-                            variant="danger"
-                            disabled={client.busy}
-                            onPress={() =>
-                              Alert.alert(
-                                ui("Delete SOP"),
-                                `${s.title}
-${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; existing farm tasks keep their instructions.")}`,
-                                [
-                                  { text: ui("Keep SOP"), style: "cancel" },
-                                  {
-                                    text: ui("Delete SOP"),
-                                    style: "destructive",
-                                    onPress: () =>
-                                      void run(async () => {
-                                        await client.command({
-                                          action: "deleteSop",
-                                          sopId: s.id,
-                                          expectedRevision: s.revision,
-                                        });
-                                        setMessage(
-                                          ui("SOP moved to Deleted SOPs."),
-                                        );
-                                      }),
-                                  },
-                                ],
-                              )
-                            }
-                          />
-                        )}
-                        {w.manage && (
-                          <>
-                            {s.status === "draft" && (
-                              <Button
-                                title={ui("Approve draft")}
-                                disabled={client.busy || card.issues > 0}
-                                onPress={() =>
-                                  void run(() =>
-                                    client.command({
-                                      action: "approve",
-                                      sopId: s.id,
-                                      expectedRevision: s.revision,
-                                    }),
-                                  )
-                                }
-                              />
-                            )}
-                            {s.status === "draft" && card.issues > 0 && (
-                              <Text style={styles.muted}>
-                                {ui(
-                                  "Complete the highlighted fields in the draft before approving.",
-                                )}
+                        <SopEditorDisclosure
+                          title={ui("More actions and details")}
+                        >
+                          <View style={styles.libraryFacts}>
+                            <View>
+                              <Text style={styles.label}>
+                                {ui("Procedure sections")}
                               </Text>
-                            )}
-                            {s.approvedVersionId && s.status === "approved" && (
-                              <>
+                              <Text style={styles.libraryFactValue}>
+                                {card.readableSections}
+                              </Text>
+                            </View>
+                            <View>
+                              <Text style={styles.label}>{ui("Checks")}</Text>
+                              <Text style={styles.libraryFactValue}>
+                                {card.checks}
+                              </Text>
+                            </View>
+                            <View>
+                              <Text style={styles.label}>
+                                {ui("Original language")}
+                              </Text>
+                              <Text style={styles.libraryFactValue}>
+                                {SOP_INTERFACE_LANGUAGES.find(
+                                  (language) =>
+                                    language.code === s.definition.language,
+                                )?.name || s.definition.language}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.muted}>
+                            {ui("revision")} {s.revision}
+                          </Text>
+                          {s.source && (
+                            <Text style={styles.text}>
+                              {s.source.author} · {s.source.versionId}
+                            </Text>
+                          )}
+                          <Button
+                            title={ui("Edit SOP")}
+                            onPress={() => {
+                              setEditing(s);
+                              setDefinition(
+                                JSON.parse(JSON.stringify(s.definition)),
+                              );
+                            }}
+                          />
+                          {(w.manage ||
+                            (s.status === "draft" &&
+                              s.createdBy === user?.uid)) && (
+                            <Button
+                              title={ui(
+                                s.status === "draft"
+                                  ? "Delete draft"
+                                  : "Delete SOP",
+                              )}
+                              variant="danger"
+                              disabled={client.busy}
+                              onPress={() =>
+                                Alert.alert(
+                                  ui("Delete SOP"),
+                                  `${s.title}
+${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; existing farm tasks keep their instructions.")}`,
+                                  [
+                                    { text: ui("Keep SOP"), style: "cancel" },
+                                    {
+                                      text: ui("Delete SOP"),
+                                      style: "destructive",
+                                      onPress: () =>
+                                        void run(async () => {
+                                          await client.command({
+                                            action: "deleteSop",
+                                            sopId: s.id,
+                                            expectedRevision: s.revision,
+                                          });
+                                          setMessage(
+                                            ui("SOP moved to Deleted SOPs."),
+                                          );
+                                        }),
+                                    },
+                                  ],
+                                )
+                              }
+                            />
+                          )}
+                          {w.manage && (
+                            <>
+                              {s.status === "draft" && (
                                 <Button
-                                  title={c.publish}
-                                  disabled={client.busy}
+                                  title={ui("Approve draft")}
+                                  disabled={client.busy || card.issues > 0}
                                   onPress={() =>
                                     void run(() =>
                                       client.command({
-                                        action: "publish",
+                                        action: "approve",
                                         sopId: s.id,
                                         expectedRevision: s.revision,
                                       }),
                                     )
                                   }
                                 />
-                                <Button
-                                  title={
-                                    existingSopAdoption(w.adoptions, s.id)
-                                      ? ui("Manage adoption")
-                                      : c.adopt
-                                  }
-                                  onPress={() => beginAdoption(s)}
-                                />
-                              </>
-                            )}
-                          </>
-                        )}
+                              )}
+                              {s.status === "draft" && card.issues > 0 && (
+                                <Text style={styles.muted}>
+                                  {ui(
+                                    "Complete the highlighted fields in the draft before approving.",
+                                  )}
+                                </Text>
+                              )}
+                              {s.approvedVersionId &&
+                                s.status === "approved" && (
+                                  <>
+                                    <Button
+                                      title={c.publish}
+                                      disabled={client.busy}
+                                      onPress={() =>
+                                        void run(() =>
+                                          client.command({
+                                            action: "publish",
+                                            sopId: s.id,
+                                            expectedRevision: s.revision,
+                                          }),
+                                        )
+                                      }
+                                    />
+                                    <Button
+                                      title={
+                                        existingSopAdoption(w.adoptions, s.id)
+                                          ? ui("Manage adoption")
+                                          : c.adopt
+                                      }
+                                      onPress={() => beginAdoption(s)}
+                                    />
+                                  </>
+                                )}
+                            </>
+                          )}
+                        </SopEditorDisclosure>
                       </View>
                     );
                   })}
@@ -936,7 +965,7 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
               <View style={styles.card} key={i.id}>
                 <Text style={styles.subheading}>{i.title}</Text>
                 <Text style={styles.text}>
-                  {i.target.name} · {i.severity} · {i.status}
+                  {i.target.name} · {ui(i.severity)} · {ui(i.status)}
                 </Text>
                 <Text style={styles.text}>
                   {i.rechecks} {ui("rechecks ·")}{" "}
@@ -945,7 +974,7 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                     : ui("Recovery required")}
                 </Text>
                 {i.failureExplanation && (
-                  <Text style={styles.text}>{i.failureExplanation}</Text>
+                  <Text style={styles.text}>{ui(i.failureExplanation)}</Text>
                 )}
                 {i.openedAt && (
                   <Text style={styles.text}>
@@ -2119,7 +2148,8 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                 <SopFlowPreview definition={definition} />
                 {definition.steps.map((s) => (
                   <Text style={styles.text} key={s.id}>
-                    {s.title} → {s.check.field}{" "}
+                    {s.title} →{" "}
+                    {sopMeasurementLabel(s.check.field, currentLanguage)}{" "}
                     {ui("→ corrective action → recheck")} {s.recheckMinutes}{" "}
                     {ui("min → escalate")} {s.escalationMinutes} {ui("min")}
                   </Text>
@@ -2354,52 +2384,61 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
           )}
           {mode === "todo" && !task && !manual && (
             <>
+              <Text style={styles.text}>
+                {ui("Choose a pond. Do the task. Save your work.")}
+              </Text>
               <Choices
                 label={ui("Status")}
                 values={[
-                  { id: "active", title: ui("Active work") },
-                  { id: "completed", title: ui("completed") },
-                  { id: "all", title: ui("All tasks") },
+                  { id: "active", title: ui("To do") },
+                  { id: "completed", title: ui("Done") },
+                  { id: "all", title: ui("Everything") },
                 ]}
                 selected={[status]}
                 onChange={setStatus}
               />
-              <Button title={c.manual} onPress={() => setManual(true)} />
+              <SopEditorDisclosure title={ui("More options")}>
+                <Button title={c.manual} onPress={() => setManual(true)} />
+                <Button
+                  title={ui("Mobile reminders")}
+                  expanded={remindersOpen}
+                  onPress={() => setRemindersOpen(!remindersOpen)}
+                />
+                {remindersOpen && (
+                  <View style={styles.card}>
+                    <Input
+                      label={ui("Routine quiet hours start (HH:MM)")}
+                      value={quietStart}
+                      onChange={setQuietStart}
+                    />
+                    <Input
+                      label={ui("Routine quiet hours end (HH:MM)")}
+                      value={quietEnd}
+                      onChange={setQuietEnd}
+                    />
+                    <Button
+                      title={ui("Enable mobile reminders")}
+                      onPress={() =>
+                        void run(async () => {
+                          if (company?.id) {
+                            const result = await enableSopPush(
+                              company.id,
+                              {
+                                quietStart,
+                                quietEnd,
+                              },
+                              currentLanguage,
+                            );
+                            setMessage(result.reason);
+                          }
+                        })
+                      }
+                    />
+                  </View>
+                )}
+              </SopEditorDisclosure>
               <Button
-                title={ui("Mobile reminders")}
-                expanded={remindersOpen}
-                onPress={() => setRemindersOpen(!remindersOpen)}
-              />
-              {remindersOpen && (
-                <View style={styles.card}>
-                  <Input
-                    label={ui("Routine quiet hours start (HH:MM)")}
-                    value={quietStart}
-                    onChange={setQuietStart}
-                  />
-                  <Input
-                    label={ui("Routine quiet hours end (HH:MM)")}
-                    value={quietEnd}
-                    onChange={setQuietEnd}
-                  />
-                  <Button
-                    title={ui("Enable mobile reminders")}
-                    onPress={() =>
-                      void run(async () => {
-                        if (company?.id) {
-                          const result = await enableSopPush(company.id, {
-                            quietStart,
-                            quietEnd,
-                          });
-                          setMessage(result.reason);
-                        }
-                      })
-                    }
-                  />
-                </View>
-              )}
-              <Button
-                title={ui("Filters")}
+                title={ui("Find a task")}
                 expanded={todoFiltersOpen}
                 onPress={() => setTodoFiltersOpen(!todoFiltersOpen)}
               />
@@ -2482,50 +2521,27 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
               <Text style={styles.subheading}>
                 {ui("Assigned work")} · {filtered.length}
               </Text>
-              {filtered.map((t) => (
-                <View style={styles.card} key={t.id}>
-                  <Text style={styles.subheading}>{t.title}</Text>
-                  <Text style={styles.text}>
-                    {t.target.name} · {ui(t.status)} · {ui(t.result)}
-                  </Text>
-                  <Text style={styles.text}>
-                    {new Date(t.dueAt).toLocaleString(currentLanguage, {
-                      timeZone: w.timeZone || "UTC",
-                    })}
-                  </Text>
-                  <Text numberOfLines={3} style={styles.text}>
-                    {t.instructions}
-                  </Text>
-                  {client.pending.includes(t.id) && (
-                    <Text style={styles.text}>{c.pending}</Text>
-                  )}
-                  <Button
-                    title={c.review}
-                    onPress={() => {
-                      setTask(t);
-                      setNotes(t.notes);
-                      setObservedAt(
-                        t.evidenceObservedAt
-                          ? new Date(t.evidenceObservedAt).toISOString()
-                          : "",
-                      );
-                      setAttachments(t.attachments);
-                      setReason("");
-                    }}
-                  />
-                  {t.target.pondId && (
-                    <Button
-                      title={ui("Open pond")}
-                      onPress={() =>
-                        router.push({
-                          pathname: "/ponddetails",
-                          params: { pondId: t.target.pondId },
-                        })
-                      }
-                    />
-                  )}
-                </View>
-              ))}
+              <SopTodoList
+                tasks={filtered}
+                language={currentLanguage}
+                timeZone={w.timeZone || "UTC"}
+                clock={clock}
+                pending={client.pending}
+                onOpen={(t) => {
+                  setTask(t);
+                  setNotes(t.notes);
+                  setObservedAt(
+                    t.evidenceObservedAt
+                      ? new Date(t.evidenceObservedAt).toISOString()
+                      : "",
+                  );
+                  setAttachments(t.attachments);
+                  setReason("");
+                }}
+                onPond={(pondId) =>
+                  router.push({ pathname: "/ponddetails", params: { pondId } })
+                }
+              />
               {!filtered.length && (
                 <View style={styles.card}>
                   <Text style={styles.subheading}>
@@ -2545,32 +2561,40 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                 </View>
               )}
               {w.notifications.length > 0 && (
-                <Text style={styles.text}>
-                  {ui("Marking an alert read acknowledges it. Complete or review the task separately in To-do.")}
-                </Text>
-              )}
-              {w.notifications.map((n) => (
-                <View key={n.id} style={styles.card}>
-                  <Text style={styles.label}>{n.title}</Text>
-                  <Text style={styles.text}>{n.message}</Text>
-                  {n.read ? (
-                    <Text style={styles.text}>{ui("Read")}</Text>
-                  ) : (
-                    <Button
-                      title={ui("Mark read")}
-                      disabled={client.busy}
-                      onPress={() =>
-                        void run(() =>
-                          client.command({
-                            action: "markRead",
-                            notificationId: n.id,
-                          }),
-                        )
-                      }
-                    />
+                <SopEditorDisclosure
+                  title={`${ui("Messages")} · ${w.notifications.filter((n) => !n.read).length}`}
+                >
+                  {w.notifications.length > 0 && (
+                    <Text style={styles.text}>
+                      {ui(
+                        "Marking an alert read acknowledges it. Complete or review the task separately in To-do.",
+                      )}
+                    </Text>
                   )}
-                </View>
-              ))}
+                  {w.notifications.map((n) => (
+                    <View key={n.id} style={styles.card}>
+                      <Text style={styles.label}>{ui(n.title)}</Text>
+                      <Text style={styles.text}>{ui(n.message)}</Text>
+                      {n.read ? (
+                        <Text style={styles.text}>{ui("Read")}</Text>
+                      ) : (
+                        <Button
+                          title={ui("Mark read")}
+                          disabled={client.busy}
+                          onPress={() =>
+                            void run(() =>
+                              client.command({
+                                action: "markRead",
+                                notificationId: n.id,
+                              }),
+                            )
+                          }
+                        />
+                      )}
+                    </View>
+                  ))}
+                </SopEditorDisclosure>
+              )}
             </>
           )}
           {mode === "todo" && w.nextTaskCursor && (
@@ -2587,25 +2611,37 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
           )}
           {task && (
             <View style={styles.card}>
-              <Text style={styles.subheading}>{task.title}</Text>
+              <Text style={styles.subheading}>
+                {sopTaskTitle(task.title, task.purpose, currentLanguage)}
+              </Text>
               <Text style={styles.text}>{task.instructions}</Text>
-              <Input
-                label={ui("When performed (ISO time)")}
-                value={observedAt}
-                onChange={setObservedAt}
-              />
+              <Text style={styles.label}>{ui("When did you do it?")}</Text>
+              <Text style={styles.text}>
+                {Number.isFinite(Date.parse(observedAt))
+                  ? new Date(observedAt).toLocaleString(currentLanguage, {
+                      timeZone: w.timeZone || "UTC",
+                    })
+                  : ui("Tap Just now if you have just finished.")}
+              </Text>
               <Button
-                title={ui("Use current time")}
+                title={ui("Just now")}
                 onPress={() => setObservedAt(new Date().toISOString())}
               />
+              <SopEditorDisclosure title={ui("Choose another time")}>
+                <Input
+                  label={ui("When performed (ISO time)")}
+                  value={observedAt}
+                  onChange={setObservedAt}
+                />
+              </SopEditorDisclosure>
               <Input
-                label={c.notes}
+                label={ui("What did you do?")}
                 value={notes}
                 multiline
                 onChange={setNotes}
               />
               <Button
-                title={c.attachment}
+                title={ui("Add a photo or file")}
                 onPress={() =>
                   void run(async () => {
                     const attachment = await pick(task.id);
@@ -2621,7 +2657,7 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                 />
               ))}
               <Button
-                title={c.submit}
+                title={ui("Save my work")}
                 disabled={client.busy}
                 onPress={() => void run(submitTask)}
               />
@@ -2634,7 +2670,9 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                         mode: "assess",
                         taskId: task.id,
                       });
-                      setMessage(`${r.result}: ${r.explanation}`);
+                      setMessage(
+                        `${ui(String(r.result ?? ""))}: ${ui(String(r.explanation ?? ""))}`,
+                      );
                       await client.refresh();
                     })
                   }
@@ -2651,7 +2689,7 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                   {["pass", "fail", "not_applicable"].map((result) => (
                     <Button
                       key={result}
-                      title={`Review as ${result}`}
+                      title={`${ui("Review as")} ${ui(result)}`}
                       disabled={client.busy || !reason}
                       onPress={() =>
                         void run(async () => {
@@ -2670,7 +2708,7 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                   {["waive", "cancel"].map((action) => (
                     <Button
                       key={action}
-                      title={action}
+                      title={ui(action)}
                       disabled={!reason}
                       onPress={() =>
                         void run(async () => {
@@ -2751,7 +2789,7 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
               <Choices
                 label={ui("Responsible person")}
                 values={[
-                  { id: user?.uid || "", title: "Myself" },
+                  { id: user?.uid || "", title: ui("Myself") },
                   ...(w.manage
                     ? w.members.map((m) => ({ id: m.id, title: m.name }))
                     : []),
@@ -2860,7 +2898,7 @@ const styles = StyleSheet.create({
   },
   button: {
     maxWidth: "100%",
-    minHeight: 44,
+    minHeight: 48,
     borderWidth: 1,
     borderColor: "#cbdde8",
     backgroundColor: "white",
@@ -2897,7 +2935,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 12,
   },
-  buttonText: { color: "#0F4C75", fontSize: 14, fontWeight: "600" },
+  buttonText: { color: "#0F4C75", fontSize: 16, fontWeight: "600" },
   field: { marginVertical: 8 },
   input: {
     borderWidth: 1,

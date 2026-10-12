@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity } from "react-native";
 import { SOP_FIELDS } from "../../shared/sop/registry";
+import { sopText } from "../../shared/sop/uiCopy";
+import { sopMeasurementLabel } from "../../shared/sop/editor";
+import { useLanguage } from "../../context/LanguageContext";
 export function SopObservationTimes({
   values,
   times,
@@ -11,6 +14,8 @@ export function SopObservationTimes({
   onChange: (times: Record<string, string>) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const { currentLanguage } = useLanguage();
+  const ui = (value: string) => sopText(value, currentLanguage);
   const fields = SOP_FIELDS.filter(
     (f) =>
       f.key.startsWith("water.") &&
@@ -25,23 +30,24 @@ export function SopObservationTimes({
         onPress={() => setOpen((v) => !v)}
       >
         <Text style={{ fontSize: 15, fontWeight: "600", color: "#0F4C75" }}>
-          Observation times for SOP checks {open ? "−" : "+"}
+          {ui("Observation times for SOP checks")} {open ? "−" : "+"}
         </Text>
       </TouchableOpacity>
       {open && (
         <>
           <Text style={{ color: "#526b7d", marginVertical: 8 }}>
-            Enter when each reading was measured, including timezone, for
-            example 2026-10-08T06:30+07:00. Blank times retain date-only
-            evidence.
+            {ui(
+              "Enter when each reading was measured, including timezone. Blank times retain date-only evidence.",
+            )}{" "}
+            2026-10-08T06:30+07:00
           </Text>
           {fields.map((f) => {
             const key = f.key.split(".").pop()!;
             return (
               <View key={key} style={{ marginVertical: 6 }}>
-                <Text>{f.label}</Text>
+                <Text>{sopMeasurementLabel(f.key, currentLanguage)}</Text>
                 <TextInput
-                  accessibilityLabel={`${f.label} observation time`}
+                  accessibilityLabel={`${sopMeasurementLabel(f.key, currentLanguage)} · ${ui("Observation time")}`}
                   value={times[key] || ""}
                   onChangeText={(value) => onChange({ ...times, [key]: value })}
                   placeholder="YYYY-MM-DDTHH:MM+07:00"

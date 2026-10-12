@@ -1050,18 +1050,42 @@
   justify-content: space-between;
   gap: 16px;
 }
-.sop-adoption-heading h2 { margin: 6px 0 12px; }
-.sop-adoption-heading > button { flex-shrink: 0; font-size: 22px; }
-.sop-adoption-fields { border: 0; padding: 0; min-width: 0; }
+.sop-adoption-heading h2 {
+  margin: 6px 0 12px;
+}
+.sop-adoption-heading > button {
+  flex-shrink: 0;
+  font-size: 22px;
+}
+.sop-adoption-fields {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
 .sop-adoption-fields > section + section {
   border-top: 1px solid #dce6ec;
   margin-top: 24px;
   padding-top: 20px;
 }
-.sop-selection-toolbar { display: flex; align-items: center; gap: 16px; }
-.sop-selection-toolbar > label { flex: 1; }
-.sop-selection-toolbar > span { font-size: 14px; font-weight: 600; white-space: nowrap; }
-.sop-selection-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 12px; }
+.sop-selection-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.sop-selection-toolbar > label {
+  flex: 1;
+}
+.sop-selection-toolbar > span {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sop-selection-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0 12px;
+}
 .sop-pond-selection {
   border: 1px solid #dce6ec;
   border-radius: 8px;
@@ -1078,23 +1102,77 @@
   cursor: pointer;
   border-bottom: 1px solid #e5edf2;
 }
-.sop-selection-row:last-child { border-bottom: 0; }
-.sop-selection-row:has(input:checked) { background: #eaf4fb; }
-.sop-shell .sop-selection-row input { width: 18px; height: 18px; margin: 0; flex-shrink: 0; }
-.sop-selection-row > span { min-width: 0; }
-.sop-selection-row strong { display: block; font-size: 15px; overflow-wrap: anywhere; }
-.sop-selection-row small { display: block; margin-top: 6px; color: #526b7d; font-size: 13px; }
-.sop-selection-summary { font-size: 14px; overflow-wrap: anywhere; }
-.sop-target-review { list-style: none; padding: 0 !important; }
-.sop-target-review li { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; border: 1px solid #dce6ec; border-radius: 8px; }
-.sop-target-review li span { font-size: 14px; color: #526b7d; }
-.sop-adoption-review { padding: 16px; border: 1px solid #cbdde8; border-radius: 8px; background: #f8fafc; }
-.sop-adoption-blocks { margin: 12px 0; }
+.sop-selection-row:last-child {
+  border-bottom: 0;
+}
+.sop-selection-row:has(input:checked) {
+  background: #eaf4fb;
+}
+.sop-shell .sop-selection-row input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex-shrink: 0;
+}
+.sop-selection-row > span {
+  min-width: 0;
+}
+.sop-selection-row strong {
+  display: block;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.sop-selection-row small {
+  display: block;
+  margin-top: 6px;
+  color: #526b7d;
+  font-size: 13px;
+}
+.sop-selection-summary {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.sop-target-review {
+  list-style: none;
+  padding: 0 !important;
+}
+.sop-target-review li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+  border: 1px solid #dce6ec;
+  border-radius: 8px;
+}
+.sop-target-review li span {
+  font-size: 14px;
+  color: #526b7d;
+}
+.sop-adoption-review {
+  padding: 16px;
+  border: 1px solid #cbdde8;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.sop-adoption-blocks {
+  margin: 12px 0;
+}
 @media (max-width: 600px) {
-  .sop-selection-toolbar { align-items: stretch; flex-direction: column; gap: 4px; margin-bottom: 12px; }
-  .sop-shell label.sop-selection-row { padding: 12px; }
-  .sop-adoption-dialog .sop-toolbar { gap: 8px; }
-  .sop-adoption-dialog .sop-toolbar > button { flex: 1; }
+  .sop-selection-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+  .sop-shell label.sop-selection-row {
+    padding: 12px;
+  }
+  .sop-adoption-dialog .sop-toolbar {
+    gap: 8px;
+  }
+  .sop-adoption-dialog .sop-toolbar > button {
+    flex: 1;
+  }
 }
 
 /* The native modal contains scrolling and keyboard focus within the window. */
@@ -1147,5 +1225,117 @@
   .sop-dialog > .sop-card > .sop-toolbar {
     bottom: -20px;
     padding-bottom: 20px;
+  }
+}
+
+/* Daily work stays readable; supporting controls open only when needed. */
+.todo-work-list {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+}
+.todo-work-list > .sop-card {
+  margin: 0;
+  padding: 24px;
+}
+.sop-shell .todo-pond-name {
+  color: #0f4c75;
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0 0 10px;
+}
+.sop-shell .todo-task-heading h3,
+.sop-shell .todo-reading-card > h3 {
+  font-size: 22px;
+  line-height: 1.4;
+  margin: 0 0 10px;
+}
+.sop-shell .todo-deadline {
+  font-size: 15px;
+  margin: 12px 0 18px;
+}
+.sop-shell .todo-attention {
+  color: #a83229;
+  font-size: 16px;
+  font-weight: 700;
+}
+.sop-shell .todo-task-details {
+  flex: 1 1 100%;
+  margin-top: 4px;
+}
+.sop-shell .todo-task-details > summary,
+.todo-reading-checks > summary,
+.sop-extra-tools > summary,
+.sop-guide-details > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  color: #0f4c75;
+}
+.sop-shell .todo-task-details > summary::after,
+.todo-reading-checks > summary::after,
+.sop-extra-tools > summary::after,
+.sop-guide-details > summary::after {
+  content: "+";
+  margin-inline-start: auto;
+  font-size: 20px;
+}
+.sop-shell details[open] > summary::after {
+  content: "−";
+}
+.todo-reading-card {
+  border-color: #b8d4e5;
+}
+.todo-reading-checks {
+  margin-top: 16px;
+}
+.todo-reading-checks .sop-card {
+  margin: 12px 0;
+  background: #f8fafc;
+}
+.todo-shell .sop-button.sop-primary {
+  color: white;
+  background: #0f4c75;
+  border-color: #0f4c75;
+}
+.sop-shell button,
+.sop-shell .sop-button {
+  min-height: 48px;
+  font-size: 16px;
+  line-height: 1.45;
+  white-space: normal;
+}
+.sop-shell .sop-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.sop-extra-tools {
+  border-bottom: 1px solid #dce6ec;
+  margin-bottom: 20px;
+  padding: 4px 0;
+}
+.sop-guide-details {
+  margin-top: 16px;
+  border-top: 1px solid #dce6ec;
+  padding-top: 8px;
+}
+.sop-library-description {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@media (max-width: 600px) {
+  .todo-work-list > .sop-card {
+    padding: 20px;
+  }
+  .todo-work-list .sop-toolbar > .sop-primary,
+  .todo-reading-card > .sop-primary {
+    width: 100%;
+  }
+  .sop-language-bar .sop-field {
+    width: 100%;
   }
 }
