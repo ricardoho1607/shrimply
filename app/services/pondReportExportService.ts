@@ -17,7 +17,7 @@ interface PondReportData {
   totalPonds: number;
   totalArea: number;
   totalBiomass: number;
-  avgSR: number;
+  avgSR: number | null;
   ponds: {
     name: string;
     area: number;
@@ -163,6 +163,7 @@ const generatePondReportHTML = (
         </div>
       </div>
 
+      <p style="margin-bottom: 16px">Physical pond count and farm area include idle ponds. Biomass, survival, performance and water quality cover active production cycles only (${data.ponds.length}). Historical cycles are excluded.</p>
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-value">${data.totalPonds}</div>
@@ -177,7 +178,7 @@ const generatePondReportHTML = (
           <div class="stat-label">Total Est. Biomass</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">${data.avgSR.toFixed(1)}%</div>
+          <div class="stat-value">${data.avgSR === null ? 'N/A' : `${data.avgSR.toFixed(1)}%`}</div>
           <div class="stat-label">Avg. Survival Rate</div>
         </div>
       </div>

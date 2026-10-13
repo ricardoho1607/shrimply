@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFeatureSource } from '../scripts/read-feature-source.cjs';
 import test from 'node:test';
 import { cycleFeatureTranslations } from './cycleFeatureTranslations.ts';
 
-const readSource = (path: string) => readFileSync(path, 'utf8');
+const readSource = (path: string) => readFeatureSource(path);
 
 test('enterprise mobile owners can switch between enterprise and normal dashboards', () => {
   const home = readSource('app/(tabs)/index.tsx');

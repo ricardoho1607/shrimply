@@ -81,7 +81,7 @@ const event = { preventDefault() {} };
 for (const mode of ['add', 'stockIn', 'usage']) {
   test(`inventory ${mode}: simultaneous submit writes stock and linked expense once`, async () => {
     const h = harness({ mode });
-    const submit = handler('inventory/feeds/page.tsx', 'handleAction', 'handleDeleteItem', h.env);
+    const submit = handler('inventory/feeds/useInventoryFeedsActions.ts', 'handleAction', 'handleDeleteItem', h.env);
     await Promise.all([submit(event), submit(event)]);
     assert.equal(h.transactions, 1); assert.deepEqual(h.alerts, []); assert.equal(h.closed, true); assert.equal(h.env.save.busy, false);
     if (mode === 'stockIn') assert.equal(h.documents.get('companies/company/feeds/feed1').totalStock, 110);
@@ -89,7 +89,7 @@ for (const mode of ['add', 'stockIn', 'usage']) {
   });
   test(`inventory ${mode}: lost acknowledgement retry applies once`, async () => {
     const h = harness({ mode, lostAck: true });
-    const submit = handler('inventory/feeds/page.tsx', 'handleAction', 'handleDeleteItem', h.env);
+    const submit = handler('inventory/feeds/useInventoryFeedsActions.ts', 'handleAction', 'handleDeleteItem', h.env);
     await submit(event); assert.equal(h.closed, false); assert.equal(h.env.save.busy, false);
     const writeCount = h.writes.length;
     await submit(event); assert.equal(h.writes.length, writeCount); assert.equal(h.closed, true);
@@ -126,7 +126,7 @@ test('finance lost acknowledgement retains draft and retry does not add a second
 test('permission and invalid quantity produce no writes; failure unlocks retry', async () => {
   for (const options of [{ permissions: false }, { fail: true }, {}]) {
     const h = harness(options); if (!options.fail && options.permissions !== false) h.env.formData.quantity = 'NaN';
-    await handler('inventory/feeds/page.tsx', 'handleAction', 'handleDeleteItem', h.env)(event);
+    await handler('inventory/feeds/useInventoryFeedsActions.ts', 'handleAction', 'handleDeleteItem', h.env)(event);
     assert.equal(h.writes.length, 0); assert.equal(h.closed, false); assert.equal(h.env.save.busy, false);
   }
 });
@@ -141,7 +141,7 @@ test('sampling retry preserves concurrent observations and never deducts invento
     setSamplingModalOpen: value => { h.env.closed = !value; }, setEditingSamplingId() {}, setSamplingForm() {},
     t: { messages: { error: 'failed' } },
   });
-  const submit = handler('ponds/detail/PondDetailClient.tsx', 'handleSaveSampling', 'handleSaveMortality', h.env);
+  const submit = handler('ponds/detail/usePondDetailActions.ts', 'handleSaveSampling', 'handleSaveMortality', h.env);
   await Promise.all([submit(event), submit(event)]);
   assert.equal(h.transactions, 1); assert.equal(h.env.save.busy, false);
   await submit(event);

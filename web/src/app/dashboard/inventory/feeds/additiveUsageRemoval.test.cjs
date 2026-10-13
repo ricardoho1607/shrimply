@@ -6,7 +6,7 @@ const ts = require('typescript');
 require('../../../../../../scripts/register-typescript.cjs');
 const { removeAdditiveUsage } = require('../../../../../../shared/additiveUsageRemoval.ts');
 const { createSaveOperation } = require('../../../../../../shared/saveOperation.ts');
-const source = ts.createSourceFile('page.tsx', fs.readFileSync(path.join(__dirname, 'page.tsx'), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const source = ts.createSourceFile('useInventoryFeedsActions.ts', fs.readFileSync(path.join(__dirname, 'useInventoryFeedsActions.ts'), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 
 function harness({ permission = true, confirm = true, fail = false } = {}) {
   let initializer;

@@ -1,11 +1,11 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
+const { readFeatureSource } = require('../../../../../../scripts/read-feature-source.cjs');
 const path = require('node:path');
 const test = require('node:test');
 
-const component = fs.readFileSync(path.join(__dirname, 'PondDetailClient.tsx'), 'utf8');
-const stylesheet = fs.readFileSync(path.join(__dirname, '../../../globals.css'), 'utf8');
-const translationsIndex = fs.readFileSync(path.join(__dirname, '../../../../translations/index.ts'), 'utf8');
+const component = readFeatureSource(path.join(__dirname, 'PondDetailClient.tsx'));
+const stylesheet = readFeatureSource(path.join(__dirname, '../../../globals.css'));
+const translationsIndex = readFeatureSource(path.join(__dirname, '../../../../translations/index.ts'));
 
 test('mobile sampling table centers every heading without horizontal overflow', () => {
   assert.match(stylesheet, /\.pond-detail-sampling-table-wrap\s*\{[^}]*overflow-x:\s*hidden;/s);

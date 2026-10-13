@@ -1,9 +1,9 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
+const { readFeatureSource } = require('../../../../scripts/read-feature-source.cjs');
 const path = require('node:path');
 const test = require('node:test');
 
-const read = (relativePath) => fs.readFileSync(path.join(__dirname, relativePath), 'utf8');
+const read = (relativePath) => readFeatureSource(path.join(__dirname, relativePath));
 
 test('web source mutations create deterministic finance records and support multi-pond harvests', () => {
   const harvest = read('./harvest/page.tsx');

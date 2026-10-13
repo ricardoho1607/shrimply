@@ -1,22 +1,48 @@
-import { buildDailyFeedRecordId, DAILY_FEED_USAGE_SOURCE, getDailyFeedUsageTotal, isDailyFeedUsage, type FeedAllocation } from './feedInventoryUsage';
+import { buildDailyFeedRecordId, DAILY_FEED_USAGE_SOURCE, getDailyFeedUsageTotal, isDailyFeedUsage, type FeedAllocation, type DailyFeedUsageLike } from './feedInventoryUsage';
 import { getUsageReturnCost } from './financeIntegrity';
 
 export interface DailyFeedIntent { pondId: string; date: string; allocations: FeedAllocation[]; previousFeedIds: string[]; feedingResponse?: string | null }
-export interface DailyFeedStock { totalStock?: number; totalCost?: number; usageHistory?: { id?: string; pondId?: string; date?: string; quantity?: number; totalCost?: number; unitPrice?: number; source?: string; feedRecordId?: string }[] }
-/** Reconcile against authoritative usage, never a device's precomputed delta. */
-export function reconcileDailyFeedStock(stock: DailyFeedStock, desired: number, intent: DailyFeedIntent, operationId: string) {
+export interface DailyFeedStock {
+  totalStock?: number;
+  totalCost?: number;
+  usageHistory?: (DailyFeedUsageLike & { id?: string })[];
+}
+
+/** Calculate one ledger adjustment from authoritative usage for both web and mobile. */
+export function reconcileDailyFeedStockAdjustment(stock: DailyFeedStock, desired: number, intent: DailyFeedIntent, operationId: string) {
+  if (!Number.isFinite(desired) || desired < 0) throw new Error('Invalid daily feed quantity');
   const history = stock.usageHistory || [];
   const delta = desired - getDailyFeedUsageTotal(history, intent.pondId, intent.date);
   if (Math.abs(delta) < 0.000001) return null;
-  const available = stock.totalStock, cost = stock.totalCost;
-  if (typeof available !== 'number' || !Number.isFinite(available) || typeof cost !== 'number' || !Number.isFinite(cost)) throw new Error('Inventory quantity or cost is missing');
+  const available = stock.totalStock;
+  const cost = stock.totalCost;
+  if (typeof available !== 'number' || !Number.isFinite(available) || available < 0
+    || typeof cost !== 'number' || !Number.isFinite(cost) || cost < 0) {
+    throw new Error('Inventory quantity or cost is missing or invalid');
+  }
   if (delta > available + 0.000001) throw new Error('Insufficient inventory stock');
-  const unitPrice = delta > 0 ? cost / available : getUsageReturnCost(history.filter(row => isDailyFeedUsage(row, intent.pondId, intent.date)), -delta).unitPrice;
+  const unitPrice = delta > 0 ? cost / available
+    : getUsageReturnCost(history.filter(row => isDailyFeedUsage(row, intent.pondId, intent.date)), -delta).unitPrice;
   if (!Number.isFinite(unitPrice) || unitPrice <= 0) throw new Error('Inventory cost is missing');
-  return { totalStock: Math.max(0, available - delta), totalCost: Math.max(0, cost - delta * unitPrice), usageHistory: [...history, {
-    id: operationId, pondId: intent.pondId, date: intent.date, quantity: delta, unitPrice, totalCost: delta * unitPrice,
-    source: DAILY_FEED_USAGE_SOURCE, feedRecordId: buildDailyFeedRecordId(intent.pondId, intent.date),
-  }] };
+  return {
+    totalStock: Math.max(0, available - delta),
+    totalCost: Math.max(0, cost - delta * unitPrice),
+    usage: {
+      id: operationId, pondId: intent.pondId, date: intent.date, quantity: delta, unitPrice, totalCost: delta * unitPrice,
+      source: DAILY_FEED_USAGE_SOURCE, feedRecordId: buildDailyFeedRecordId(intent.pondId, intent.date),
+    },
+  };
+}
+
+/** Reconcile against authoritative usage, never a device's precomputed delta. */
+export function reconcileDailyFeedStock(stock: DailyFeedStock, desired: number, intent: DailyFeedIntent, operationId: string) {
+  const adjustment = reconcileDailyFeedStockAdjustment(stock, desired, intent, operationId);
+  if (!adjustment) return null;
+  return {
+    totalStock: adjustment.totalStock,
+    totalCost: adjustment.totalCost,
+    usageHistory: [...(stock.usageHistory || []), adjustment.usage],
+  };
 }
 
 /** Preserve pending desired feed totals when a server snapshot replaces local ponds. */

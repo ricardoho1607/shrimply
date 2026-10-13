@@ -1,10 +1,10 @@
 /* global __dirname */
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
+const { readFeatureSource } = require('../scripts/read-feature-source.cjs');
 const path = require('node:path');
 const test = require('node:test');
 const ts = require('typescript');
-require.extensions['.ts'] = (module, file) => module._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+require.extensions['.ts'] = (module, file) => module._compile(ts.transpileModule(readFeatureSource(file), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
 }).outputText, file);
 const { buildOrsonAnalysis } = require('../orson/pipeline.ts');
@@ -24,7 +24,7 @@ test('Orson receives the actual latest sampling ADG while retaining its separate
 });
 
 test('mobile dashboard, sampling history and both exports use the shared interval calculator', () => {
-  const source = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const source = file => readFeatureSource(path.join(root, file));
   assert.match(source('app/(tabs)/index.tsx'), /calculateAdg\(pond, company\?\.timeZone\)/);
   assert.match(source('app/ponddetails.tsx'), /calculateSamplingAdg\(pond, sampling, company\?\.timeZone\)/);
   assert.match(source('web/src/app/dashboard/ponds/detail/PondDetailClient.tsx'), /const samplingAdg = calculateSamplingAdg\(pond, s, company\?\.timeZone\)/);

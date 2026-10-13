@@ -1,5 +1,6 @@
 // app/settings.tsx - Optimized with consistent Android styles
 import { useEffect, useMemo, useState } from 'react';
+import { getPondSummaryScope } from '../shared/pondSummaryScope';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Switch, ActivityIndicator, StatusBar, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -92,7 +93,7 @@ export default function Settings() {
   const [isChangingLanguage, setIsChangingLanguage] = useState(false);
   const [isChangingCurrency, setIsChangingCurrency] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
-  const { ponds, calculatePondMetricsWithHarvest } = usePondStore();
+  const { ponds, physicalPonds, calculatePondMetricsWithHarvest } = usePondStore();
   const { manualRestore, isRestoring } = useDataBackup();
   const [isExporting, setIsExporting] = useState(false);
   const [activitySource, setActivitySource] = useState<{ companyId: string; rows: ActivitySummary[] } | null>(null);
@@ -265,7 +266,7 @@ export default function Settings() {
   };
 
   const handleExportPondData = async () => {
-    if (!ponds || ponds.length === 0) {
+    if (ponds.length === 0 && physicalPonds.length === 0) {
       Alert.alert(t.messages.error || 'Error', 'No pond data available to export.');
       return;
     }
@@ -273,7 +274,8 @@ export default function Settings() {
     try {
       setIsExporting(true);
       
-      const reportPonds = ponds.map(pond => {
+      const scope = getPondSummaryScope(ponds, physicalPonds);
+      const reportPonds = scope.activePonds.map(pond => {
         const metrics = calculatePondMetricsWithHarvest(pond);
         const doc = getPondCurrentDoc(pond, company?.timeZone);
         
@@ -302,14 +304,14 @@ export default function Settings() {
         };
       });
 
-      const totalArea = ponds.reduce((sum, p) => sum + p.pondArea, 0);
+      const totalArea = scope.totalArea;
       const totalBiomass = reportPonds.reduce((sum, p) => sum + p.biomass, 0);
-      const avgSR = reportPonds.reduce((sum, p) => sum + parseFloat(p.sr), 0) / reportPonds.length;
+      const avgSR = reportPonds.length ? reportPonds.reduce((sum, p) => sum + parseFloat(p.sr), 0) / reportPonds.length : null;
 
       await exportPondReportPDF({
         companyName: company?.companyName || 'My Farm',
         reportDate: new Date().toISOString(),
-        totalPonds: ponds.length,
+        totalPonds: scope.totalPonds,
         totalArea,
         totalBiomass,
         avgSR,
@@ -318,7 +320,7 @@ export default function Settings() {
 
     } catch (error) {
       console.error('Export failed:', error);
-      Alert.alert(t.messages.error || 'Error', 'Failed to generate pond report. Please try again.');
+      Alert.alert(t.messages.error || 'Error', error instanceof Error ? error.message : 'Failed to generate pond report. Please try again.');
     } finally {
       setIsExporting(false);
     }

@@ -1,10 +1,10 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
+const { readFeatureSource } = require('../../../../scripts/read-feature-source.cjs');
 const path = require('node:path');
 const test = require('node:test');
 
-const styles = fs.readFileSync(path.join(__dirname, '../globals.css'), 'utf8');
-const layout = fs.readFileSync(path.join(__dirname, 'layout.tsx'), 'utf8');
+const styles = readFeatureSource(path.join(__dirname, '../globals.css'));
+const layout = readFeatureSource(path.join(__dirname, 'layout.tsx'));
 
 const compactRoutes = [
   'admin/page.tsx',
@@ -125,14 +125,14 @@ test('business routes use the shared business UI layer', () => {
   assert.match(layout, /\.business-dashboard-page :where\(\.btn-primary, \.dashboard-action-primary\)[\s\S]*?background:\s*#0f4c75 !important;/);
   assert.match(layout, /@media \(max-width: 640px\)[\s\S]*?\.business-dashboard-page \.dashboard-action-row/);
   for (const route of businessRoutes) {
-    const source = fs.readFileSync(path.join(__dirname, route), 'utf8');
+    const source = readFeatureSource(path.join(__dirname, route));
     assert.match(source, /business-dashboard-page/, `${route} is missing the business UI class`);
   }
 });
 
 test('remaining authenticated routes opt into the compact UI standard', () => {
   for (const route of compactRoutes) {
-    const source = fs.readFileSync(path.join(__dirname, route), 'utf8');
+    const source = readFeatureSource(path.join(__dirname, route));
     assert.match(source, /authenticated-compact-page/, `${route} is missing the compact UI class`);
   }
 });

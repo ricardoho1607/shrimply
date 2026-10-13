@@ -1,10 +1,10 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
+const { readFeatureSource } = require('../../../scripts/read-feature-source.cjs');
 const path = require('node:path');
 const test = require('node:test');
 
 const srcRoot = path.join(__dirname, '..');
-const read = (file) => fs.readFileSync(path.join(srcRoot, file), 'utf8');
+const read = (file) => readFeatureSource(path.join(srcRoot, file));
 
 test('web DOC surfaces refresh at the 3am farm boundary', () => {
   for (const file of [

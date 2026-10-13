@@ -187,6 +187,108 @@ const generateProfitLossHTML = (
   const printPageWidth = useIosPrintLayout ? '100%' : '8.5in';
   const printPageHeight = useIosPrintLayout ? '100%' : '11in';
 
+  // Budget for the smallest renderer (612 x 792 CSS pixels). Explicit text
+  // lines keep pagination identical in native printing and the web canvas export.
+  const lines = (text: string, limit: number) => {
+    const characters = Array.from(localizePdfText(text, language));
+    const result: string[] = [];
+    while (characters.length) {
+      // Conservative glyph widths at 12px, including full-width CJK text.
+      let width = 0;
+      let end = 0;
+      while (end < characters.length) {
+        const char = characters[end];
+        const glyphWidth = /[\u0000-\u007f]/.test(char)
+          ? /[ il.,:;'!|]/.test(char) ? 0.4 : /[A-Zmw@]/.test(char) ? 1 : 0.75
+          : 1.1;
+        if (width + glyphWidth > limit) break;
+        width += glyphWidth;
+        end += 1;
+      }
+      if (end < characters.length) {
+        const space = characters.slice(0, end + 1).lastIndexOf(' ');
+        if (space > 0) end = space + 1;
+      }
+      result.push(characters.splice(0, end).join(''));
+    }
+    return result.length ? result : [''];
+  };
+  const pages: { title: string; blocks: string[] }[] = [];
+  let used = 0;
+  let title = 'Income Statement';
+  const newPage = () => { pages.push({ title, blocks: [] }); used = 0; };
+  newPage();
+  const add = (html: string, height: number) => {
+    if (used + height > 480) newPage();
+    pages[pages.length - 1].blocks.push(html);
+    used += height;
+  };
+  const row = (label: string, value: string, style = 'category') => {
+    const labelLines = lines(label, 24);
+    labelLines.forEach((line, index) => add(
+      `<div class="report-row ${style}"><span>${line}</span><span class="amount">${index === labelLines.length - 1 ? value : ''}</span></div>`, 32,
+    ));
+  };
+  const section = (heading: string, entries: Record<string, number>, totalLabel: string, total: number, expense = false, empty = '') => {
+    const headingHtml = `<div class="report-heading">${localizePdfText(heading, language)}</div>`;
+    if (used + 96 > 480) newPage();
+    add(headingHtml, 32);
+    Object.entries(entries).forEach(([category, amount]) => {
+      // Repeat the section label when a category needs a continuation page.
+      if (used + lines(category, 24).length * 32 > 480 && used > 32) {
+        newPage();
+        add(headingHtml, 32);
+      }
+      row(category, money(amount));
+    });
+    if (!Object.keys(entries).length && empty) row(empty, '-');
+    if (used + lines(totalLabel, 24).length * 32 > 480) {
+      newPage();
+      add(headingHtml, 32);
+    }
+    row(totalLabel, expense ? `(${money(total)})` : money(total), 'total');
+  };
+  section('Revenue', revenueBreakdown, 'Total Revenue', totalRevenue);
+  section('Cost of Goods Sold (COGS)', cogsBreakdown, 'Total Cost of Goods Sold', totalCOGS, true, 'No COGS recorded');
+  row('Gross Profit', money(grossProfit), 'gross');
+  section('Operating Expenses (OPEX)', opexBreakdown, 'Total Operating Expenses', totalOPEX, true, 'No Operating Expenses recorded');
+  row('Operating Income (EBITDA)', money(operatingIncome), 'gross');
+  if (totalOtherExpenses > 0) section('Non-Operating Expenses / Other', otherExpenseBreakdown, 'Total Non-Operating Expenses', totalOtherExpenses, true);
+  row(`Net ${netProfit >= 0 ? 'Income' : 'Loss'}`, `${money(Math.abs(netProfit))} ${currencyCode}`, 'net');
+  title = 'Profit & Loss Analysis';
+  newPage();
+  row('Gross Profit Margin:', `${totalRevenue > 0 ? ((grossProfit / totalRevenue) * 100).toFixed(2) : '0.00'}%`);
+  row('Operating Margin:', `${totalRevenue > 0 ? ((operatingIncome / totalRevenue) * 100).toFixed(2) : '0.00'}%`);
+  row('Net Profit Margin:', `${totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(2) : '0.00'}%`);
+  for (const [heading, items] of [['Executive Summary', reportAnalysis.executiveSummary], ['Risk Assessment', reportAnalysis.riskAssessment]] as const) {
+    const firstItemHeight = lines(items[0] || '', 38).length * 24 + 8;
+    if (used + 32 + Math.min(firstItemHeight, 448) > 480) newPage();
+    add(`<div class="report-heading">${localizePdfText(heading, language)}</div>`, 32);
+    for (const item of items) {
+      const itemLines = lines(item, 38);
+      const height = itemLines.length * 24 + 8;
+      if (height <= 480 && used + height > 480) newPage();
+      for (const line of itemLines) add(`<div class="analysis-line">${line}</div>`, 24);
+      if (used + 8 <= 480) add('<div class="analysis-gap"></div>', 8);
+    }
+  }
+  const renderedPages = pages.map((page, index) => `
+    <div class="pdf-page">
+      <img class="page-bg" src="data:image/png;base64,${brandAssets.backgroundBase64}" alt="" />
+      <div class="page-content">
+        <div class="header">
+          <img class="header-logo" src="data:image/png;base64,${brandAssets.logoBase64}" alt="Shrimply" />
+          <div class="title">${page.title}</div>
+          <div class="company-name">${companyName}</div>
+          <div class="date-range">${formatDate(startDate, language)} - ${formatDate(endDate, language)}</div>
+        </div>
+        <div class="divider"></div>
+        <div class="report-blocks">${page.blocks.join('')}</div>
+        <div class="footer">Generated by Shrimply Aquaculture Management on ${formatPdfDateTime(new Date(), language, { year: 'numeric', month: 'long', day: 'numeric' })} - ${companyName}
+          <br/>Statement prepared according to multi-step income format. · ${index + 1} / ${pages.length}</div>
+      </div>
+    </div>`).join('');
+
   return localizePdfHtml(`
     <!DOCTYPE html>
     <html>
@@ -195,286 +297,43 @@ const generateProfitLossHTML = (
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Profit and Loss Statement</title>
       <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { margin:0; padding:0; box-sizing:border-box; }
         @page { size: ${printPageSize}; margin: 0; }
-        html { width: 100%; height: 100%; }
+        html { width:100%; height:100%; }
         body {
-          width: ${printPageWidth};
-          height: ${printPageHeight};
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-          color: #2C3E50;
-          background: #0F4C75;
-          font-size: 12px;
-          line-height: 1.35;
+          width:${printPageWidth}; height:${printPageHeight};
+          font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          color:#111827; background:#0F4C75; font-size:12px; line-height:1.35;
         }
         .pdf-page {
-          width: 100%;
-          height: 100%;
-          padding: 38px 44px 34px;
-          position: relative;
-          overflow: hidden;
-          background: #0F4C75;
-          page-break-after: always;
+          width:100%; height:100%; padding:38px 44px 34px;
+          position:relative; overflow:hidden; background:#0F4C75;
+          page-break-after:always;
           ${useIosPrintLayout ? '' : 'break-inside: avoid; page-break-inside: avoid;'}
+          print-color-adjust:exact; -webkit-print-color-adjust:exact;
         }
-        .pdf-page:last-child { page-break-after: auto; }
-        .page-bg {
-          position: absolute;
-          inset: -14px;
-          width: calc(100% + 28px);
-          height: calc(100% + 28px);
-          object-fit: cover;
-          z-index: 0;
-        }
-        .page-content {
-          position: relative;
-          z-index: 1;
-          height: 100%;
-          display: flex;
-          flex-direction: column;
-        }
-        .header { margin-bottom: 18px; padding-right: 78px; position: relative; min-height: 58px; }
-        .header-logo { position: absolute; top: -6px; right: 0; width: 64px; height: 64px; object-fit: contain; }
-        .title { font-size: 28px; font-weight: 700; color: #0066CC; margin-bottom: 6px; }
-        .company-name { font-size: 14px; color: #2C3E50; margin-bottom: 3px; font-weight: 600; }
-        .subtitle { font-size: 13px; color: #4A5568; }
-        .date-range { font-size: 13px; color: #2C3E50; }
-        .divider { height: 3px; background: linear-gradient(to right, #0066CC, #0099FF); margin: 15px 0; border-radius: 2px; }
-        .section { margin-bottom: 14px; }
-        .section-title { font-size: 14px; font-weight: 700; color: #2C3E50; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #BDC3C7; padding-bottom: 4px; }
-        .line-item { display: flex; justify-content: space-between; padding: 5px 0; }
-        .line-item.category { color: #34495E; padding-left: 10px; }
-        .line-item.total { font-weight: 700; font-size: 14px; border-top: 1px solid #BDC3C7; padding: 8px 0; margin-top: 4px; color: #2C3E50; }
-        .line-item.gross { font-weight: 700; font-size: 15px; border-top: 2px solid #34495E; border-bottom: 1px solid #34495E; padding: 10px 0; margin-top: 8px; color: #2C3E50; background: #F8FAFB; padding-left: 10px; padding-right: 10px; }
-        .line-item.net { font-weight: 700; font-size: 16px; border-bottom: 3px double #34495E; border-top: 2px solid #34495E; padding: 12px 10px; margin-top: 10px; background: #F0F4F8; }
-        .amount { text-align: right; font-variant-numeric: tabular-nums; }
-        .amount.positive { color: #2D7A4F; }
-        .amount.negative { color: #C0392B; }
-        .currency { font-size: 11px; color: #4A5568; display: inline-block; margin-left: 4px; }
-        .summary-box { background: rgba(248, 250, 251, 0.78); border-left: 4px solid #0066CC; padding: 12px; margin-top: 18px; border-radius: 0; }
-        .summary-item { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
-        .summary-item.highlight { font-weight: 700; font-size: 15px; color: #2C3E50; border-top: 1px solid #BDC3C7; margin-top: 8px; padding-top: 8px; }
-        .analysis-section {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-          margin-top: 12px;
-        }
-        .analysis-box {
-          page-break-inside: avoid;
-          break-inside: avoid;
-          min-height: 180px;
-          padding: 16px;
-          background: rgba(248, 250, 251, 0.72);
-          border: 1px solid #DDEAF3;
-          border-left: 4px solid #0066CC;
-          border-radius: 0;
-        }
-        .analysis-box.risk {
-          background: rgba(255, 251, 234, 0.74);
-          border-color: #F5D08A;
-          border-left-color: #F39C12;
-        }
-        .analysis-title {
-          font-size: 15px;
-          font-weight: 700;
-          color: #0066CC;
-          margin-bottom: 8px;
-        }
-        .analysis-box.risk .analysis-title {
-          color: #B45309;
-        }
-        .analysis-list {
-          margin-left: 18px;
-          font-size: 12px;
-          color: #2C3E50;
-          line-height: 1.45;
-        }
-        .analysis-list li {
-          margin-bottom: 8px;
-        }
-        .footer { margin-top: auto; padding-top: 12px; border-top: 1px solid rgba(15, 76, 117, 0.18); font-size: 10px; color: #4A5568; text-align: center; }
-        body, .pdf-page { color: #111827; }
-        .header-logo { filter: grayscale(1); }
-        .title, .company-name, .subtitle, .date-range, .section-title,
-        .line-item, .line-item.category, .line-item.total, .line-item.gross,
-        .line-item.net, .amount, .amount.positive, .amount.negative,
-        .currency, .summary-item, .summary-item.highlight, .analysis-title,
-        .analysis-box.risk .analysis-title, .analysis-list, .footer {
-          color: #111827;
-        }
-        .divider { background: #374151; }
-        .line-item.gross, .line-item.net, .summary-box, .analysis-box,
-        .analysis-box.risk {
-          background: #FFFFFF;
-          border-color: #6B7280;
-        }
-        .summary-box {
-          border: 1px solid #6B7280;
-          border-left-width: 1px;
-        }
-        .analysis-box, .analysis-box.risk {
-          border: 1px solid #9CA3AF;
-          border-left: 3px solid #4B5563;
-        }
+        .pdf-page:last-child { page-break-after:auto; }
+        .page-bg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; z-index:0; }
+        .page-content { position:relative; z-index:1; height:100%; display:flex; flex-direction:column; }
+        .page-content > * { flex-shrink:0; }
+        .header { margin-bottom:18px; padding-right:78px; position:relative; min-height:58px; }
+        .header-logo { position:absolute; top:-6px; right:0; width:64px; height:64px; object-fit:contain; filter:grayscale(1); }
+        .title { font-size:28px; font-weight:700; margin-bottom:6px; }
+        .company-name { font-size:14px; margin-bottom:3px; font-weight:600; overflow-wrap:anywhere; }
+        .date-range { font-size:13px; }
+        .divider { height:3px; background:#374151; margin:15px 0; border-radius:2px; }
+        .report-row { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:32px; font-size:12px; line-height:16px; }
+        .report-row > span:first-child { overflow-wrap:anywhere; }
+        .amount { text-align:right; font-variant-numeric:tabular-nums; flex-shrink:0; white-space:nowrap; }
+        .report-row.total, .report-row.gross, .report-row.net { font-weight:700; border-top:1px solid #6B7280; }
+        .report-heading { min-height:32px; padding-top:8px; font-weight:700; font-size:13px; }
+        .analysis-line { min-height:24px; line-height:24px; font-size:12px; overflow-wrap:anywhere; }
+        .analysis-gap { height:8px; }
+        .footer { margin-top:auto; padding-top:12px; border-top:1px solid rgba(15,76,117,0.18); font-size:10px; text-align:center; }
       </style>
     </head>
     <body>
-      <div class="pdf-page">
-        <img class="page-bg" src="data:image/png;base64,${brandAssets.backgroundBase64}" alt="" />
-        <div class="page-content">
-          <div class="header">
-            <img class="header-logo" src="data:image/png;base64,${brandAssets.logoBase64}" alt="Shrimply" />
-            <div class="title">Income Statement</div>
-            <div class="company-name">${companyName}</div>
-            <div class="subtitle">Multi-Step Profit & Loss</div>
-            <div class="date-range">For the period ${formatDate(startDate, language)} - ${formatDate(endDate, language)}</div>
-          </div>
-
-          <div class="divider"></div>
-
-          <!-- REVENUE -->
-          <div class="section">
-            <div class="section-title">Revenue</div>
-            ${Object.entries(revenueBreakdown).map(([category, amount]) => `
-              <div class="line-item category">
-                <span>${category}</span>
-                <span class="amount">${money(amount)}</span>
-              </div>
-            `).join('')}
-            <div class="line-item total">
-              <span>Total Revenue</span>
-              <span class="amount">${money(totalRevenue)}</span>
-            </div>
-          </div>
-
-          <!-- COGS -->
-          <div class="section">
-            <div class="section-title">Cost of Goods Sold (COGS)</div>
-            ${Object.entries(cogsBreakdown).map(([category, amount]) => `
-              <div class="line-item category">
-                <span>${category}</span>
-                <span class="amount">${money(amount)}</span>
-              </div>
-            `).join('')}
-            ${Object.keys(cogsBreakdown).length === 0 ? '<div class="line-item category"><span>No COGS recorded</span><span class="amount">-</span></div>' : ''}
-            <div class="line-item total">
-              <span>Total Cost of Goods Sold</span>
-              <span class="amount">(${money(totalCOGS)})</span>
-            </div>
-          </div>
-
-          <!-- GROSS PROFIT -->
-          <div class="line-item gross">
-            <span>Gross Profit</span>
-            <span class="amount">${money(grossProfit)}</span>
-          </div>
-          <br/>
-
-          <!-- OPERATING EXPENSES -->
-          <div class="section">
-            <div class="section-title">Operating Expenses (OPEX)</div>
-            ${Object.entries(opexBreakdown).map(([category, amount]) => `
-              <div class="line-item category">
-                <span>${category}</span>
-                <span class="amount">${money(amount)}</span>
-              </div>
-            `).join('')}
-            ${Object.keys(opexBreakdown).length === 0 ? '<div class="line-item category"><span>No Operating Expenses recorded</span><span class="amount">-</span></div>' : ''}
-            <div class="line-item total">
-              <span>Total Operating Expenses</span>
-              <span class="amount">(${money(totalOPEX)})</span>
-            </div>
-          </div>
-
-          <!-- OPERATING INCOME -->
-          <div class="line-item gross">
-            <span>Operating Income (EBITDA)</span>
-            <span class="amount">${money(operatingIncome)}</span>
-          </div>
-          <br/>
-
-          <!-- NON-OPERATING EXPENSES -->
-          ${totalOtherExpenses > 0 ? `
-          <div class="section">
-            <div class="section-title">Non-Operating Expenses / Other</div>
-            ${Object.entries(otherExpenseBreakdown).map(([category, amount]) => `
-              <div class="line-item category">
-                <span>${category}</span>
-                <span class="amount">${money(amount)}</span>
-              </div>
-            `).join('')}
-            <div class="line-item total">
-              <span>Total Non-Operating Expenses</span>
-              <span class="amount">(${money(totalOtherExpenses)})</span>
-            </div>
-          </div>
-          ` : ''}
-
-          <!-- NET PROFIT -->
-          <div class="line-item net ${netProfit >= 0 ? '' : 'negative'}">
-            <span>Net ${netProfit >= 0 ? 'Income' : 'Loss'}</span>
-            <div>
-              <span class="amount ${netProfit >= 0 ? 'positive' : 'negative'}">${money(Math.abs(netProfit))}</span>
-              <span class="currency">${currencyCode}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="pdf-page">
-        <img class="page-bg" src="data:image/png;base64,${brandAssets.backgroundBase64}" alt="" />
-        <div class="page-content">
-          <div class="header">
-            <img class="header-logo" src="data:image/png;base64,${brandAssets.logoBase64}" alt="Shrimply" />
-            <div class="title">Profit & Loss Analysis</div>
-            <div class="company-name">${companyName}</div>
-            <div class="subtitle">Margin and risk review</div>
-            <div class="date-range">For the period ${formatDate(startDate, language)} - ${formatDate(endDate, language)}</div>
-          </div>
-
-          <div class="divider"></div>
-
-          <div class="summary-box">
-            <div class="summary-item">
-              <span>Gross Profit Margin:</span>
-              <span>${totalRevenue > 0 ? ((grossProfit / totalRevenue) * 100).toFixed(2) : '0.00'}%</span>
-            </div>
-            <div class="summary-item">
-              <span>Operating Margin:</span>
-              <span>${totalRevenue > 0 ? ((operatingIncome / totalRevenue) * 100).toFixed(2) : '0.00'}%</span>
-            </div>
-            <div class="summary-item highlight">
-              <span>Net Profit Margin:</span>
-              <span class="${netProfit >= 0 ? 'positive' : 'negative'}">${totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(2) : '0.00'}%</span>
-            </div>
-          </div>
-
-          <div class="analysis-section">
-            <div class="analysis-box">
-              <div class="analysis-title">Executive Summary</div>
-              <ul class="analysis-list">
-                ${reportAnalysis.executiveSummary.map((item) => `<li>${item}</li>`).join('')}
-              </ul>
-            </div>
-            <div class="analysis-box risk">
-              <div class="analysis-title">Risk Assessment</div>
-              <ul class="analysis-list">
-                ${reportAnalysis.riskAssessment.map((item) => `<li>${item}</li>`).join('')}
-              </ul>
-            </div>
-          </div>
-
-          <div class="footer">
-            Generated by Shrimply Aquaculture Management on ${formatPdfDateTime(new Date(), language, {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })} - ${companyName}
-            <br/>Statement prepared according to multi-step income format.
-          </div>
-        </div>
-      </div>
+      ${renderedPages}
     </body>
     </html>
   `, language);

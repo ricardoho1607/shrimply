@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFeatureSource } from '../scripts/read-feature-source.cjs';
 
 import {
   getOfflineRetryDelay,
@@ -42,7 +42,7 @@ test('backs off failed reconnect syncs and caps the delay', () => {
 });
 
 test('mobile sync applies the offline guards to every persisted farm collection', () => {
-  const syncSource = readFileSync('app/hooks/useFirebaseSync.ts', 'utf8');
+  const syncSource = readFeatureSource('app/hooks/useFirebaseSync.ts');
   const snapshotGuardUses = syncSource.match(/shouldApplyRemoteCollectionSnapshot\(/g) || [];
 
   assert.equal(snapshotGuardUses.length, 4);

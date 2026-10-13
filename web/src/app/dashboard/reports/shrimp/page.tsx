@@ -1,23 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Loader2, 
   Waves, 
   TrendingUp,
   X
 } from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { 
-  collection, 
-  query, 
-  orderBy, 
-  onSnapshot, 
-  doc, 
-} from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useCompanyBlocks, useCompanyHarvestRecords } from '@/hooks/useDashboardData';
+import { useCompanyId, useCompanyPonds, useCompanyCycles, useCompanyBlocks, useCompanyHarvestRecords } from '@/hooks/useDashboardData';
 import { filterEnterpriseRecordsForUser, type FarmBlock } from '../../../../../../shared/enterpriseBlocks';
 import { reportCalculationOptions, buildPondReportSnapshot, type ReportHarvest } from '../../../../../../shared/reportSnapshots';
 import { filterSamplingReportPonds } from './samplingReportScope';
@@ -96,23 +87,6 @@ interface FarmCycle {
   id: string;
   cycleName?: string;
   status?: 'planning' | 'stocking' | 'active' | 'closing' | 'closed';
-}
-
-interface DashboardUser {
-  uid: string;
-  name?: string;
-  email?: string;
-  companyId?: string;
-  role?: string;
-  permissionOverrides?: unknown;
-}
-
-interface Company {
-  businessSize?: string;
-  id: string;
-  companyName?: string;
-  timeZone?: string;
-  ownerId?: string;
 }
 
 /* --- Robust Calculation Utilities (Mobile + Web Parity) ---- */
@@ -330,14 +304,17 @@ const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
 };
 
 export default function ShrimpReportsPage() {
+  const { scope } = useCompanyId();
+  return <ShrimpReportsContent key={scope || 'signed-out'} />;
+}
+
+function ShrimpReportsContent() {
   const copy = useDashboardCopy();
   const { currentLanguage } = useLanguage();
-  const [ponds, setPonds] = useState<Pond[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: ponds, loading } = useCompanyPonds<Pond>();
   const [exportLoading, setExportLoading] = useState(false);
-  const [user, setUser] = useState<DashboardUser | null>(null);
-  const [company, setCompany] = useState<Company | null>(null);
-  const [cycles, setCycles] = useState<FarmCycle[]>([]);
+  const { user, company } = useCompanyId();
+  const { data: cycles } = useCompanyCycles<FarmCycle>();
   const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
   const { data: harvests, loading: harvestsLoading, error: harvestsError } = useCompanyHarvestRecords<ReportHarvest & { id: string }>();
   const [cycleScope, setCycleScope] = useState('active');
@@ -347,50 +324,6 @@ export default function ShrimpReportsPage() {
   const hasPermission = useFarmPermissions();
   const canViewReports = hasPermission('viewReports');
   const canExportReports = hasPermission('exportReports');
-
-  useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          if (uDoc.exists()) {
-            const userData = uDoc.data();
-            setUser({ ...userData, uid: firebaseUser.uid, email: userData.email || firebaseUser.email || undefined });
-            if (userData.companyId) {
-              onSnapshot(doc(db, 'companies', userData.companyId), (cDoc) => {
-                if (cDoc.exists()) setCompany({ id: cDoc.id, ...cDoc.data() });
-              });
-            }
-          }
-        });
-      }
-    });
-    return () => unsubAuth();
-  }, []);
-
-  useEffect(() => {
-    if (!company?.id) return;
-    const q = query(collection(db, 'companies', company.id, 'ponds'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snapshot) => {
-      const pondData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Pond));
-      setPonds(pondData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching ponds:", error);
-      setLoading(false);
-    });
-    return () => unsub();
-  }, [company?.id]);
-
-  useEffect(() => {
-    if (!company?.id) return;
-    const q = query(collection(db, 'companies', company.id, 'cycles'), orderBy('createdAt', 'asc'));
-    const unsub = onSnapshot(q, (snapshot) => {
-      setCycles(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as FarmCycle)));
-    }, (error) => {
-      console.error("Error fetching cycles:", error);
-    });
-    return () => unsub();
-  }, [company?.id]);
 
   const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, { businessSize: company?.businessSize, role: user?.role, userId: user?.uid, blocks: farmBlocks }), [ponds, company?.businessSize, user?.role, user?.uid, farmBlocks]);
   const scopedPonds = useMemo(() => filterSamplingReportPonds(accessiblePonds, cycles, cycleScope), [accessiblePonds, cycles, cycleScope]);

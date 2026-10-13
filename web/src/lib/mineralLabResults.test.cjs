@@ -1,7 +1,7 @@
 const ts = require('typescript');
-const fs = require('node:fs');
+const { readFeatureSource } = require('../../../scripts/read-feature-source.cjs');
 const path = require('node:path');
-require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, filename);
+require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileModule(readFeatureSource(filename), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, filename);
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { selectMineralLabReports } = require('./mineralLabResults.ts');
@@ -23,16 +23,16 @@ test('only confirmed manual mineral reports are offered, including legacy manual
   assert.deepEqual(selectMineralLabReports(reports, ponds, '2026-09-08', 'all').map(report => report.id), ['report-1', 'legacy']);
 });
 test('Daily Operations offers the mineral tab with report permissions and retains the existing report tabs', () => {
-  const page = fs.readFileSync(path.join(__dirname, '../app/dashboard/reports/daily-operations/page.tsx'), 'utf8');
+  const page = readFeatureSource(path.join(__dirname, '../app/dashboard/reports/daily-operations/page.tsx'));
   assert.match(page, /key: 'mineral'.*copy.mineralLabResults/);
   assert.match(page, /ponds=\{accessiblePonds\}/);
   assert.match(page, /canExport=\{canExportReports\}/);
   assert.match(page, /key: 'sipon'/);
   assert.match(page, /key: 'water'/);
-  const component = fs.readFileSync(path.join(__dirname, '../components/MineralLabResults.tsx'), 'utf8');
+  const component = readFeatureSource(path.join(__dirname, '../components/MineralLabResults.tsx'));
   assert.match(component, /if \(!canExport \|\| exporting \|\| !selected\) return/);
   assert.match(component, /generateManualLabReportHTML\(selected, assets\)/);
-  const water = fs.readFileSync(path.join(__dirname, '../app/dashboard/water/page.tsx'), 'utf8');
+  const water = readFeatureSource(path.join(__dirname, '../app/dashboard/water/page.tsx'));
   assert.match(water, /'manual' && report.reportType === 'plankton'/);
 });
 test('mortality title is consistent in the UI and PDF in every supported language', () => {

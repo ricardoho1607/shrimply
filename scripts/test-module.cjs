@@ -4,14 +4,14 @@ const vm = require('node:vm');
 const { createRequire } = require('node:module');
 const ts = require('typescript');
 require('./register-typescript.cjs');
-exports.loadModule = (relativePath, overrides = {}) => {
+exports.loadModule = (relativePath, overrides = {}, globals = {}) => {
   const filename = path.resolve(__dirname, '..', relativePath);
   const actual = createRequire(filename);
   const module = { exports: {} };
   const require = name => Object.hasOwn(overrides, name) ? overrides[name] : actual(name);
   const source = fs.readFileSync(filename, 'utf8');
   const code = /\.tsx?$/.test(filename) ? ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText : source;
-  vm.runInNewContext(code, { module, exports: module.exports, require, console, Date, URL, process, fetch, AbortSignal, setTimeout, clearTimeout }, { filename });
+  vm.runInNewContext(code, { module, exports: module.exports, require, console, Date, URL, process, fetch, AbortSignal, setTimeout, clearTimeout, ...globals }, { filename });
   return module.exports;
 };
 exports.loadCallback = (relativePath, name, bindings) => {

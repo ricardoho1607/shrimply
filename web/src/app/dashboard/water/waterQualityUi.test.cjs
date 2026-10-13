@@ -1,20 +1,20 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
+const { readFeatureSource } = require('../../../../../scripts/read-feature-source.cjs');
 const path = require('node:path');
 const test = require('node:test');
 
-const pageSource = fs.readFileSync(path.join(__dirname, 'page.tsx'), 'utf8');
-const globalStyles = fs.readFileSync(path.join(__dirname, '../../globals.css'), 'utf8');
-const mobileSource = fs.readFileSync(path.join(__dirname, '../../../../../app/(tabs)/water-quality.tsx'), 'utf8');
+const pageSource = readFeatureSource(path.join(__dirname, 'page.tsx'));
+const globalStyles = readFeatureSource(path.join(__dirname, '../../globals.css'));
+const mobileSource = readFeatureSource(path.join(__dirname, '../../../../../app/(tabs)/water-quality.tsx'));
 const ts = require('typescript');
-const waterFormSource = fs.readFileSync(path.join(__dirname, 'waterFormState.ts'), 'utf8');
+const waterFormSource = readFeatureSource(path.join(__dirname, 'waterFormState.ts'));
 const compiledWaterForm = ts.transpileModule(waterFormSource, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 const waterFormModule = { exports: {} };
 new Function('module', 'exports', 'require', compiledWaterForm)(waterFormModule, waterFormModule.exports, require);
 const { initializeWaterDraft } = waterFormModule.exports;
-const pondStore = fs.readFileSync(path.join(__dirname, '../../../../../app/store/pondStore.ts'), 'utf8');
+const pondStore = readFeatureSource(path.join(__dirname, '../../../../../app/store/pondStore.ts'));
 
 test('water quality uses the compact authenticated layout', () => {
   assert.match(pageSource, /className="dashboard-page water-quality-page"/);

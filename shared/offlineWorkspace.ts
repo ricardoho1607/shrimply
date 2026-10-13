@@ -440,8 +440,9 @@ export const rollbackPendingHarvestEdit = <T extends Record<string, any>>(
 ): T => {
   if (hasNoLaterHarvestReceipt(current, previous, operationId)) return restoreHarvestOwnedFields(current, previous!);
   const reverted = nextLine ? reverseHarvestImpactOnPond(current, nextLine) : current;
+  // Keep the newer biological baseline when undoing an older optimistic edit.
   const restored = previousLine
-    ? applyHarvestImpactToPond(reverted, previousLine, previousRecord.date, previousLine.partialHarvestNumber)
+    ? applyHarvestImpactToPond(reverted, previousLine, current.postHarvestBaselineDate || previousRecord.date, previousLine.partialHarvestNumber)
     : reverted;
   const cleaned = clearHarvestReceipt(restored, operationId);
   return {
@@ -467,7 +468,7 @@ export const rollbackPendingHarvestDelete = <T extends Record<string, any>>(
 ): T => {
   if (hasNoLaterHarvestReceipt(current, previous, operationId)) return restoreHarvestOwnedFields(current, previous!);
   const restored = clearHarvestReceipt(
-    applyHarvestImpactToPond(current, line, record.date, line.partialHarvestNumber),
+    applyHarvestImpactToPond(current, line, current.postHarvestBaselineDate || record.date, line.partialHarvestNumber),
     operationId,
   );
   return {

@@ -79,7 +79,7 @@ interface EnterpriseCycleDashboardProps {
   }) => void | Promise<void>;
   onCreatePond: (input: { pondName: string; pondArea: number; block: FarmBlock }) => void | Promise<void>;
   onEditCycle: (cycle: FarmCycle, input: { cycleName: string; blocks: FarmBlock[] }) => void | Promise<void>;
-  onCloseCycle: (cycle: FarmCycle) => void;
+  onCloseCycle: (cycle: FarmCycle) => void | Promise<void>;
   onAddSampling: () => void;
   onAddMortality: () => void;
   createBlock: (input: { name: string; technician?: EnterpriseTechnician | null }) => Promise<void>;
@@ -640,7 +640,7 @@ export default function EnterpriseCycleDashboard({
               </>}
               {editingCycle ? <View style={styles.editModalActions}>
                 <TouchableOpacity style={styles.secondaryAction} onPress={() => { resetCycleForm(); router.push({ pathname: '/cycle-report', params: { cycleId: editingCycle.id } }); }}><Text style={styles.secondaryActionText}>{copy.viewCycleReport}</Text></TouchableOpacity>
-                {editingCycle.status !== 'closed' ? <TouchableOpacity style={[styles.closeAction, (editingCycleSummary?.activeCount || 0) > 0 && styles.disabledAction]} disabled={(editingCycleSummary?.activeCount || 0) > 0} onPress={() => Alert.alert(copy.closeCycle, copy.closeCycleConfirm.replace('{{cycleName}}', editingCycle.cycleName), [{ text: t.actions.cancel, style: 'cancel' }, { text: copy.closeCycle, style: 'destructive', onPress: () => { onCloseCycle(editingCycle); resetCycleForm(); } }])}><Text style={styles.closeActionText}>{copy.closeCycle}</Text></TouchableOpacity> : null}
+                {editingCycle.status !== 'closed' ? <TouchableOpacity style={[styles.closeAction, (editingCycleSummary?.activeCount || 0) > 0 && styles.disabledAction]} disabled={(editingCycleSummary?.activeCount || 0) > 0} onPress={() => Alert.alert(copy.closeCycle, copy.closeCycleConfirm.replace('{{cycleName}}', editingCycle.cycleName), [{ text: t.actions.cancel, style: 'cancel' }, { text: copy.closeCycle, style: 'destructive', onPress: async () => { try { await onCloseCycle(editingCycle); resetCycleForm(); } catch (error) { Alert.alert(t.messages.error, error instanceof Error ? error.message : t.messages.networkError); } } }])}><Text style={styles.closeActionText}>{copy.closeCycle}</Text></TouchableOpacity> : null}
               </View> : null}
             </ScrollView>
           </View>

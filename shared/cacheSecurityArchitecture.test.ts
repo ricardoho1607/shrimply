@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFeatureSource } from '../scripts/read-feature-source.cjs';
 import test from 'node:test';
 
-const readSource = (path: string) => readFileSync(path, 'utf8');
+const readSource = (path: string) => readFeatureSource(path);
 
 test('farm cache and offline queue only persist through protected storage', () => {
   const farmCache = readSource('app/services/farmCache.ts');

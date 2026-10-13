@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFeatureSource } from '../scripts/read-feature-source.cjs';
 import test from 'node:test';
 
 import {
@@ -177,7 +177,7 @@ test('every operational mobile data surface uses the durable offline layer', () 
     'app/(tabs)/water-quality.tsx',
     'app/disease-report.tsx',
     'app/notifications.tsx',
-  ].map((path) => readFileSync(path, 'utf8'));
+  ].map((path) => readFeatureSource(path));
 
   for (const source of sources) {
     assert.match(source, /offlineWorkspace/);
@@ -381,7 +381,7 @@ test('edit and delete rollback recalculate remaining state after a newer harvest
   assert.equal(rolledEdit.postHarvestReferenceSamplingId, 's2');
 
   const optimisticDelete = { ...baseline, totalHarvestedBiomass: 200, totalHarvestedPopulation: 20000, postHarvestRemainingBiomass: 800, postHarvestRemainingPopulation: 80000, appliedHarvestOperationIds: ['op-h2', 'op-delete-h1'] };
-  const rolledDelete = rollbackPendingHarvestDelete(optimisticDelete, { ...baseline, appliedHarvestOperationIds: ['op-h2'] }, h1line, { ...original, ponds: [h1line] }, 'op-delete-h1');
+  const rolledDelete = rollbackPendingHarvestDelete(optimisticDelete, { ...baseline, appliedHarvestOperationIds: [] }, h1line, { ...original, ponds: [h1line] }, 'op-delete-h1');
   assert.equal(rolledDelete.totalHarvestedBiomass, 300);
   assert.equal(rolledDelete.postHarvestRemainingBiomass, 700);
   assert.equal(rolledDelete.totalHarvestedPopulation, 30000);

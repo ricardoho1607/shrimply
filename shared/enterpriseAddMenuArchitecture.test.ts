@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFeatureSource } from '../scripts/read-feature-source.cjs';
 import test from 'node:test';
 
-const readSource = (path: string) => readFileSync(path, 'utf8');
+const readSource = (path: string) => readFeatureSource(path);
 
 test('enterprise mobile add menu reuses the existing sampling and mortality entry handlers', () => {
   const dashboard = readSource('app/(tabs)/index.tsx');

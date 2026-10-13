@@ -1,10 +1,10 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
+const { readFeatureSource } = require('../../../../../../scripts/read-feature-source.cjs');
 const path = require('node:path');
 const test = require('node:test');
 
-const stylesheet = fs.readFileSync(path.join(__dirname, 'InventoryFeeds.module.css'), 'utf8');
-const source = fs.readFileSync(path.join(__dirname, 'page.tsx'), 'utf8');
+const stylesheet = readFeatureSource(path.join(__dirname, 'InventoryFeeds.module.css'));
+const source = readFeatureSource(path.join(__dirname, 'page.tsx'));
 
 test('inventory currency metrics stay on one line with a wider value column', () => {
   assert.match(stylesheet, /grid-template-columns:\s*minmax\(0, 0\.85fr\)\s+minmax\(0, 1fr\)\s+minmax\(0, 1\.25fr\)/);
@@ -22,7 +22,7 @@ test('inventory cards keep header and actions compact without decorative icons',
   assert.match(source, /copy\('History'\)/);
   assert.match(source, /copy\('Delete'\)/);
   assert.match(source, /copy\(activeTab === 'additive' \? 'Product' : 'Threshold'\)/);
-  const cardSection = source.match(/className=\{styles\.inventoryCardHeader\}[\s\S]*?className=\{styles\.inventoryCardActions\}[\s\S]*?<\/div>\s*<\/div>/);
+  const cardSection = source.match(/className=\{styles\.inventoryCardHeader\}[\s\S]*?className=\{styles\.inventoryCardActions\}[\s\S]*?<\/div>\s*\)\}\s*<\/div>/);
   assert.ok(cardSection, 'inventory card section should exist');
   assert.doesNotMatch(cardSection[0], /<History size=/);
   assert.doesNotMatch(cardSection[0], /<Trash2 size=/);

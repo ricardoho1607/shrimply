@@ -1,6 +1,6 @@
 "use client";
 
-import { getUsageReturnCost } from '../../../../../shared/financeIntegrity';
+import { reconcileDailyFeedStockAdjustment } from '../../../../../shared/dailyFeedTransaction';
 import { useSaveOperation } from '../../../../../shared/useSaveOperation';
 import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -15,12 +15,7 @@ import {
   TriangleAlert,
   Trash2
 } from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
 import {
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
   doc,
   serverTimestamp,
   runTransaction,
@@ -28,24 +23,20 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import type { DocumentData, DocumentSnapshot } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
-import { useAuth } from '@/contexts/AuthContext';
 import {
-  DAILY_FEED_USAGE_SOURCE,
   buildDailyFeedRecordId,
   getDailyFeedUsageTotal,
-  getDailyFeedUsageAdjustment,
   formatFeedQuantityForDisplay,
-  isDailyFeedUsage,
   normalizeFeedAllocations,
   sumFeedAllocations,
   type FeedAllocation,
 } from '../../../../../shared/feedInventoryUsage';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import { EnterpriseGroupedPondGrid } from '@/components/EnterpriseDashboard';
-import { useCompanyBlocks } from '@/hooks/useDashboardData';
+import { useCompanyId, useCompanyPonds, useCompanyFeeds, useCompanyBlocks } from '@/hooks/useDashboardData';
 import {
   filterEnterpriseRecordsForUser,
   isEnterpriseOwner,
@@ -160,17 +151,22 @@ function getSelectableFeedOptions(
   );
 }
 export default function FeedRecordsPage() {
+  const { scope } = useCompanyId();
+  return <FeedRecordsContent key={scope || 'signed-out'} />;
+}
+
+function FeedRecordsContent() {
   const copy = useDashboardCopy();
   const { t } = useLanguage();
-  const { user, company } = useAuth();
+  const { user, company } = useCompanyId();
   const searchParams = useSearchParams();
   const requestedPondId = searchParams.get('pondId');
   const requestedAction = searchParams.get('action');
   const today = useFarmDateKey(company?.timeZone);
-  const [ponds, setPonds] = useState<Pond[]>([]);
+  const { data: companyPonds, loading: pondsLoading, companyId } = useCompanyPonds<Pond>();
+  const ponds = useMemo(() => companyPonds.filter(pond => pond.cycleStatus !== 'ended'), [companyPonds]);
   const { save, busy: savePending } = useSaveOperation();
-  const [loading, setLoading] = useState(true);
-  const [companyId, setCompanyId] = useState<string | null>(null);
+
 
   const [isModalOpen, setModalOpen] = useState(false);
   const [selectedPondIdForHistory, setSelectedPondIdForHistory] = useState<string | null>(null);
@@ -179,7 +175,9 @@ export default function FeedRecordsPage() {
   const [revealedFeedRecordId, setRevealedFeedRecordId] = useState<string | null>(null);
   const [isDeletingFeedRecord, setIsDeletingFeedRecord] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [inventoryFeeds, setInventoryFeeds] = useState<InventoryFeed[]>([]);
+  const { data: companyFeeds, loading: feedsLoading } = useCompanyFeeds<InventoryFeed>();
+  const inventoryFeeds = useMemo(() => [...companyFeeds].sort((a, b) => (a.feedName || '').localeCompare(b.feedName || '')), [companyFeeds]);
+  const loading = pondsLoading || feedsLoading;
   const historyTouchStartXRef = useRef<number | null>(null);
   const suppressHistoryClickRef = useRef(false);
   const requestedFeedActionHandledRef = useRef(false);
@@ -261,71 +259,6 @@ export default function FeedRecordsPage() {
     return () => window.clearTimeout(openRequestedFeedForm);
   }, [accessiblePonds, canEditFeed, loading, requestedAction, requestedPondId, today]);
 
-  useEffect(() => {
-    let unsubUser: (() => void) | null = null;
-    let unsubPonds: (() => void) | null = null;
-    let unsubFeeds: (() => void) | null = null;
-    let currentCompanyId: string | null = null;
-
-    const cleanCompanyListeners = () => {
-      if (unsubPonds) unsubPonds();
-      if (unsubFeeds) unsubFeeds();
-      unsubPonds = null;
-      unsubFeeds = null;
-    };
-
-    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (unsubUser) unsubUser();
-      cleanCompanyListeners();
-      unsubUser = null;
-      currentCompanyId = null;
-
-      if (firebaseUser) {
-        unsubUser = onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          const userData = uDoc.data();
-          const cid = userData?.companyId;
-          setCompanyId(cid);
-          if (cid && cid !== currentCompanyId) {
-            cleanCompanyListeners();
-            currentCompanyId = cid;
-            const q = query(collection(db, 'companies', cid, 'ponds'), orderBy('createdAt', 'desc'));
-            unsubPonds = onSnapshot(q, (snapshot) => {
-              const data = snapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() } as Pond))
-                .filter(pond => pond.cycleStatus !== 'ended');
-              setPonds(data);
-              setLoading(false);
-            });
-
-            // Fetch Inventory Feeds
-            const qFeeds = query(collection(db, 'companies', cid, 'feeds'), orderBy('feedName', 'asc'));
-            unsubFeeds = onSnapshot(qFeeds, (snapshot) => {
-              setInventoryFeeds(snapshot.docs.map((feedDoc) => ({ id: feedDoc.id, ...feedDoc.data() } as InventoryFeed)));
-            });
-          } else {
-            if (!cid) {
-              cleanCompanyListeners();
-              currentCompanyId = null;
-              setPonds([]);
-              setInventoryFeeds([]);
-              setLoading(false);
-            }
-          }
-        });
-      } else {
-        setCompanyId(null);
-        setPonds([]);
-        setInventoryFeeds([]);
-        setLoading(false);
-      }
-    });
-    return () => {
-      unsubAuth();
-      if (unsubUser) unsubUser();
-      cleanCompanyListeners();
-    };
-  }, []);
-
   // -- Sync form data with existing records when pond/date changes ----
   useEffect(() => {
     if (!isModalOpen || !formData.pondId || !formData.date) return;
@@ -404,7 +337,7 @@ export default function FeedRecordsPage() {
       const pondRef = doc(db, 'companies', companyId, 'ponds', formData.pondId);
       await runTransaction(db, async (transaction) => {
         const pondDoc = await transaction.get(pondRef);
-        if (!pondDoc.exists()) throw new Error('Pond record not found');
+        if (!pondDoc.exists() || pondDoc.data().cycleStatus === 'ended') throw new Error('Pond cycle is unavailable');
 
         const pondData = pondDoc.data();
         const samplings = [...(pondData.samplings || [])];
@@ -425,7 +358,7 @@ export default function FeedRecordsPage() {
         const desiredByFeedId = new Map(requestedAllocations.map((allocation) => (
           [allocation.inventoryFeedId, allocation.quantityKg]
         )));
-        const feedRecordId = buildDailyFeedRecordId(formData.pondId, formData.date);
+        const intent = { pondId: formData.pondId, date: formData.date, allocations: requestedAllocations, previousFeedIds: previousAllocations.map(row => row.inventoryFeedId) };
 
         const feedData = {
           totalDailyFeed: feedAmount.toFixed(2),
@@ -469,77 +402,30 @@ export default function FeedRecordsPage() {
           feedSnapshots.set(feedId, await transaction.get(feedRef));
         }
 
-        const getFeedScreenUsageTotal = (feedId: string) => {
-          const feedDoc = feedSnapshots.get(feedId);
-          if (!feedDoc?.exists()) return 0;
-          const data = feedDoc.data() as InventoryFeed;
-          return getDailyFeedUsageTotal(data.usageHistory, formData.pondId, formData.date);
-        };
-
-        const adjustFeedUsage = (feedId: string, quantityDelta: number) => {
-          if (!feedId || !Number.isFinite(quantityDelta) || Math.abs(quantityDelta) < 0.000001) return;
-
-          const feedRef = doc(db, 'companies', companyId, 'feeds', feedId);
-          const feedDoc = feedSnapshots.get(feedId);
-          if (!feedDoc?.exists()) {
-            throw new Error('Selected feed inventory item was not found.');
-          }
-
-          const currentFeedData = feedDoc.data() as InventoryFeed;
-          const currentStock = Number(currentFeedData.totalStock) || 0;
-          const currentCost = Number(currentFeedData.totalCost) || 0;
-          if (quantityDelta > 0 && quantityDelta > currentStock) {
-            throw new Error('Insufficient stock');
-          }
-
-          const matchingUsage = (currentFeedData.usageHistory || [])
-            .filter((usage) => isDailyFeedUsage(usage, formData.pondId, formData.date))
-            .slice()
-            .reverse()
-            .find((usage) => Number(usage.unitPrice) > 0 || Number(usage.totalCost) > 0);
-          const historicalUnitPrice = matchingUsage
-            ? Number(matchingUsage.unitPrice) || (Number(matchingUsage.totalCost) / Number(matchingUsage.quantity))
-            : 0;
-          const unitPrice = quantityDelta > 0
-            ? (currentStock > 0 ? currentCost / currentStock : historicalUnitPrice)
-            : getUsageReturnCost((currentFeedData.usageHistory || []).filter(usage => isDailyFeedUsage(usage, formData.pondId, formData.date)), Math.abs(quantityDelta)).unitPrice;
-          if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
-            throw new Error('Feed cost is missing. Stock this feed with a price before recording usage.');
-          }
-
-          transaction.update(feedRef, removeUndefinedFields({
-            totalStock: Math.max(0, currentStock - quantityDelta),
-            totalCost: quantityDelta > 0
-              ? Math.max(0, currentCost - (quantityDelta * unitPrice))
-              : currentCost + (Math.abs(quantityDelta) * unitPrice),
-            usageHistory: arrayUnion({
-              id: `usage-${formData.pondId}-${formData.date}-${feedId}-${Date.now()}`,
-              date: formData.date,
-              quantity: quantityDelta,
-              unitPrice,
-              totalCost: quantityDelta * unitPrice,
-              pondId: formData.pondId,
-              cycleId: pondData.cycleId,
-              cycleName: pondData.cycleName,
-              pondCycleId: pondData.pondCycleId || formData.pondId,
-              notes: `Daily feed for pond: ${pondData.pondName}`,
-              source: DAILY_FEED_USAGE_SOURCE,
-              feedRecordId,
-              createdAt: Timestamp.now()
-            }),
-            lastUpdated: serverTimestamp()
-          }));
-        };
-
         for (const feedId of feedIds) {
           const feedDoc = feedSnapshots.get(feedId);
           if (!feedDoc?.exists()) {
             if (desiredByFeedId.has(feedId)) throw new Error('Selected feed inventory item was not found.');
             continue;
           }
-          const alreadyDeducted = getFeedScreenUsageTotal(feedId);
-          const desiredAmount = desiredByFeedId.get(feedId) || 0;
-          adjustFeedUsage(feedId, getDailyFeedUsageAdjustment(desiredAmount, alreadyDeducted));
+          const adjustment = reconcileDailyFeedStockAdjustment(
+            feedDoc.data() as InventoryFeed, desiredByFeedId.get(feedId) || 0, intent,
+            `usage-${formData.pondId}-${formData.date}-${feedId}-${Date.now()}`,
+          );
+          if (!adjustment) continue;
+          transaction.update(doc(db, 'companies', companyId, 'feeds', feedId), removeUndefinedFields({
+            totalStock: adjustment.totalStock,
+            totalCost: adjustment.totalCost,
+            usageHistory: arrayUnion({
+              ...adjustment.usage,
+              cycleId: pondData.cycleId,
+              cycleName: pondData.cycleName,
+              pondCycleId: pondData.pondCycleId || formData.pondId,
+              notes: `Daily feed for pond: ${pondData.pondName}`,
+              createdAt: Timestamp.now(),
+            }),
+            lastUpdated: serverTimestamp(),
+          }));
         }
 
         transaction.update(pondRef, removeUndefinedFields({
@@ -741,32 +627,23 @@ export default function FeedRecordsPage() {
           if (!Number.isFinite(quantityToRestore) || quantityToRestore <= 0) continue;
           restoredQuantity += quantityToRestore;
 
-          const currentStock = Number(inventoryFeed.totalStock) || 0;
-        const currentCost = Number(inventoryFeed.totalCost) || 0;
-        const unitPrice = getUsageReturnCost((inventoryFeed.usageHistory || []).filter(usage => isDailyFeedUsage(usage, selectedPondForHistory.id, deletingFeedRecord.date)), quantityToRestore).unitPrice;
-          if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
-            throw new Error(t.feed.missingFeedCost);
-          }
-
+          const adjustment = reconcileDailyFeedStockAdjustment(inventoryFeed, 0, {
+            pondId: selectedPondForHistory.id, date: deletingFeedRecord.date,
+            allocations: [], previousFeedIds: feedIds,
+          }, `${feedRecordId}:${feedId}:deleted:${adjustmentTimestamp}`);
+          if (!adjustment) continue;
           const feedRef = doc(db, 'companies', companyId, 'feeds', feedId);
           transaction.update(feedRef, removeUndefinedFields({
             usageHistory: arrayUnion({
-              id: `${feedRecordId}:${feedId}:deleted:${adjustmentTimestamp}`,
-              date: deletingFeedRecord.date,
-              quantity: -quantityToRestore,
-              unitPrice,
-              totalCost: -(quantityToRestore * unitPrice),
-              pondId: selectedPondForHistory.id,
+              ...adjustment.usage,
               cycleId: feedData.cycleId || pondData.cycleId || null,
               cycleName: feedData.cycleName || pondData.cycleName || null,
               pondCycleId: feedData.pondCycleId || pondData.pondCycleId || selectedPondForHistory.id,
               notes: 'Deleted feed record returned to inventory',
-              source: DAILY_FEED_USAGE_SOURCE,
-              feedRecordId,
               createdAt: Timestamp.now(),
             }),
-            totalStock: currentStock + quantityToRestore,
-            totalCost: currentCost + (quantityToRestore * unitPrice),
+            totalStock: adjustment.totalStock,
+            totalCost: adjustment.totalCost,
             lastUpdated: serverTimestamp(),
           }));
         }

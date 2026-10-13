@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { 
-  FlatList, Modal, ScrollView, StatusBar, StyleSheet, Text, 
+  Modal, ScrollView, StatusBar, StyleSheet, Text,
   TextInput, TouchableOpacity, View, Alert, Platform,
   Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView
 } from 'react-native';
@@ -627,7 +627,6 @@ export default function PondDetails() {
     
     const mortalityPieces = todayMortality.totalMortality;
     const mortalityWeight = todayMortality.totalMortalityWeight;
-    const observedMortalityPieces = todayMortality.observedRecovered;
       
     const totalMortalityWeight = harvestAdjustedMetrics.totalMortalityWeight;
 
@@ -653,8 +652,7 @@ export default function PondDetails() {
       fcr,
       mortalityPieces,
       mortalityWeight,
-      observedMortalityPieces,
-      totalMortalityWeight,
+        totalMortalityWeight,
       pondSamplingData,
       feedBiomassInsight
     };
@@ -693,69 +691,74 @@ export default function PondDetails() {
     setEditModalVisible(true);
   }, [canRecordPondData, pond, t]);
 
-  const handleStartNewCycle = useCallback(() => {
-    if (!pond || !canManagePonds || !canManageCycles) return;
-    if (isEnterpriseTechnician && !activeFarmCycle) {
-      Alert.alert(t.farmCycle.noActiveCycle, t.enterprise.ownerMustStartCycle);
-      return;
+  const handleStartNewCycle = useCallback(async () => {
+    try {
+      if (!pond || !canManagePonds || !canManageCycles) return;
+      if (isEnterpriseTechnician && !activeFarmCycle) {
+        Alert.alert(t.farmCycle.noActiveCycle, t.enterprise.ownerMustStartCycle);
+        return;
+      }
+      const { density, docStart, plValue, plSupplier } = newCycleForm;
+
+      if (!density || !docStart || !plValue || !plSupplier) {
+        Alert.alert(t.messages.error, t.home.fillAllFields);
+        return;
+      }
+
+      const initialPopulation = pond.pondArea * Number(density);
+      const initialWeight = (parseFloat(plValue) || 0) / 10;
+      const hasActiveCycleForPond = ponds.some((existingPond) =>
+        existingPond.id !== pond.id &&
+        isPondCycleActive(existingPond) &&
+        getPhysicalPondKey(existingPond.pondName) === getPhysicalPondKey(pond.pondName)
+      );
+
+      if (hasActiveCycleForPond) {
+        Alert.alert(t.messages.error, `${pond.pondName} already has an active cycle. End that pond first before starting another cycle for it.`);
+        return;
+      }
+
+      const added = await addPond({
+        id: Date.now().toString(),
+        pondName: pond.pondName,
+        pondArea: pond.pondArea,
+        blockId: pond.blockId,
+        blockName: pond.blockName,
+        density: Number(density),
+        initialPopulation,
+        docStart,
+        supplier: plSupplier,
+        plSupplier,
+        initialWeight,
+        samplings: [],
+        totalHarvestedBiomass: 0,
+        totalHarvestedPopulation: 0,
+        totalHarvestedFeed: 0,
+        cycleStatus: 'active',
+        cycleStartedAt: docStart,
+        previousCyclePondId: pond.id,
+        physicalPondId: pond.physicalPondId,
+      });
+
+      if (!added) {
+        Alert.alert(t.messages.error, 'Could not start this pond. Sync the farm and check its physical pond link before trying again.');
+        return;
+      }
+
+      setStartCycleVisible(false);
+      setNewCycleForm({
+        density: '',
+        docStart: getFarmDateKey(new Date(), company?.timeZone),
+        plValue: '',
+        plSupplier: '',
+      });
+      router.push('/(tabs)' as any);
+      Alert.alert(t.messages.success, `${pond.pondName} new cycle started.`);
+
+    } catch (error) {
+      Alert.alert(t.messages.error, error instanceof Error ? error.message : t.messages.networkError);
     }
-    const { density, docStart, plValue, plSupplier } = newCycleForm;
-
-    if (!density || !docStart || !plValue || !plSupplier) {
-      Alert.alert(t.messages.error, t.home.fillAllFields);
-      return;
-    }
-
-    const initialPopulation = pond.pondArea * Number(density);
-    const initialWeight = (parseFloat(plValue) || 0) / 10;
-    const hasActiveCycleForPond = ponds.some((existingPond) =>
-      existingPond.id !== pond.id &&
-      isPondCycleActive(existingPond) &&
-      getPhysicalPondKey(existingPond.pondName) === getPhysicalPondKey(pond.pondName)
-    );
-
-    if (hasActiveCycleForPond) {
-      Alert.alert(t.messages.error, `${pond.pondName} already has an active cycle. End that pond first before starting another cycle for it.`);
-      return;
-    }
-
-    const added = addPond({
-      id: Date.now().toString(),
-      pondName: pond.pondName,
-      pondArea: pond.pondArea,
-      blockId: pond.blockId,
-      blockName: pond.blockName,
-      density: Number(density),
-      initialPopulation,
-      docStart,
-      supplier: plSupplier,
-      plSupplier,
-      initialWeight,
-      samplings: [],
-      totalHarvestedBiomass: 0,
-      totalHarvestedPopulation: 0,
-      totalHarvestedFeed: 0,
-      cycleStatus: 'active',
-      cycleStartedAt: docStart,
-      previousCyclePondId: pond.id,
-      physicalPondId: pond.physicalPondId,
-    });
-
-    if (!added) {
-      Alert.alert(t.messages.error, 'Could not start this pond. Sync the farm and check its physical pond link before trying again.');
-      return;
-    }
-
-    setStartCycleVisible(false);
-    setNewCycleForm({
-      density: '',
-      docStart: getFarmDateKey(new Date(), company?.timeZone),
-      plValue: '',
-      plSupplier: '',
-    });
-    router.push('/(tabs)' as any);
-    Alert.alert(t.messages.success, `${pond.pondName} new cycle started.`);
-  }, [activeFarmCycle, addPond, canManageCycles, canManagePonds, company?.timeZone, isEnterpriseTechnician, newCycleForm, pond, ponds, router, t]);
+  }, [activeFarmCycle, addPond, canManageCycles, canManagePonds, company, isEnterpriseTechnician, newCycleForm, pond, ponds, router, t]);
 
   const closeEditModal = useCallback(() => {
     setEditModalVisible(false);
@@ -893,7 +896,6 @@ export default function PondDetails() {
     fcr,
     mortalityPieces,
     mortalityWeight,
-    observedMortalityPieces,
     totalMortalityWeight,
     pondSamplingData,
     feedBiomassInsight

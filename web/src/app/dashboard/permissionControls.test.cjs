@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- This is a CommonJS Node test. */
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
+const { readFeatureSource } = require('../../../../scripts/read-feature-source.cjs');
 const path = require('node:path');
 const test = require('node:test');
-const read = (file) => fs.readFileSync(path.resolve(__dirname, file), 'utf8');
+const read = (file) => readFeatureSource(path.resolve(__dirname, file));
 
 test('Feed buttons, open forms and saves all honour the live feeding permission', () => {
   const source = read('feed/page.tsx');

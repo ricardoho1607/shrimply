@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFeatureSource } from '../scripts/read-feature-source.cjs';
 import test from 'node:test';
 import { cycleFeatureTranslations } from './cycleFeatureTranslations.ts';
 
-const readSource = (path: string) => readFileSync(path, 'utf8');
+const readSource = (path: string) => readFeatureSource(path);
 
 test('enterprise cycle creation exposes and persists the cycle start mode on mobile', () => {
   const dashboard = readSource('app/components/enterprise/EnterpriseCycleDashboard.tsx');

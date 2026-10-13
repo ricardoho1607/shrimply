@@ -1,13 +1,16 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadCallback } = require('../../scripts/test-module.cjs');
+const { sortPendingChanges, removeAcknowledgedPendingChanges, isOfflineSyncIdentityCurrent } = require('../../shared/offlineWorkspace.ts');
 function runner(changes, commit, persist = async () => {}) {
  const ref = { current: changes }, calls = [], status = {};
- const sync = loadCallback('app/hooks/useFirebaseSync.ts', 'syncPendingChanges', {
+ const sync = loadCallback('app/services/firebaseSync/useSyncRetry.ts', 'syncPendingChanges', {
+  sortPendingChanges, removeAcknowledgedPendingChanges, isOfflineSyncIdentityCurrent,
+  pendingStorageKey:'queue',pendingIdentityRef:{current:'queue'},pendingQueueWritesRef:{current:0},pendingEnqueueRef:{current:Promise.resolve()},retryTimerRef:{current:undefined},setTimeout(){},
   activeCompanyId:'farm', user:{uid:'user'}, pendingChangesRef:ref, isOnlineRef:{current:true},syncInProgressRef:{current:false},retryAttemptRef:{current:0},
   clearRetryTimer(){}, scheduleSyncRetry(){}, usePondStore:{getState:()=>({currentCompanyId:'farm',farmCacheUserId:'user'})},
   setSyncStatus(update){Object.assign(status,update(status));},setPendingChanges(){},
-  commitChanges:async batch=>{calls.push(batch[0].id);return commit(batch[0],ref);},
+  commitChanges:async batch=>{calls.push(batch[0].id);return {processedIds:await commit(batch[0],ref),committedLegacyPonds:{}};},
   persistPendingQueue:async next=>persist(next,ref),
  });
  return {sync,ref,calls,status};

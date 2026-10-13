@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   collection,
   type DocumentData,
@@ -11,12 +11,14 @@ import {
   orderBy,
   query,
   type QueryDocumentSnapshot,
+  type Query,
   QueryConstraint,
   startAfter,
   where,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useScopedSnapshot } from './useScopedSnapshot';
 import { isOperationalSummaryFresh } from '../../../shared/operationalSummary';
 
 type SnapshotState<T> = {
@@ -28,9 +30,8 @@ type SnapshotState<T> = {
 const EMPTY_CONSTRAINTS: QueryConstraint[] = [];
 const HISTORY_PAGE_SIZE = 50;
 
-const deferStateUpdate = (callback: () => void) => {
-  queueMicrotask(callback);
-};
+const EMPTY_DOCUMENTS: QueryDocumentSnapshot<DocumentData>[] = [];
+const EMPTY_DOCUMENT: DocumentData = {};
 
 type MonitoredCompanyDocument = {
   id: string;
@@ -48,10 +49,14 @@ const asFiniteNumber = (value: unknown, fallback = 0) => {
 
 export function useCompanyId() {
   const { user, company } = useAuth();
+  // Wait for matching company metadata so role/block filters cannot use the previous farm.
+  const companyId = user?.uid && user.companyId && company?.id === user.companyId
+    ? user.companyId : null;
   return {
     user,
-    company,
-    companyId: user?.companyId || company?.id || null,
+    company: companyId ? company : null,
+    companyId,
+    scope: companyId && user ? JSON.stringify([user.uid, companyId]) : null,
   };
 }
 
@@ -66,59 +71,27 @@ export function useDebouncedValue<T>(value: T, delay = 180) {
   return debouncedValue;
 }
 
+function useQueryDocuments(scope: string | null, reference: Query | null) {
+  const subscribe = useCallback((next: (data: QueryDocumentSnapshot<DocumentData>[]) => void, fail: (error: Error) => void) => {
+    if (!reference) return () => {};
+    return onSnapshot(reference, snapshot => next(snapshot.docs), fail);
+  }, [reference]);
+  return useScopedSnapshot(reference ? scope : null, subscribe, EMPTY_DOCUMENTS);
+}
+
 function useCompanySubcollection<T>(
   collectionName: string,
-  constraints: QueryConstraint[] = EMPTY_CONSTRAINTS
+  constraints: QueryConstraint[] = EMPTY_CONSTRAINTS,
+  enabled = true,
 ): SnapshotState<T> & ReturnType<typeof useCompanyId> {
   const dashboardContext = useCompanyId();
-  const { companyId } = dashboardContext;
-  const [state, setState] = useState<SnapshotState<T>>({
-    data: [],
-    loading: true,
-    error: null,
-  });
-
-  useEffect(() => {
-    let isActive = true;
-    const deferIfActive = (callback: () => void) => {
-      deferStateUpdate(() => {
-        if (isActive) callback();
-      });
-    };
-
-    if (!companyId) {
-      deferIfActive(() => setState({ data: [], loading: false, error: null }));
-      return () => {
-        isActive = false;
-      };
-    }
-
-    deferIfActive(() => setState((previous) => ({ ...previous, loading: true, error: null })));
-
-    const ref = collection(db, 'companies', companyId, collectionName);
-    const q = constraints.length > 0 ? query(ref, ...constraints) : query(ref);
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        setState({
-          data: snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as T)),
-          loading: false,
-          error: null,
-        });
-      },
-      (error) => {
-        console.error(`Error loading ${collectionName}:`, error);
-        setState((previous) => ({ ...previous, loading: false, error }));
-      }
-    );
-
-    return () => {
-      isActive = false;
-      unsubscribe();
-    };
-  }, [companyId, collectionName, constraints]);
-
-  return { ...state, ...dashboardContext };
+  const { companyId, scope } = dashboardContext;
+  const reference = useMemo(() => companyId && enabled
+    ? query(collection(db, 'companies', companyId, collectionName), ...constraints)
+    : null, [companyId, collectionName, constraints, enabled]);
+  const state = useQueryDocuments(scope, reference);
+  const data = useMemo(() => state.data.map(item => ({ ...item.data(), id: item.id } as T)), [state.data]);
+  return { ...state, data, ...dashboardContext };
 }
 
 export function useCompanyPonds<T>(sort: 'asc' | 'desc' = 'desc') {
@@ -136,9 +109,9 @@ export function useCompanyBlocks<T>(sort: 'asc' | 'desc' = 'asc') {
   return useCompanySubcollection<T>('blocks', constraints);
 }
 
-export function useCompanyCycles<T>(sort: 'asc' | 'desc' = 'asc') {
+export function useCompanyCycles<T>(sort: 'asc' | 'desc' = 'asc', enabled = true) {
   const constraints = useMemo(() => [orderBy('createdAt', sort)], [sort]);
-  return useCompanySubcollection<T>('cycles', constraints);
+  return useCompanySubcollection<T>('cycles', constraints, enabled);
 }
 
 export function useCompanyFeeds<T>() {
@@ -155,289 +128,152 @@ export function useCompanyHarvestRecords<T>(sort: 'asc' | 'desc' = 'desc') {
   return { ...state, data: state.data.filter(item => !(item as { voided?: boolean }).voided) };
 }
 
-export function useCompanyMembers<T>() {
-  const { companyId } = useCompanyId();
-  const [state, setState] = useState<SnapshotState<T>>({
-    data: [],
-    loading: true,
-    error: null,
-  });
+export function useCompanyLabReports<T>() {
+  const constraints = useMemo(() => [orderBy('sampleDate', 'desc')], []);
+  return useCompanySubcollection<T>('labReports', constraints);
+}
 
-  useEffect(() => {
-    let isActive = true;
-    const deferIfActive = (callback: () => void) => {
-      deferStateUpdate(() => {
-        if (isActive) callback();
-      });
-    };
-
-    if (!companyId) {
-      deferIfActive(() => setState({ data: [], loading: false, error: null }));
-      return () => {
-        isActive = false;
-      };
-    }
-
-    deferIfActive(() => setState((previous) => ({ ...previous, loading: true, error: null })));
-
-    const membersQuery = query(collection(db, 'users'), where('companyId', '==', companyId));
-    const unsubscribe = onSnapshot(
-      membersQuery,
-      (snapshot) => {
-        setState({
-          data: snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as T)),
-          loading: false,
-          error: null,
-        });
-      },
-      (error) => {
-        console.error('Error loading company members:', error);
-        setState((previous) => ({ ...previous, loading: false, error }));
-      }
-    );
-
-    return () => {
-      isActive = false;
-      unsubscribe();
-    };
+export function useCompanyLabPdfUsage() {
+  const { companyId, scope } = useCompanyId();
+  const subscribe = useCallback((next: (data: DocumentData) => void, fail: (error: Error) => void) => {
+    if (!companyId) return () => {};
+    return onSnapshot(doc(db, 'companies', companyId, 'labUsage', 'pdfExtraction'),
+      snapshot => next(snapshot.data() || EMPTY_DOCUMENT), fail);
   }, [companyId]);
+  return useScopedSnapshot(scope, subscribe, EMPTY_DOCUMENT);
+}
 
-  return { ...state, companyId };
+export function useCompanyAssets<T>() {
+  const { companyId, scope } = useCompanyId();
+  const reference = useMemo(() => companyId
+    ? query(collection(db, 'assets'), where('companyId', '==', companyId)) : null, [companyId]);
+  const state = useQueryDocuments(scope, reference);
+  const data = useMemo(() => state.data.map(item => ({ ...item.data(), id: item.id } as T)), [state.data]);
+  return { ...state, data, companyId };
+}
+
+export function useCompanyMembers<T>() {
+  const { companyId, scope } = useCompanyId();
+  const reference = useMemo(() => companyId
+    ? query(collection(db, 'users'), where('companyId', '==', companyId)) : null, [companyId]);
+  const state = useQueryDocuments(scope, reference);
+  const data = useMemo(() => state.data.map(item => ({ ...item.data(), id: item.id } as T)), [state.data]);
+  return { ...state, data, companyId };
+}
+
+function useFinanceCollection<T>(collectionName: string, type: 'expense' | 'income', includeVoided: boolean) {
+  const state = useCompanySubcollection<DocumentData>(collectionName);
+  const data = useMemo(() => state.data
+    .filter(item => includeVoided || !item.voided)
+    // Sort locally so legacy entries without timestamp are not silently omitted.
+    .sort((a, b) => (Number(b.timestamp) || Date.parse(b.date) || 0) - (Number(a.timestamp) || Date.parse(a.date) || 0))
+    .map(item => ({ ...item, type } as T)), [state.data, includeVoided, type]);
+  return { ...state, data };
 }
 
 export function useFinanceRecords<TExpense, TRevenue>(includeVoided = false) {
-  const { companyId } = useCompanyId();
-  const [expenses, setExpenses] = useState<TExpense[]>([]);
-  const [revenues, setRevenues] = useState<TRevenue[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
-  useEffect(() => {
-    let isActive = true;
-    const deferIfActive = (callback: () => void) => {
-      deferStateUpdate(() => {
-        if (isActive) callback();
-      });
-    };
-
-    if (!companyId) {
-      deferIfActive(() => {
-        setExpenses([]);
-        setRevenues([]);
-        setLoading(false);
-        setError(null);
-      });
-      return () => {
-        isActive = false;
-      };
-    }
-
-    let receivedExpenses = false;
-    let receivedRevenues = false;
-    deferIfActive(() => {
-      setLoading(true);
-      setError(null);
-    });
-
-    const expensesQuery = query(
-      collection(db, 'companies', companyId, 'expenses'),
-      // Sort locally so legacy entries without timestamp are not silently omitted.
-    );
-    const revenuesQuery = query(
-      collection(db, 'companies', companyId, 'revenues'),
-      // Sort locally so legacy entries without timestamp are not silently omitted.
-    );
-
-    const markReady = () => {
-      if (receivedExpenses && receivedRevenues) setLoading(false);
-    };
-
-    const unsubExpenses = onSnapshot(
-      expensesQuery,
-      (snapshot) => {
-        if (!isActive) return;
-        receivedExpenses = true;
-        setExpenses(snapshot.docs.filter(item => includeVoided || !item.data().voided).sort((a, b) => (Number(b.data().timestamp) || Date.parse(b.data().date) || 0) - (Number(a.data().timestamp) || Date.parse(a.data().date) || 0)).map((item) => ({ ...item.data(), id: item.id, type: 'expense' } as TExpense)));
-        markReady();
-      },
-      (snapshotError) => {
-        receivedExpenses = true;
-        console.error('Error loading expenses:', snapshotError);
-        setError(snapshotError);
-        markReady();
-      }
-    );
-
-    const unsubRevenues = onSnapshot(
-      revenuesQuery,
-      (snapshot) => {
-        if (!isActive) return;
-        receivedRevenues = true;
-        setRevenues(snapshot.docs.filter(item => includeVoided || !item.data().voided).sort((a, b) => (Number(b.data().timestamp) || Date.parse(b.data().date) || 0) - (Number(a.data().timestamp) || Date.parse(a.data().date) || 0)).map((item) => ({ ...item.data(), id: item.id, type: 'income' } as TRevenue)));
-        markReady();
-      },
-      (snapshotError) => {
-        receivedRevenues = true;
-        console.error('Error loading revenues:', snapshotError);
-        setError(snapshotError);
-        markReady();
-      }
-    );
-
-    return () => {
-      isActive = false;
-      unsubExpenses();
-      unsubRevenues();
-    };
-  }, [companyId, includeVoided]);
-
-  return { expenses, revenues, loading, error, companyId };
+  const expenses = useFinanceCollection<TExpense>('expenses', 'expense', includeVoided);
+  const revenues = useFinanceCollection<TRevenue>('revenues', 'income', includeVoided);
+  return {
+    expenses: expenses.data, revenues: revenues.data,
+    loading: expenses.loading || revenues.loading,
+    error: expenses.error || revenues.error, companyId: expenses.companyId,
+  };
 }
 
 export function useCompanyNotifications<T>() {
-  const { companyId } = useCompanyId();
-  const [state, setState] = useState<SnapshotState<T>>({
-    data: [],
-    loading: true,
-    error: null,
-  });
-  const [hasMore, setHasMore] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const cursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
-  const loadedBeyondFirstPageRef = useRef(false);
-  const olderNotificationsRef = useRef<T[]>([]);
+  const { companyId, scope } = useCompanyId();
+  // Each subscription owns its pagination cursor and in-flight requests.
+  const session = useMemo(() => ({
+    scope, active: false, busy: false, loadedBeyondFirstPage: false,
+    cursor: null as QueryDocumentSnapshot<DocumentData> | null,
+    older: [] as T[],
+  }), [scope]);
+  const [state, setState] = useState<SnapshotState<T> & {
+    session: typeof session; hasMore: boolean; loadingMore: boolean;
+  } | null>(null);
 
   useEffect(() => {
-    let isActive = true;
-    const deferIfActive = (callback: () => void) => {
-      deferStateUpdate(() => {
-        if (isActive) callback();
-      });
-    };
-
-    if (!companyId) {
-      deferIfActive(() => setState({ data: [], loading: false, error: null }));
-      cursorRef.current = null;
-      loadedBeyondFirstPageRef.current = false;
-      olderNotificationsRef.current = [];
-      setHasMore(false);
-      return () => {
-        isActive = false;
-      };
-    }
-
-    cursorRef.current = null;
-    loadedBeyondFirstPageRef.current = false;
-    olderNotificationsRef.current = [];
-    deferIfActive(() => {
-      setState({ data: [], loading: true, error: null });
-      setHasMore(false);
+    if (!companyId || !scope) return;
+    session.active = true;
+    let active = true;
+    const unsubscribe = onSnapshot(query(
+      collection(db, 'notifications'), where('companyId', '==', companyId),
+      orderBy('timestamp', 'desc'), limitQuery(HISTORY_PAGE_SIZE),
+    ), snapshot => {
+      if (!active) return;
+      const firstPage = snapshot.docs.map(item => ({ ...item.data(), id: item.id } as T));
+      const firstPageIds = new Set(snapshot.docs.map(item => item.id));
+      if (!session.loadedBeyondFirstPage) session.cursor = snapshot.docs.at(-1) || null;
+      setState(previous => ({
+        session,
+        data: [...firstPage, ...session.older.filter(item => !firstPageIds.has((item as { id: string }).id))],
+        loading: false, error: null, loadingMore: session.busy,
+        hasMore: session.loadedBeyondFirstPage && previous?.session === session
+          ? previous.hasMore : snapshot.size === HISTORY_PAGE_SIZE,
+      }));
+    }, error => {
+      if (!active) return;
+      session.cursor = null;
+      session.older = [];
+      setState({ session, data: [], loading: false, error, hasMore: false, loadingMore: false });
     });
+    return () => { active = false; session.active = false; unsubscribe(); };
+  }, [companyId, scope, session]);
 
-    const notificationsQuery = query(
-      collection(db, 'notifications'),
-      where('companyId', '==', companyId),
-      // Legacy timestamps are repaired by the notification migration/normalizer.
-      orderBy('timestamp', 'desc'),
-      limitQuery(HISTORY_PAGE_SIZE),
-    );
-    const unsubscribe = onSnapshot(
-      notificationsQuery,
-      (snapshot) => {
-        const firstPage = snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as T));
-        const firstPageIds = new Set(snapshot.docs.map((item) => item.id));
-        setState({
-          data: [
-            ...firstPage,
-            ...olderNotificationsRef.current.filter((item) => !firstPageIds.has((item as { id?: string }).id || '')),
-          ],
-          loading: false,
-          error: null,
-        });
-        if (!loadedBeyondFirstPageRef.current) {
-          cursorRef.current = snapshot.docs.at(-1) || null;
-          setHasMore(snapshot.size === HISTORY_PAGE_SIZE);
-        }
-      },
-      (error) => {
-        console.error('Error loading notifications:', error);
-        setState((previous) => ({ ...previous, loading: false, error }));
-      }
-    );
-
-    return () => {
-      isActive = false;
-      unsubscribe();
-    };
-  }, [companyId]);
-
+  const current = scope && state?.session === session ? state : {
+    data: [] as T[], loading: Boolean(scope), error: null, hasMore: false, loadingMore: false,
+  };
+  const hasMore = current.hasMore;
   const loadMore = useCallback(async () => {
-    if (!companyId || !cursorRef.current || loadingMore || !hasMore) return;
-    setLoadingMore(true);
+    if (!companyId || !session.active || !session.cursor || session.busy || !hasMore) return;
+    session.busy = true;
+    setState(previous => previous?.session === session ? { ...previous, loadingMore: true } : previous);
     try {
-      const nextPageQuery = query(
-        collection(db, 'notifications'),
-        where('companyId', '==', companyId),
-        // Legacy timestamps are repaired by the notification migration/normalizer.
-      orderBy('timestamp', 'desc'),
-        startAfter(cursorRef.current),
-        limitQuery(HISTORY_PAGE_SIZE),
-      );
-      const snapshot = await getDocs(nextPageQuery);
-      const nextPage = snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as T));
-      setState((previous) => {
-        const existingIds = new Set(previous.data.map((item) => (item as { id?: string }).id));
-        const uniqueNextPage = nextPage.filter((item) => !existingIds.has((item as { id?: string }).id));
-        olderNotificationsRef.current = [...olderNotificationsRef.current, ...uniqueNextPage];
-        return {
-          ...previous,
-          data: [...previous.data, ...uniqueNextPage],
-        };
+      const snapshot = await getDocs(query(
+        collection(db, 'notifications'), where('companyId', '==', companyId),
+        orderBy('timestamp', 'desc'), startAfter(session.cursor), limitQuery(HISTORY_PAGE_SIZE),
+      ));
+      if (!session.active || !session.cursor) return;
+      const nextPage = snapshot.docs.map(item => ({ ...item.data(), id: item.id } as T));
+      session.loadedBeyondFirstPage = true;
+      session.cursor = snapshot.docs.at(-1) || session.cursor;
+      const olderIds = new Set(session.older.map(item => (item as { id: string }).id));
+      session.older = [...session.older, ...nextPage.filter(item => !olderIds.has((item as { id: string }).id))];
+      setState(previous => {
+        if (previous?.session !== session) return previous;
+        const ids = new Set(previous.data.map(item => (item as { id: string }).id));
+        return { ...previous, data: [...previous.data, ...nextPage.filter(item => !ids.has((item as { id: string }).id))],
+          hasMore: snapshot.size === HISTORY_PAGE_SIZE };
       });
-      loadedBeyondFirstPageRef.current = true;
-      cursorRef.current = snapshot.docs.at(-1) || cursorRef.current;
-      setHasMore(snapshot.size === HISTORY_PAGE_SIZE);
     } catch (error) {
-      setState((previous) => ({ ...previous, error: error as Error }));
+      if (session.active) setState(previous => previous?.session === session ? { ...previous, error: error as Error } : previous);
     } finally {
-      setLoadingMore(false);
+      session.busy = false;
+      if (session.active) setState(previous => previous?.session === session ? { ...previous, loadingMore: false } : previous);
     }
-  }, [companyId, hasMore, loadingMore]);
+  }, [companyId, hasMore, session]);
 
   const updateLocalItem = useCallback((id: string, updates: Partial<T>) => {
-    olderNotificationsRef.current = olderNotificationsRef.current.map((item) => (
-      (item as { id?: string }).id === id ? { ...item, ...updates } : item
-    ));
-    setState((previous) => ({
-      ...previous,
-      data: previous.data.map((item) => (item as { id?: string }).id === id ? { ...item, ...updates } : item),
-    }));
-  }, []);
+    if (!session.active) return;
+    const update = (item: T) => (item as { id: string }).id === id ? { ...item, ...updates } : item;
+    session.older = session.older.map(update);
+    setState(previous => previous?.session === session ? { ...previous, data: previous.data.map(update) } : previous);
+  }, [session]);
   const removeLocalItem = useCallback((id: string) => {
-    olderNotificationsRef.current = olderNotificationsRef.current.filter(
-      (item) => (item as { id?: string }).id !== id,
-    );
-    setState((previous) => ({
-      ...previous,
-      data: previous.data.filter((item) => (item as { id?: string }).id !== id),
-    }));
-  }, []);
+    if (!session.active) return;
+    const keep = (item: T) => (item as { id: string }).id !== id;
+    session.older = session.older.filter(keep);
+    setState(previous => previous?.session === session ? { ...previous, data: previous.data.filter(keep) } : previous);
+  }, [session]);
   const clearLocalItems = useCallback(() => {
-    olderNotificationsRef.current = [];
-    setHasMore(false);
-    setState((previous) => ({ ...previous, data: [] }));
-  }, []);
+    if (!session.active) return;
+    session.older = [];
+    session.cursor = null;
+    setState(previous => previous?.session === session ? { ...previous, data: [], hasMore: false } : previous);
+  }, [session]);
 
-  return {
-    ...state,
-    companyId,
-    hasMore,
-    loadingMore,
-    loadMore,
-    updateLocalItem,
-    removeLocalItem,
-    clearLocalItems,
-  };
+  return { ...current, companyId, loadMore, updateLocalItem, removeLocalItem, clearLocalItems };
 }
 
 export function useMarketplaceListings<T>() {
@@ -450,277 +286,68 @@ export function useMarketplaceListings<T>() {
 
 function useTopLevelCollection<T>(
   collectionName: string,
-  constraints: QueryConstraint[] = EMPTY_CONSTRAINTS
+  constraints: QueryConstraint[] = EMPTY_CONSTRAINTS,
 ): SnapshotState<T> {
-  const [state, setState] = useState<SnapshotState<T>>({
-    data: [],
-    loading: true,
-    error: null,
-  });
-
-  useEffect(() => {
-    let isActive = true;
-    const deferIfActive = (callback: () => void) => {
-      deferStateUpdate(() => {
-        if (isActive) callback();
-      });
-    };
-
-    deferIfActive(() => setState((previous) => ({ ...previous, loading: true, error: null })));
-
-    const ref = collection(db, collectionName);
-    const q = constraints.length > 0 ? query(ref, ...constraints) : query(ref);
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        setState({
-          data: snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as T)),
-          loading: false,
-          error: null,
-        });
-      },
-      (error) => {
-        console.error(`Error loading ${collectionName}:`, error);
-        setState((previous) => ({ ...previous, loading: false, error }));
-      }
-    );
-
-    return () => {
-      isActive = false;
-      unsubscribe();
-    };
-  }, [collectionName, constraints]);
-
-  return state;
+  const reference = useMemo(() => query(collection(db, collectionName), ...constraints), [collectionName, constraints]);
+  const state = useQueryDocuments(collectionName, reference);
+  const data = useMemo(() => state.data.map(item => ({ ...item.data(), id: item.id } as T)), [state.data]);
+  return { ...state, data };
 }
 
 export function useMonitoredCompanies<T>() {
   const { user } = useAuth();
-  const [state, setState] = useState<SnapshotState<T>>({
-    data: [],
-    loading: true,
-    error: null,
-  });
-
-  useEffect(() => {
-    if (!user?.uid) {
-      setState({ data: [], loading: false, error: null });
-      return;
-    }
-
-    let cancelled = false;
-    setState((previous) => ({ ...previous, loading: true, error: null }));
-
-    const monitoredQuery = query(collection(db, 'users', user.uid, 'monitoredCompanies'));
-    const unsubscribe = onSnapshot(
-      monitoredQuery,
-      async (snapshot) => {
-        try {
-          const companies = snapshot.docs.map((item) => {
-            const company = { id: item.id, ...item.data() } as MonitoredCompanyDocument;
-            return {
-              ...company,
-              avgDOC: asFiniteNumber(company.avgDOC),
-              avgSize: asFiniteNumber(company.avgSize),
-              totalBiomass: asFiniteNumber(company.totalBiomass),
-              pondCount: asFiniteNumber(company.pondCount),
-            } as T;
-          });
-
-          if (!cancelled) {
-            setState({ data: companies, loading: false, error: null });
-          }
-        } catch (error) {
-          if (!cancelled) {
-            console.error('Error loading monitored companies:', error);
-            setState((previous) => ({ ...previous, loading: false, error: error as Error }));
-          }
-        }
-      },
-      (error) => {
-        console.error('Error loading monitored companies:', error);
-        setState((previous) => ({ ...previous, loading: false, error }));
-      }
-    );
-
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, [user?.uid]);
-
-  return state;
+  const uid = user?.uid || null;
+  const reference = useMemo(() => uid ? query(collection(db, 'users', uid, 'monitoredCompanies')) : null, [uid]);
+  const state = useQueryDocuments(uid, reference);
+  const data = useMemo(() => state.data.map(item => {
+    const company = { ...item.data(), id: item.id } as MonitoredCompanyDocument;
+    return { ...company, avgDOC: asFiniteNumber(company.avgDOC), avgSize: asFiniteNumber(company.avgSize),
+      totalBiomass: asFiniteNumber(company.totalBiomass), pondCount: asFiniteNumber(company.pondCount) } as T;
+  }), [state.data]);
+  return { ...state, data };
 }
 
 export function useInventoryFeeds<TFeed, TAdditive, TPond>() {
-  const { companyId } = useCompanyId();
-  const [feeds, setFeeds] = useState<TFeed[]>([]);
-  const [additives, setAdditives] = useState<TAdditive[]>([]);
-  const [ponds, setPonds] = useState<TPond[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
-  useEffect(() => {
-    let isActive = true;
-    const deferIfActive = (callback: () => void) => {
-      deferStateUpdate(() => {
-        if (isActive) callback();
-      });
-    };
-
-    if (!companyId) {
-      deferIfActive(() => {
-        setFeeds([]);
-        setAdditives([]);
-        setPonds([]);
-        setLoading(false);
-        setError(null);
-      });
-      return () => {
-        isActive = false;
-      };
-    }
-
-    let receivedFeeds = false;
-    let receivedAdditives = false;
-    let receivedPonds = false;
-    deferIfActive(() => {
-      setLoading(true);
-      setError(null);
-    });
-
-    const markReady = () => {
-      if (receivedFeeds && receivedAdditives && receivedPonds) setLoading(false);
-    };
-
-    const unsubFeeds = onSnapshot(
-      query(collection(db, 'companies', companyId, 'feeds')),
-      (snapshot) => {
-        receivedFeeds = true;
-        setFeeds(snapshot.docs.map((item) => ({
-          id: item.id,
-          ...item.data(),
-          itemName: item.data().feedName,
-        } as TFeed)));
-        markReady();
-      },
-      (snapshotError) => {
-        receivedFeeds = true;
-        console.error('Error loading feeds:', snapshotError);
-        setError(snapshotError);
-        markReady();
-      }
-    );
-
-    const unsubAdditives = onSnapshot(
-      query(collection(db, 'companies', companyId, 'additives')),
-      (snapshot) => {
-        receivedAdditives = true;
-        setAdditives(snapshot.docs.map((item) => ({
-          id: item.id,
-          ...item.data(),
-          itemName: item.data().additiveName,
-        } as TAdditive)));
-        markReady();
-      },
-      (snapshotError) => {
-        receivedAdditives = true;
-        console.error('Error loading additives:', snapshotError);
-        setError(snapshotError);
-        markReady();
-      }
-    );
-
-    const unsubPonds = onSnapshot(
-      query(collection(db, 'companies', companyId, 'ponds'), orderBy('pondName', 'asc')),
-      (snapshot) => {
-        receivedPonds = true;
-        setPonds(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as TPond)));
-        markReady();
-      },
-      (snapshotError) => {
-        receivedPonds = true;
-        console.error('Error loading inventory ponds:', snapshotError);
-        setError(snapshotError);
-        markReady();
-      }
-    );
-
-    return () => {
-      isActive = false;
-      unsubFeeds();
-      unsubAdditives();
-      unsubPonds();
-    };
-  }, [companyId]);
-
-  return { feeds, additives, ponds, loading, error, companyId };
+  const feeds = useCompanyFeeds<DocumentData>();
+  const additives = useCompanyAdditives<DocumentData>();
+  const constraints = useMemo(() => [orderBy('pondName', 'asc')], []);
+  const ponds = useCompanySubcollection<TPond>('ponds', constraints);
+  const feedData = useMemo(() => feeds.data.map(item => ({ ...item, itemName: item.feedName } as TFeed)), [feeds.data]);
+  const additiveData = useMemo(() => additives.data.map(item => ({ ...item, itemName: item.additiveName } as TAdditive)), [additives.data]);
+  return { feeds: feedData, additives: additiveData, ponds: ponds.data,
+    loading: feeds.loading || additives.loading || ponds.loading,
+    error: feeds.error || additives.error || ponds.error, companyId: feeds.companyId };
 }
 
 export function useUnreadNotificationsCount(options: { enabled?: boolean } = {}) {
-  const { company } = useAuth();
-  const [count, setCount] = useState(0);
+  const { companyId, scope } = useCompanyId();
   const enabled = options.enabled ?? true;
-
-  useEffect(() => {
-    let isActive = true;
-    const deferIfActive = (callback: () => void) => {
-      deferStateUpdate(() => {
-        if (isActive) callback();
-      });
-    };
-
-    if (!enabled || !company?.id) {
-      deferIfActive(() => setCount(0));
-      return () => {
-        isActive = false;
-      };
-    }
-
+  const subscribe = useCallback((next: (count: number) => void, fail: (error: Error) => void) => {
+    if (!companyId) return () => {};
+    let active = true;
     let legacyUnsubscribe: (() => void) | undefined;
+    let legacyGeneration = 0;
     const startLegacyListener = () => {
-      if (legacyUnsubscribe) return;
-      const unreadQuery = query(
-        collection(db, 'notifications'),
-        where('companyId', '==', company.id),
-        where('read', '==', false)
-      );
-      legacyUnsubscribe = onSnapshot(
-        unreadQuery,
-        (snapshot) => setCount(snapshot.size),
-        (error) => {
-          console.error('Error loading unread notification count:', error);
-          setCount(0);
-        }
-      );
+      if (!active || legacyUnsubscribe) return;
+      const generation = ++legacyGeneration;
+      legacyUnsubscribe = onSnapshot(query(collection(db, 'notifications'),
+        where('companyId', '==', companyId), where('read', '==', false)),
+      snapshot => { if (active && generation === legacyGeneration) next(snapshot.size); },
+      error => { if (active && generation === legacyGeneration) fail(error); });
     };
-    const stopLegacyListener = () => {
-      legacyUnsubscribe?.();
-      legacyUnsubscribe = undefined;
-    };
-    const unsubscribeSummary = onSnapshot(
-      doc(db, 'companies', company.id, 'summaries', 'dashboard'),
-      { includeMetadataChanges: true },
-      (snapshot) => {
+    const stopLegacyListener = () => { legacyGeneration += 1; legacyUnsubscribe?.(); legacyUnsubscribe = undefined; };
+    const unsubscribeSummary = onSnapshot(doc(db, 'companies', companyId, 'summaries', 'dashboard'),
+      { includeMetadataChanges: true }, snapshot => {
+        if (!active) return;
         const data = snapshot.data() || {};
         if (snapshot.exists() && isOperationalSummaryFresh(data)) {
           stopLegacyListener();
-          setCount(Math.max(0, Number(data.unreadNotificationCount) || 0));
-          return;
-        }
-        if (!snapshot.metadata.fromCache) startLegacyListener();
-      },
-      () => startLegacyListener(),
-    );
-
-    return () => {
-      isActive = false;
-      unsubscribeSummary();
-      stopLegacyListener();
-    };
-  }, [enabled, company?.id]);
-
-  return count;
+          next(Math.max(0, Number(data.unreadNotificationCount) || 0));
+        } else if (!snapshot.metadata.fromCache) startLegacyListener();
+      }, startLegacyListener);
+    return () => { active = false; unsubscribeSummary(); stopLegacyListener(); };
+  }, [companyId]);
+  return useScopedSnapshot(enabled ? scope : null, subscribe, 0).data;
 }
 
 export async function fetchCompanyPondCount(companyId: string) {

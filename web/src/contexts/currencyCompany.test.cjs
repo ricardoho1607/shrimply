@@ -1,18 +1,18 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
+const { readFeatureSource } = require('../../../scripts/read-feature-source.cjs');
 const path = require('node:path');
 const test = require('node:test');
 const ts = require('typescript');
 
-const currencyContext = fs.readFileSync(path.join(__dirname, 'CurrencyContext.tsx'), 'utf8');
-const appProviders = fs.readFileSync(path.join(__dirname, '../components/AppProviders.tsx'), 'utf8');
-const inventory = fs.readFileSync(path.join(__dirname, '../app/dashboard/inventory/feeds/page.tsx'), 'utf8');
-const assets = fs.readFileSync(path.join(__dirname, '../app/dashboard/inventory/assets/page.tsx'), 'utf8');
-const finance = fs.readFileSync(path.join(__dirname, '../app/dashboard/finance/page.tsx'), 'utf8');
-const harvest = fs.readFileSync(path.join(__dirname, '../app/dashboard/harvest/page.tsx'), 'utf8');
-const marketplace = fs.readFileSync(path.join(__dirname, '../app/dashboard/marketplace/page.tsx'), 'utf8');
-const currencyCoreSource = fs.readFileSync(path.join(__dirname, '../lib/companyCurrency.ts'), 'utf8');
+const currencyContext = readFeatureSource(path.join(__dirname, 'CurrencyContext.tsx'));
+const appProviders = readFeatureSource(path.join(__dirname, '../components/AppProviders.tsx'));
+const inventory = readFeatureSource(path.join(__dirname, '../app/dashboard/inventory/feeds/page.tsx'));
+const assets = readFeatureSource(path.join(__dirname, '../app/dashboard/inventory/assets/page.tsx'));
+const finance = readFeatureSource(path.join(__dirname, '../app/dashboard/finance/page.tsx'));
+const harvest = readFeatureSource(path.join(__dirname, '../app/dashboard/harvest/page.tsx'));
+const marketplace = readFeatureSource(path.join(__dirname, '../app/dashboard/marketplace/page.tsx'));
+const currencyCoreSource = readFeatureSource(path.join(__dirname, '../lib/companyCurrency.ts'));
 const compiledCurrencyCore = ts.transpileModule(currencyCoreSource, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;

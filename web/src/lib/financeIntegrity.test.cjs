@@ -60,7 +60,8 @@ test('reconciliation reports missing, duplicate and orphaned entries without wri
 });
 test('source saves post together and UI cannot remove generated history independently', () => {
   const source = file => fs.readFileSync(path.join(root, file), 'utf8');
-  const sync = source('app/hooks/useFirebaseSync.ts');
+  const { readFeatureSource } = require('../../../scripts/read-feature-source.cjs');
+  const sync = readFeatureSource(path.join(root, 'app/hooks/useFirebaseSync.ts'));
   assert.match(sync, /transaction\.set\(doc\(db, 'companies', activeCompanyId, 'revenues', revenueId\)/);
   assert.match(sync, /transaction\.update\(harvestRef, \{ voided: true/);
   const offline = source('app/services/offlineWorkspace.ts');

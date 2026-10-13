@@ -25,3 +25,13 @@ test('logout preserves encrypted pending work for the same account and blocks ac
  assert.equal(storage.has(pending),false);
  assert.equal(secure.size,0);
 });
+
+test('required writes reject unavailable secure storage instead of accepting a no-op', async () => {
+ const api = loadModule('app/services/protectedStorage.ts', {
+  '@react-native-async-storage/async-storage': { removeItem: async () => { throw new Error('Must not erase pending work'); } },
+  'expo-crypto': {},
+  'expo-secure-store': { isAvailableAsync: async () => false },
+  'react-native': { Platform: { OS: 'android' } },
+ });
+ await assert.rejects(api.writeProtectedItem('alice', 'pending', 'change', { required: true }), /Secure local storage is unavailable/);
+});

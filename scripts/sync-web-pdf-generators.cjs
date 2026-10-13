@@ -48,6 +48,7 @@ const buildGenerator = ({ sourcePath, definitionsStart, logicStart, exportStart,
 const outputs = {
   'mobileProfitLossReport.ts': buildGenerator({
     sourcePath: 'app/services/pdfExportService.ts',
+    extraImports: `import { localizePdfText } from '../../../../shared/pdfReportI18n';`,
     definitionsStart: 'interface PdfBrandAssets',
     logicStart: 'const formatCurrency',
     exportStart: 'export const exportFinancialPDF',

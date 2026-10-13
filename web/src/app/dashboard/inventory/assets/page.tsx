@@ -4,7 +4,7 @@ import { useSaveOperation } from '../../../../../../shared/useSaveOperation';
 import { createRecordOnce } from '@/lib/saveData';
 import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
 import { uploadSaveFile } from '@/lib/saveData';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import QRCode from 'qrcode';
 import { 
   Plus, 
@@ -23,22 +23,16 @@ import {
   X,
   Briefcase
 } from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
 import { 
-  collection, 
-  query, 
-  where, 
-  onSnapshot, 
   doc, 
   runTransaction,
   deleteDoc, 
   serverTimestamp,
   Timestamp,
-  orderBy
 } from 'firebase/firestore';
-import { auth, db, storage } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref as storageRef } from 'firebase/storage';
-import { useAuth } from '@/contexts/AuthContext';
+import { useCompanyId, useCompanyAssets, useCompanyCycles } from '@/hooks/useDashboardData';
 import { getFarmDateKey } from '../../../../../../shared/farmDate';
 import { storedDate } from '@/lib/storedDate';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -114,10 +108,15 @@ const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Needs Repair'];
 const MAINTENANCE_TYPES = ['Preventive', 'Corrective', 'Inspection', 'Repair', 'Upgrade'];
 
 export default function AssetInventoryPage() {
+  const { scope } = useCompanyId();
+  return <AssetInventoryContent key={scope || 'signed-out'} />;
+}
+
+function AssetInventoryContent() {
   const copy = useDashboardCopy();
   const { t } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
-  const { company } = useAuth();
+  const { user, company } = useCompanyId();
   const hasPermission = useFarmPermissions();
   const canManageAssets = hasPermission('manageAssets');
   const canLogMaintenance = hasPermission('logAssetMaintenance');
@@ -125,12 +124,10 @@ export default function AssetInventoryPage() {
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'all'>('dashboard');
   const { save, busy: savePending } = useSaveOperation();
-  const [loading, setLoading] = useState(true);
-  const [companyId, setCompanyId] = useState<string | null>(null);
-  const [user, setUser] = useState<import('firebase/auth').User | null>(null);
-  
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [cycles, setCycles] = useState<FarmCycle[]>([]);
+  const { data: companyAssets, loading, companyId } = useCompanyAssets<Asset>();
+  const assets = useMemo(() => [...companyAssets].sort((a, b) =>
+    (storedDate(b.createdAt)?.getTime() ?? 0) - (storedDate(a.createdAt)?.getTime() ?? 0)), [companyAssets]);
+  const { data: cycles } = useCompanyCycles<FarmCycle>('asc', user?.role !== 'mechanic');
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
@@ -169,48 +166,6 @@ export default function AssetInventoryPage() {
     nextMaint: '',
     notes: ''
   });
-
-  useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          const cid = uDoc.data()?.companyId;
-          const role = uDoc.data()?.role;
-          setCompanyId(cid);
-          if (cid) {
-            const q = query(collection(db, 'assets'), where('companyId', '==', cid));
-            const unsubAssets = onSnapshot(q, (snapshot) => {
-              const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
-              
-              // Sort in-memory to avoid requiring a composite index
-              data.sort((a, b) => {
-                const timeA = storedDate(a.createdAt)?.getTime() ?? 0;
-                const timeB = storedDate(b.createdAt)?.getTime() ?? 0;
-                return timeB - timeA;
-              });
-
-              setAssets(data);
-              setLoading(false);
-            });
-            const qCycles = query(collection(db, 'companies', cid, 'cycles'), orderBy('createdAt', 'asc'));
-            const unsubCycles = role === 'mechanic'
-              ? () => {}
-              : onSnapshot(qCycles, (snapshot) => {
-                setCycles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FarmCycle)));
-              });
-            return () => {
-              unsubAssets();
-              unsubCycles();
-            };
-          } else {
-            setLoading(false);
-          }
-        });
-      }
-    });
-    return () => unsubAuth();
-  }, []);
 
   const metrics = useMemo(() => {
     const totalAssets = assets.length;
@@ -260,7 +215,7 @@ export default function AssetInventoryPage() {
         to: '',
         purpose: '',
         expectedReturn: '',
-        technician: user?.displayName || user?.email || '',
+        technician: user?.name || user?.email || '',
         maintType: 'Preventive',
         maintDesc: '',
         maintCost: '',

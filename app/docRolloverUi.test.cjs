@@ -1,10 +1,10 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
+const { readFeatureSource } = require('../scripts/read-feature-source.cjs');
 const path = require('node:path');
 const test = require('node:test');
 
 const appRoot = __dirname;
-const read = (file) => fs.readFileSync(path.join(appRoot, file), 'utf8');
+const read = (file) => readFeatureSource(path.join(appRoot, file));
 
 test('mobile DOC surfaces refresh from the company farm date', () => {
   for (const file of ['(tabs)/index.tsx', 'ponddetails.tsx', 'shrimp-reports.tsx']) {

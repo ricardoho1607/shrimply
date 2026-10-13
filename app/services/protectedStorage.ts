@@ -92,21 +92,33 @@ const writeProtectedItemAtGeneration = async (
   storageKey: string,
   value: string,
   generation: number,
+  required = false,
 ): Promise<void> => {
-  if (!isCurrentOperation(userId, generation)) return;
+  if (!isCurrentOperation(userId, generation)) {
+    if (required) throw new Error('Account changed before protected storage could save.');
+    return;
+  }
   const key = await readOrCreateKey(userId);
   if (!key) {
+    if (required) throw new Error('Secure local storage is unavailable. Please try again on this device.');
     if (isCurrentOperation(userId, generation)) await AsyncStorage.removeItem(storageKey);
     return;
   }
-  if (!isCurrentOperation(userId, generation)) return;
+  if (!isCurrentOperation(userId, generation)) {
+    if (required) throw new Error('Account changed before protected storage could save.');
+    return;
+  }
   const nonce = await getRandomBytesAsync(NONCE_SIZE);
-  if (!isCurrentOperation(userId, generation)) return;
+  if (!isCurrentOperation(userId, generation)) {
+    if (required) throw new Error('Account changed before protected storage could save.');
+    return;
+  }
   const encrypted = encryptStorageValue(value, key, nonce, storageKey);
   await AsyncStorage.setItem(storageKey, encrypted);
   if (!isCurrentOperation(userId, generation)) {
     const current = await AsyncStorage.getItem(storageKey);
     if (current === encrypted) await AsyncStorage.removeItem(storageKey);
+    if (required) throw new Error('Account changed while saving to protected storage.');
   }
 };
 
@@ -134,9 +146,10 @@ export const writeProtectedItem = async (
   userId: string,
   storageKey: string,
   value: string,
+  options?: { required?: boolean },
 ): Promise<void> => {
   const generation = getUserGeneration(userId);
-  await writeProtectedItemAtGeneration(userId, storageKey, value, generation);
+  await writeProtectedItemAtGeneration(userId, storageKey, value, generation, options?.required);
 };
 
 export const removeProtectedItem = async (storageKey: string): Promise<void> => {

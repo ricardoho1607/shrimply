@@ -28,20 +28,19 @@ test('physical identity resolution handles restarts without guessing ambiguous p
   assert.equal(resolvePhysicalPond({ id: 'new', pondName: 'A1' }, []), undefined);
 });
 
-test('mobile starts and restarts persist canonical identity and refuse unregistered ponds', () => {
+test('mobile starts and restarts persist canonical identity and refuse unregistered ponds', async () => {
   const { usePondStore } = loader()(path.resolve(__dirname, '../app/store/pondStore.ts'));
   const writes = [];
   const physical = { id: 'physical', pondName: 'A1', pondArea: 100, status: 'idle' };
   usePondStore.setState({ ponds: [], physicalPonds: [physical], cycles: [{ id: 'farm-cycle', cycleName: 'Farm cycle', status: 'active' }], firebaseSync: {
-    syncPond: (action, pond) => writes.push({ type: 'cycle', action, pond }),
-    syncPhysicalPond: (action, pond) => writes.push({ type: 'physical', action, pond }),
+    syncLifecycleChanges: async changes => { writes.push(...changes.map(change => ({ ...change, pond: change.data }))); return { success: true, status: 'pending' }; },
   } });
   const cycle = { id: 'new-cycle', pondName: 'A1', pondArea: 100, previousCyclePondId: 'old-cycle', physicalPondId: 'old-cycle', docStart: '2026-09-09', density: 10, initialPopulation: 1000, samplings: [] };
-  assert.equal(usePondStore.getState().addPond(cycle), true);
+  assert.equal(await usePondStore.getState().addPond(cycle), true);
   assert.equal(usePondStore.getState().ponds[0].physicalPondId, 'physical');
   assert.equal(writes[0].pond.activePondId, 'new-cycle');
   assert.equal(writes[1].pond.physicalPondId, 'physical');
-  assert.equal(usePondStore.getState().addPond({ ...cycle, id: 'extra', pondName: 'Unregistered' }), false);
+  assert.equal(await usePondStore.getState().addPond({ ...cycle, id: 'extra', pondName: 'Unregistered' }), false);
   assert.equal(writes.length, 2);
 });
 
