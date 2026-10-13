@@ -40,7 +40,7 @@ export function sopScheduleLabel(
     doc: "By stocking day (H- / DOC)",
     event: "After an event",
     stage: "At a production stage",
-    manual: "When assigned manually",
+    manual: "Once at each selected stage",
   };
   return sopText(labels[kind], language);
 }

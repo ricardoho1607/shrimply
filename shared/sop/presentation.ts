@@ -1,3 +1,4 @@
+import { farmDate } from "./engine";
 import type { SopTask } from "./contracts";
 
 const finished = (task: SopTask) =>
@@ -82,4 +83,21 @@ export function sopTaskStatus(task: SopTask): string {
       cancelled: "Stopped",
     } as const
   )[task.status];
+}
+
+/** Day buckets use farm time, not the device clock zone or submission time. */
+export function sopTaskBucket(task: SopTask, now: number, timeZone: string): "today" | "pending" | "upcoming" | "completed" {
+  if (finished(task)) return "completed";
+  const today = farmDate(now, timeZone);
+  const workDate = farmDate(task.purpose === "manual" || !task.step
+    ? task.dueAt : task.windowStart || task.createdAt || task.dueAt, timeZone);
+  if (workDate < today) return "pending";
+  if (workDate > today) return "upcoming";
+  return "today";
+}
+export function sopTaskMatchesView(task: SopTask, view: string, now: number, timeZone: string): boolean {
+  if (view === "all") return true;
+  if (view === "active") return !finished(task);
+  if (["today", "pending", "upcoming"].includes(view)) return sopTaskBucket(task, now, timeZone) === view;
+  return task.status === view;
 }

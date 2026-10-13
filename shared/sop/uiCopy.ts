@@ -1,5 +1,12 @@
 /** Interface text only. Farm instructions and approved rules retain their original language. */
 const rows = `
+today|Hari ini|Hôm nay|วันนี้|今天
+upcoming|Mendatang|Sắp tới|กำลังจะถึง|即将到来
+Today|Hari ini|Hôm nay|วันนี้|今天
+Pending|Tertunda|Còn tồn|งานค้าง|待处理
+Upcoming|Mendatang|Sắp tới|กำลังจะถึง|即将到来
+Once at each selected stage|Sekali pada setiap tahap terpilih|Một lần ở mỗi giai đoạn đã chọn|หนึ่งครั้งในแต่ละระยะที่เลือก|每个所选阶段一次
+
 Manage adoption|Kelola penerapan|Quản lý áp dụng|จัดการการนำไปใช้|管理采用
 Cancel|Batal|Hủy|ยกเลิก|取消
 Confirm decision|Konfirmasi keputusan|Xác nhận quyết định|ยืนยันการตัดสินใจ|确认决定

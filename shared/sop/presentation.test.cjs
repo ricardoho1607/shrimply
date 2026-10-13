@@ -110,3 +110,28 @@ test("urgent work is ahead of reading groups, without hiding finished tasks or r
     "Not needed",
   );
 });
+
+const { sopTaskBucket, sopTaskMatchesView } = require("./presentation.ts");
+test("Today, Pending and Upcoming use farm dates and preserve unfinished history", () => {
+  const now = Date.parse("2026-10-13T00:30:00Z");
+  const make = (id, start, due, status = "open") => task(id, { windowStart: Date.parse(start), dueAt: Date.parse(due), status });
+  const yesterday = make("yesterday", "2026-10-11T13:00:00Z", "2026-10-12T12:59:59Z");
+  const today = make("today", "2026-10-12T13:00:00Z", "2026-10-13T12:59:59Z");
+  const tomorrow = make("tomorrow", "2026-10-13T13:00:00Z", "2026-10-14T12:59:59Z");
+  const review = { ...yesterday, status: "needs_review", severity: "critical" };
+  assert.equal(sopTaskBucket(yesterday, now, "Australia/Melbourne"), "pending");
+  assert.equal(sopTaskBucket(today, now, "Australia/Melbourne"), "today");
+  assert.equal(sopTaskBucket(tomorrow, now, "Australia/Melbourne"), "upcoming");
+  assert.equal(sopTaskBucket(review, now, "Australia/Melbourne"), "pending");
+  assert.equal(sopTaskBucket({ ...yesterday, dueAt: tomorrow.dueAt }, now, "Australia/Melbourne"), "pending", "Older unfinished work cannot reappear as today's work just because its deadline is later");
+  assert.equal(sopTaskBucket({ ...today, purpose: "manual", dueAt: tomorrow.dueAt }, now, "Australia/Melbourne"), "upcoming");
+  assert.equal(sopTaskMatchesView(review, "pending", now, "Australia/Melbourne"), true);
+  assert.equal(sopTaskMatchesView({ ...today, status: "completed" }, "today", now, "Australia/Melbourne"), false);
+  assert.equal(sopTaskMatchesView({ ...today, status: "completed" }, "completed", now, "Australia/Melbourne"), true);
+  assert.equal(sopTaskMatchesView(yesterday, "all", now, "Australia/Melbourne"), true);
+});
+test("late-night and DST day boundaries do not use the device date", () => {
+  const t = task("dst", { windowStart: Date.parse("2026-10-03T14:00Z"), dueAt: Date.parse("2026-10-04T12:59:59Z") });
+  assert.equal(sopTaskBucket(t, Date.parse("2026-10-04T12:30Z"), "Australia/Melbourne"), "today");
+  assert.equal(sopTaskBucket(t, Date.parse("2026-10-04T13:00Z"), "Australia/Melbourne"), "pending");
+});

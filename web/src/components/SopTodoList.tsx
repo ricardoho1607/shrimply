@@ -48,7 +48,7 @@ function TaskCard({
         {isPondReadingTask(task) ? (
           <Link
             className="sop-button sop-primary"
-            href={`/dashboard/ponds/detail?id=${encodeURIComponent(task.target.pondId)}`}
+            href={`/dashboard/water?pondId=${encodeURIComponent(task.target.pondId)}`}
           >
             {ui("Enter readings")}
           </Link>
@@ -122,7 +122,7 @@ export function SopTodoList({ tasks, ...props }: Props) {
             )}
             <Link
               className="sop-button sop-primary"
-              href={`/dashboard/ponds/detail?id=${encodeURIComponent(item.tasks[0].target.pondId)}`}
+              href={`/dashboard/water?pondId=${encodeURIComponent(item.tasks[0].target.pondId)}`}
             >
               {ui("Enter readings")}
             </Link>

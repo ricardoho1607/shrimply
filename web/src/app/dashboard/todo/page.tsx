@@ -1,4 +1,5 @@
 "use client";
+import { sopTaskMatchesView } from "../../../../../shared/sop/presentation";
 import { sopMeasurementLabel } from "../../../../../shared/sop/editor";
 import { sopText, sopTaskTitle } from "../../../../../shared/sop/uiCopy";
 import { useAuth } from "@/contexts/AuthContext";
@@ -26,7 +27,7 @@ function TodoPageContent() {
     c = sopCopy(currentLanguage);
   const ui = (value: string) => sopText(value, currentLanguage);
   const [messageTone, setMessageTone] = useState<"status" | "error">("status");
-  const [status, setStatus] = useState("active"),
+  const [status, setStatus] = useState("today"),
     [person, setPerson] = useState(""),
     [pond, setPond] = useState(""),
     [block, setBlock] = useState(""),
@@ -109,10 +110,7 @@ function TodoPageContent() {
   };
   const tasks = w.tasks.filter(
     (t) =>
-      (status === "all" ||
-        (status === "active" &&
-          !["completed", "waived", "cancelled"].includes(t.status)) ||
-        t.status === status) &&
+      sopTaskMatchesView(t, status, clock, w.timeZone || "UTC") &&
       (!person || t.assigneeId === person) &&
       (!pond || t.target.id === pond) &&
       (!block || t.target.blockId === block) &&
@@ -181,7 +179,9 @@ function TodoPageContent() {
           aria-label={ui("Status")}
         >
           {[
-            ["active", "To do"],
+            ["today", "Today"],
+            ["pending", "Pending"],
+            ["upcoming", "Upcoming"],
             ["completed", "Done"],
             ["all", "Everything"],
           ].map(([value, label]) => (
@@ -190,7 +190,7 @@ function TodoPageContent() {
               aria-pressed={status === value}
               onClick={() => setStatus(value)}
             >
-              {ui(label)}
+              {ui(label)} · {w.tasks.filter((task) => sopTaskMatchesView(task, value, clock, w.timeZone || "UTC")).length}
             </button>
           ))}
         </div>
@@ -213,6 +213,9 @@ function TodoPageContent() {
             {ui("Status")}
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
               {[
+                "today",
+                "pending",
+                "upcoming",
                 "active",
                 "all",
                 "open",

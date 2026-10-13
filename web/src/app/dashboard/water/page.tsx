@@ -375,8 +375,9 @@ export default function WaterQualityPage() {
     const pond = accessiblePonds.find(pond => pond.id === pondId);
     return initializeWaterDraft(pondId, date, pond?.samplings || []);
   };
-  const openWaterRecord = (pondId = '') => {
+  const openWaterRecord = (pondId = new URLSearchParams(window.location.search).get('pondId') || '') => {
     if (!save.reset()) return;
+    pondId = accessiblePonds.some(pond => pond.id === pondId) ? pondId : '';
     waterDrafts.current.clear();
     setSopTimes({});
     setFormData(createWaterDraft(pondId, today));

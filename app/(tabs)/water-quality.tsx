@@ -5,7 +5,7 @@ import { labMeasurementLabel, validateLabRow } from '../../functions/shared/labM
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { FlatList, StyleSheet, Text, View, TouchableOpacity, Modal, TextInput, ScrollView, StatusBar, Alert, Platform, KeyboardAvoidingView, ActivityIndicator, Linking, InteractionManager } from "react-native";
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { collection, doc, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
 import { hasWaterQualityData, usePondStore, isPondCycleActive, type Pond } from "../store/pondStore";
@@ -155,6 +155,7 @@ const Parameter = React.memo(function Parameter({ icon, label, value, color }: a
 
 export default function WaterQualityScreen() {
   const router = useRouter();
+  const { pondId: requestedPondId } = useLocalSearchParams<{ pondId?: string }>();
   const insets = useSafeAreaInsets();
   const { user, company } = useAuth();
   const { t } = useLanguage();
@@ -1143,7 +1144,7 @@ export default function WaterQualityScreen() {
 
         {canEditPonds && activeView === 'daily' && (
           // UPDATED BUTTON TO MATCH YOUR OTHER PAGE
-          <TouchableOpacity style={styles.floatingButton} onPress={() => { submitLockRef.current = false; setIsSubmitting(false); setIsOptionalConditionsExpanded(false); setIsModalVisible(true); }}>
+          <TouchableOpacity style={styles.floatingButton} onPress={() => { submitLockRef.current = false; setIsSubmitting(false); setIsOptionalConditionsExpanded(false); const requested = activePonds.find(pond => pond.id === requestedPondId); if (requested) handlePondSelection(requested.pondName); setIsModalVisible(true); }}>
             <Ionicons name="add" size={28} color="#fff" />
           </TouchableOpacity>
         )}

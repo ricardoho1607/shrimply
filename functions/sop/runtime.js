@@ -18,6 +18,10 @@ const {
   sopPondStage,
   obsoleteSopTaskReason,
 } = require("../shared/orsonDomain/sop/lifecycle");
+const PAGE_SIZE = 100;
+const ACTIVE_STATUSES = ["open", "scheduled", "submitted", "needs_review"];
+const documentId = () => require("firebase-admin/firestore").FieldPath.documentId();
+const recordingOnly = (task) => task.purpose === "routine" && task.step?.check.field !== "manual" && task.step?.check.operator === "present" && task.step?.severity !== "critical";
 const terminal = (task) => ["waived", "cancelled"].includes(task.status);
 function isFullyValidManualOnly(definition) {
   try {
@@ -150,54 +154,42 @@ function createSopRuntime(db) {
       }
       if (validateSop(ad.definition).length)
         for (const kind of ["waterObservations", "feeds", "additives", "harvestRecords", "labReports", "assets"]) sources.add(kind);
+      const kinds = [...sources];
+      const savedCursor = ad.baselineCursor || {};
+      let kind = kinds.includes(savedCursor.kind) ? savedCursor.kind : kinds[0];
+      let cursor = savedCursor.kind === kind ? savedCursor.documentId || "" : "";
+      let budget = PAGE_SIZE, baselineCursor = null;
       const pondOnly = ad.targets.length > 0 && ad.targets.every((target) => target.scope === "pond");
-      for (const kind of [...sources].filter((kind) => kind !== "assets")) {
-        const source = await ref.collection(kind).get();
-        for (const doc of source.docs) {
+      while (kind && budget > 0) {
+        let query = kind === "assets" ? db.collection("assets").where("companyId", "==", companyId) : ref.collection(kind);
+        query = query.orderBy(documentId());
+        if (cursor) query = query.startAfter(cursor);
+        const page = await query.limit(budget).get();
+        const filledPage = page.size === budget;
+        budget -= page.size;
+        for (const doc of page.docs) {
           const data = doc.data();
-          // Shared checks retain their existing company/block reconciliation.
-          // Pond checks need current adopted cycles, not unrelated farm history.
           if (pondOnly && kind === "ponds" && !ad.targets.some((target) =>
-            target.pondId ? target.pondId === doc.id :
-              target.id === (data.physicalPondId || data.previousCyclePondId || doc.id) &&
-              target.cycleId === (data.pondCycleId || data.cycleId || doc.id)
+            target.pondId ? target.pondId === doc.id : target.id === (data.physicalPondId || data.previousCyclePondId || doc.id) && target.cycleId === (data.pondCycleId || data.cycleId || doc.id)
           )) continue;
-          if (pondOnly && kind === "waterObservations" && !ad.targets.some((target) =>
-            target.id === (data.physicalPondId || data.pondId) &&
-            target.cycleId === data.cycleId
-          )) continue;
-          await project(
-            companyId,
-            kind,
-            doc.id,
-            doc.data(),
-            `baseline-${ad.id}-${doc.id}`,
-            doc.updateTime.toMillis(),
-          );
+          if (pondOnly && kind === "waterObservations" && !ad.targets.some((target) => target.id === (data.physicalPondId || data.pondId) && target.cycleId === data.cycleId)) continue;
+          await project(companyId, kind, doc.id, data, `baseline-${ad.id}-${doc.id}`, doc.updateTime.toMillis());
         }
+        if (filledPage) { baselineCursor = { kind, documentId: page.docs.at(-1).id }; break; }
+        kind = kinds[kinds.indexOf(kind) + 1];
+        cursor = "";
       }
-      if (sources.has("assets")) {
-        const assets = await db
-          .collection("assets")
-          .where("companyId", "==", companyId)
-          .get();
-        for (const doc of assets.docs)
-          await project(
-            companyId,
-            "assets",
-            doc.id,
-            doc.data(),
-            `baseline-${ad.id}-${doc.id}`,
-            doc.updateTime.toMillis(),
-          );
-      }
-      await adRef.update({ baselineReconciledAt: now });
+      await adRef.update({ baselineCursor, ...(!baselineCursor ? { baselineReconciledAt: now } : {}) });
     }
+
+    let taskQuery = ref.collection("tasks").where("adoptionId", "==", adId)
+      .where("status", "in", ACTIVE_STATUSES).orderBy(documentId());
+    if (ad.taskCursor) taskQuery = taskQuery.startAfter(ad.taskCursor);
     const [stageSnap, pondSnap, taskSnap, cycleSnap, blockSnap, companySnap] =
       await Promise.all([
         ref.collection("sopStages").get(),
         ref.collection("ponds").get(),
-        ref.collection("tasks").where("adoptionId", "==", adId).get(),
+        taskQuery.limit(PAGE_SIZE).get(),
         ref.collection("cycles").get(),
         ref.collection("blocks").get(),
         ref.get(),
@@ -219,7 +211,9 @@ function createSopRuntime(db) {
       )
     ) {
       await adRef.update({
-        status: "retired",
+        status: taskSnap.size === PAGE_SIZE ? "active" : "retired",
+        taskCursor: taskSnap.size === PAGE_SIZE ? taskSnap.docs.at(-1).id : "",
+        nextDueAt: now,
         retiredAt: now,
         retirementReason: "Adopted production cycles ended",
       });
@@ -610,11 +604,9 @@ function createSopRuntime(db) {
               const start = e.data().at + step.trigger.offsetMinutes * 60000;
               if (
                 e.data().taskId &&
-                !tasks.some(
-                  (t) =>
-                    t.id === e.data().taskId &&
-                    t.result === "pass" &&
-                    t.evaluationId === e.data().evaluationId,
+                !await ref.collection("tasks").doc(e.data().taskId).get().then((snap) =>
+                  snap.exists && snap.data().result === "pass" &&
+                  snap.data().evaluationId === e.data().evaluationId
                 )
               )
                 continue;
@@ -675,17 +667,14 @@ function createSopRuntime(db) {
           for (const due of occurrences) {
             if (
               step.dependsOn.length &&
-              !step.dependsOn.every((id) =>
-                tasks.some(
-                  (t) =>
-                    t.step?.id === id &&
-                    t.target.id === target.id &&
-                    t.target.cycleId === target.cycleId &&
-                    t.result === "pass" &&
-                    t.windowStart <= due.start &&
-                    t.windowStart >= target.stageEnteredAt,
-                ),
-              )
+              !(await Promise.all(step.dependsOn.map(async (id) => {
+                const passed = await ref.collection("tasks")
+                  .where("adoptionId", "==", adId).where("step.id", "==", id)
+                  .where("target.id", "==", target.id).where("target.cycleId", "==", target.cycleId)
+                  .where("result", "==", "pass").where("windowStart", ">=", target.stageEnteredAt)
+                  .where("windowStart", "<=", due.start).limit(1).get();
+                return !passed.empty;
+              }))).every(Boolean)
             )
               continue;
             await createTask(
@@ -699,7 +688,6 @@ function createSopRuntime(db) {
       .collection("sopGates")
       .where("adoptionIds", "array-contains", adId)
       .get();
-    const currentTasks = rows(await ref.collection("tasks").get());
     for (const gate of gates.docs) {
       const data = gate.data(),
         entry =
@@ -708,16 +696,16 @@ function createSopRuntime(db) {
       const allowed =
         (data.approvedAt > now - 86400000 &&
           stages.find((s) => s.id === data.targetId)?.stage === data.stage) ||
-        data.required.every((r) =>
-          currentTasks.some(
-            (t) =>
-              t.adoptionId === r.adoptionId &&
-              t.step?.id === r.stepId &&
-              t.target.id === (r.targetId || data.targetId) &&
-              t.createdAt >= entry &&
-              (t.result === "pass" || t.status === "waived"),
-          ),
-        );
+        (await Promise.all(data.required.map(async (r) => {
+          const query = ref.collection("tasks").where("adoptionId", "==", r.adoptionId)
+            .where("step.id", "==", r.stepId).where("target.id", "==", r.targetId || data.targetId)
+            .where("createdAt", ">=", entry);
+          const [passed, waived] = await Promise.all([
+            query.where("result", "==", "pass").limit(1).get(),
+            query.where("status", "==", "waived").limit(1).get(),
+          ]);
+          return !passed.empty || !waived.empty;
+        }))).every(Boolean);
       await gate.ref.update({ allowed, updatedAt: now });
     }
     for (const task of tasks) {
@@ -728,6 +716,7 @@ function createSopRuntime(db) {
       if (current.exists && current.data().revision === ad.revision)
         tx.update(adRef, {
           nextDueAt: caughtUp ? now + 60000 : now,
+          taskCursor: taskSnap.size === PAGE_SIZE ? taskSnap.docs.at(-1).id : "",
           scheduleCursorAt: caughtUp
             ? now
             : localInstant(date, "00:00", ad.timeZone),
@@ -738,7 +727,7 @@ function createSopRuntime(db) {
   async function evaluateTask(companyId, taskId, now = Date.now()) {
     const ref = base(companyId),
       taskRef = ref.collection("tasks").doc(taskId);
-    await db.runTransaction(async (tx) => {
+    return db.runTransaction(async (tx) => {
       const s = await tx.get(taskRef);
       if (!s.exists) return;
       const task = { id: s.id, ...s.data() };
@@ -746,6 +735,7 @@ function createSopRuntime(db) {
       const adSnap = await tx.get(
         ref.collection("sopAdoptions").doc(task.adoptionId),
       );
+      if (adSnap.data()?.status === "paused") return false;
       if (!adSnap.exists || adSnap.data().status !== "active") return;
       const ad = { id: adSnap.id, ...adSnap.data() };
       const evidenceSnap = await tx.get(
@@ -771,11 +761,18 @@ function createSopRuntime(db) {
         );
       let issueSnap = await tx.get(issueRef),
         issue = issueSnap.exists ? issueSnap.data() : null;
+      let evidenceStart = task.windowStart, evidenceEnd = task.dueAt;
+      if (recordingOnly(task) && ["daily", "weekly", "doc"].includes(task.step.trigger.kind)) {
+        const date = farmDate(task.windowStart, ad.timeZone);
+        const nextDate = new Date(Date.parse(date + "T00:00Z") + 86400000).toISOString().slice(0, 10);
+        evidenceStart = localInstant(date, "00:00", ad.timeZone);
+        evidenceEnd = localInstant(nextDate, "00:00", ad.timeZone) - 1;
+      }
       let evaluation = evaluateSopStep(task.step, rows(evidenceSnap), {
         target: task.target,
-        start: task.windowStart,
-        end: task.dueAt,
-        now: Math.min(now, task.dueAt),
+        start: evidenceStart,
+        end: evidenceEnd,
+        now: Math.min(now, evidenceEnd),
         timeZone: ad.timeZone,
       });
       let sourcePending = false;
@@ -850,7 +847,7 @@ function createSopRuntime(db) {
       );
       const overdue =
         !sourcePending && now > task.dueAt && !evaluation.recorded;
-      const shouldFail = evaluation.result === "fail" || overdue;
+      const shouldFail = evaluation.result === "fail" || (overdue && !recordingOnly(task));
       if (issue?.status === "closed" && !task.issueId && shouldFail) {
         issueRef = ref.collection("sopIssues").doc(hash([episodeKey, task.id]));
         issueSnap = await tx.get(issueRef);
@@ -989,6 +986,8 @@ function createSopRuntime(db) {
           result: evaluation.result,
           evidenceIds: evaluation.evidenceIds,
         });
+      }
+      if (!previous.exists || task.evaluationId !== decisionId || task.result !== evaluation.result)
         tx.update(taskRef, {
           result: evaluation.result,
           status:
@@ -1007,7 +1006,7 @@ function createSopRuntime(db) {
             : evaluation.explanation,
           evaluationId: decisionId,
         });
-      }
+
       if (corrective) {
         tx.create(issueRef, {
           id: issueRef.id,
@@ -1140,11 +1139,18 @@ function createSopRuntime(db) {
     const ref = base(companyId),
       company = (await ref.get()).data();
     if (!company) return;
+    const stateRef = ref.collection("sopRuntimeState").doc("assignments");
+    const state = (await stateRef.get()).data() || {};
+    const pageQuery = (name, statuses, cursor) => {
+      let query = ref.collection(name).where("status", "in", statuses).orderBy(documentId());
+      if (cursor) query = query.startAfter(cursor);
+      return query.limit(PAGE_SIZE).get();
+    };
     const [physical, blocks, tasks, issues, users, productionPonds, cycles] = await Promise.all([
       ref.collection("physicalPonds").get(),
       ref.collection("blocks").get(),
-      ref.collection("tasks").get(),
-      ref.collection("sopIssues").get(),
+      pageQuery("tasks", ACTIVE_STATUSES, state.taskCursor),
+      pageQuery("sopIssues", ["open", "action_required", "closure_review"], state.issueCursor),
       Promise.all(
         [company.ownerId, ...(company.teamMembers || [])].map((uid) =>
           db.doc(`users/${uid}`).get(),
@@ -1200,10 +1206,12 @@ function createSopRuntime(db) {
           (user.role !== "technician" || target.scope === "company" || assignedTechnician === candidate);
       const assignee = allowed ? candidate : manager,
         visibleTo = [...new Set([assignee, manager])];
+      target.assigneeId = assignee;
       if (
         JSON.stringify(visibleTo) === JSON.stringify(data.visibleTo) &&
         (snapshot.ref.parent.id !== "tasks" || data.assigneeId === assignee) &&
         target.blockId === data.target.blockId &&
+        target.assigneeId === data.target.assigneeId &&
         data.managerId === manager
       )
         continue;
@@ -1230,6 +1238,11 @@ function createSopRuntime(db) {
         });
       });
     }
+    await stateRef.set({
+      taskCursor: tasks.size === PAGE_SIZE ? tasks.docs.at(-1).id : "",
+      issueCursor: issues.size === PAGE_SIZE ? issues.docs.at(-1).id : "",
+      updatedAt: Date.now(),
+    });
   }
   async function project(
     companyId,
@@ -1259,7 +1272,7 @@ function createSopRuntime(db) {
       return true;
     });
     if (!accepted) return;
-    if (["ponds", "physicalPonds", "blocks", "cycles"].includes(kind))
+    if (!eventId.startsWith("baseline-") && ["ponds", "physicalPonds", "blocks", "cycles"].includes(kind))
       await refreshAssignments(companyId);
     if (kind === "cycles") return;
     const entries = projectEvidence(kind, documentId, data, receivedAt),
@@ -1415,11 +1428,44 @@ function createSopRuntime(db) {
           tx.create(revisionRef, { ...e, sourceEventAt: receivedAt });
         tx.set(liveRef, { ...e, sourceEventAt: receivedAt });
       });
+    for (const old of rows(current)) {
+      if (!changed.some((entry) => entry.id === old.id && entry.revision !== old.revision)) continue;
+      const job = ref.collection("sopReevaluationJobs").doc(hash([old.id, old.revision]));
+      await db.runTransaction(async (tx) => {
+        const existing = await tx.get(job);
+        if (!existing.exists) tx.create(job, { status: "pending", evidenceKey: `${old.id}:${old.revision}`, cursor: "" });
+      });
+    }
+    await reconcileSourceChanges(companyId);
     const ads = await ref
       .collection("sopAdoptions")
       .where("status", "==", "active")
       .get();
     for (const ad of ads.docs) await ad.ref.update({ nextDueAt: Date.now() });
+  }
+  async function reconcileSourceChanges(companyId) {
+    const ref = base(companyId);
+    const stateRef = ref.collection("sopRuntimeState").doc("sourceJobs");
+    const state = (await stateRef.get()).data() || {};
+    let jobQuery = ref.collection("sopReevaluationJobs").where("status", "==", "pending").orderBy(documentId());
+    if (state.cursor) jobQuery = jobQuery.startAfter(state.cursor);
+    const jobs = await jobQuery.limit(10).get();
+    for (const job of jobs.docs) {
+      let query = ref.collection("sopEvaluations").where("evidenceIds", "array-contains", job.data().evidenceKey).orderBy(documentId());
+      if (job.data().cursor) query = query.startAfter(job.data().cursor);
+      const evaluations = await query.limit(PAGE_SIZE).get();
+      let deferred = false;
+      for (const taskId of new Set(evaluations.docs.map((doc) => doc.data().taskId))) {
+        // A paused adoption must retain its invalidation until it resumes.
+        if (await evaluateTask(companyId, taskId) === false) deferred = true;
+      }
+      await job.ref.update({
+        cursor: deferred ? job.data().cursor : evaluations.size === PAGE_SIZE ? evaluations.docs.at(-1).id : "",
+        status: deferred || evaluations.size === PAGE_SIZE ? "pending" : "done",
+      });
+    }
+    // Rotation prevents a paused job from starving other adoptions' active work.
+    await stateRef.set({ cursor: jobs.size === 10 ? jobs.docs.at(-1).id : "" });
   }
   async function scheduler() {
     const due = await db
@@ -1433,6 +1479,7 @@ function createSopRuntime(db) {
     for (const ad of due.docs) {
       const companyId = ad.ref.parent.parent.id;
       try {
+        await reconcileSourceChanges(companyId);
         await tickAdoption(companyId, ad.id);
       } catch (error) {
         failures.push({ companyId, adoptionId: ad.id, error: String(error) });

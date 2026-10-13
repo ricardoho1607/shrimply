@@ -1,6 +1,14 @@
 # Adaptive SOPs and To-do
 
-Implemented on `codex/adaptive-sops`. This document is the handoff for verification and rollout, not authorization to deploy.
+Implemented on `codex/adaptive-sops`.
+
+**Current status:** use [the release and acceptance ledger](adaptive-sops-status.md). This page describes architecture and retains historical implementation checkpoints. The initial no-deployment statements and test counts below are historical, not the current release state. Later work included a production release, branch previews, and additional local fixes; these must be tracked separately.
+
+Scheduling labels: the legacy `manual` trigger creates one task at each selected stage; the UI now says “Once at each selected stage.” It does not mean an owner must manually create a task. Manual evidence remains separate from scheduling.
+
+To-do defaults to Today in the farm timezone. Unfinished work from earlier days remains in Pending, future-start work in Upcoming, and completed work in Done. Changing tabs never changes task results. Routine non-critical recording checks accept evidence from their scheduled farm day, including later submissions; missing records remain pending rather than spawning corrective/recheck chains. Range failures and critical timing continue through the corrective workflow.
+
+Runtime reconciliation processes at most 100 active tasks per adoption page and 100 assignment tasks/issues per company page, with durable cursors. Baseline replay shares a 100-source-document budget across relevant collections. Dependencies and stage gates use targeted pass/exemption queries. Completed source corrections use paged jobs keyed by evidence revision; they do not require scanning all completed work on each tick. Completed historical assignments remain historical; active task ownership metadata is synchronized.
 
 ## Product and data boundaries
 
@@ -60,7 +68,7 @@ cd web && npm run build
 
 The integration suite verifies private files, sanitized publication/withdrawal, denied cross-company/forged writes, idempotent offline replay, revoked assignments, corrected source revisions, shared event work, preparation without stocking, future updates/migration history, stage gates, one-episode correction and recipient push retry/quiet-hour policy.
 
-## Release checks still requiring external access
+## Historical release checklist — consult the current ledger
 
 1. **Physical device push and native build.** `expo-notifications` and Android/iOS configuration are prepared with app/runtime `3.3.0` / `3.3.0-sdk57`. Android signing protections are preserved. This workspace has no Android SDK/adb or CocoaPods, so no native build or physical device delivery was verified. Build compatible native binaries, configure provider credentials, then verify permission denial, normal/critical channels, foreground/background/killed app, quiet hours, company-safe deep links and invalid-token receipts. An OTA to the old runtime cannot supply the module.
 2. **Narrative release configuration.** SOP drafting, PDF/DOCX/text authoring, translation and narrative evaluation use the same Meta Muse Spark adapter and `MODEL_API_KEY` as Orson chat. `SOP_NARRATIVE_CALIBRATED` defaults to false, and automatic approvals additionally require `SOP_NARRATIVE_CALIBRATION_ID=muse-spark-1.3-contributor:v2`. The actual evaluator/model prompt is shared with the labelled fixture runner:
@@ -76,7 +84,7 @@ Expo Doctor currently passes 18/21 checks. The remaining checks include pre-exis
 
 ## Controlled rollout
 
-No production deployment or Git push is part of this implementation. Deploy additive rules/indexes and the new SOP callable/event/scheduled functions before distributing the clients. Preserve existing functions. Confirm indexes are ready and function secrets/runtime parameters are available; keep automatic narrative decisions disabled until calibration passes. Prepare and verify native builds before release. Existing farms opt in through adoption and no historical compliance is fabricated.
+At the initial implementation checkpoint, no production deployment or Git push had occurred. Later releases are recorded separately in the current ledger. Deploy additive rules/indexes and the new SOP callable/event/scheduled functions before distributing the clients. Preserve existing functions. Confirm indexes are ready and function secrets/runtime parameters are available; keep automatic narrative decisions disabled until calibration passes. Prepare and verify native builds before release. Existing farms opt in through adoption and no historical compliance is fabricated.
 
 Monitor adoption `nextDueAt` lag, `lastSchedulerError`, pending source verifications, oldest offline submissions, open/repeated episodes, projection failures, AI human-review rate and `sopPushDeliveries` retry/receipt errors. Failed evaluation must remain pending/needs-review. Audit/source retention must survive retirement and unlisting. Avoid deleting SOP runtime services while client guidance gates are active.
 

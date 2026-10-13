@@ -1,3 +1,4 @@
+import { sopTaskMatchesView } from "../../shared/sop/presentation";
 import {
   adoptionPonds,
   adoptionPreview,
@@ -315,7 +316,7 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
     [instructions, setInstructions] = useState(""),
     [due, setDue] = useState(""),
     [assignee, setAssignee] = useState("");
-  const [status, setStatus] = useState("active"),
+  const [status, setStatus] = useState("today"),
     [person, setPerson] = useState(""),
     [pond, setPond] = useState(""),
     [block, setBlock] = useState(""),
@@ -483,10 +484,7 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
   };
   const filtered = w.tasks.filter(
     (t) =>
-      (status === "all" ||
-        (status === "active" &&
-          !["completed", "waived", "cancelled"].includes(t.status)) ||
-        t.status === status) &&
+      sopTaskMatchesView(t, status, clock, w.timeZone || "UTC") &&
       (!person || t.assigneeId === person) &&
       (!pond || t.target.id === pond) &&
       (!block || t.target.blockId === block) &&
@@ -2390,7 +2388,9 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
               <Choices
                 label={ui("Status")}
                 values={[
-                  { id: "active", title: ui("To do") },
+                  { id: "today", title: `${ui("Today")} · ${w.tasks.filter((task) => sopTaskMatchesView(task, "today", clock, w.timeZone || "UTC")).length}` },
+                  { id: "pending", title: `${ui("Pending")} · ${w.tasks.filter((task) => sopTaskMatchesView(task, "pending", clock, w.timeZone || "UTC")).length}` },
+                  { id: "upcoming", title: `${ui("Upcoming")} · ${w.tasks.filter((task) => sopTaskMatchesView(task, "upcoming", clock, w.timeZone || "UTC")).length}` },
                   { id: "completed", title: ui("Done") },
                   { id: "all", title: ui("Everything") },
                 ]}
@@ -2447,6 +2447,9 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                   <Choices
                     label={ui("Status")}
                     values={vals([
+                      "today",
+                      "pending",
+                      "upcoming",
                       "active",
                       "all",
                       "open",
@@ -2538,6 +2541,7 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                   setAttachments(t.attachments);
                   setReason("");
                 }}
+                onReadings={(pondId) => router.push({ pathname: "/(tabs)/water-quality", params: { pondId } })}
                 onPond={(pondId) =>
                   router.push({ pathname: "/ponddetails", params: { pondId } })
                 }

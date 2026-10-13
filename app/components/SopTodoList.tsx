@@ -17,6 +17,7 @@ type Props = {
   pending: string[];
   onOpen: (task: SopTask) => void;
   onPond: (pondId: string) => void;
+  onReadings: (pondId: string) => void;
 };
 function Action({
   label,
@@ -99,7 +100,7 @@ function TaskCard({
         )}
         onPress={() =>
           isPondReadingTask(task)
-            ? props.onPond(task.target.pondId)
+            ? props.onReadings(task.target.pondId)
             : props.onOpen(task)
         }
       />
@@ -153,7 +154,7 @@ export function SopTodoList({ tasks, ...props }: Props) {
             <Action
               primary
               label={ui("Enter readings")}
-              onPress={() => props.onPond(item.tasks[0].target.pondId)}
+              onPress={() => props.onReadings(item.tasks[0].target.pondId)}
             />
             <Details label={`${ui("View each check")} · ${item.tasks.length}`}>
               {item.tasks.map((task) => (

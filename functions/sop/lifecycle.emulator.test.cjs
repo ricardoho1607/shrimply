@@ -126,7 +126,8 @@ test("stocking plans validate dates and manager authority, and cannot relabel ac
   );
 });
 
-test("two ponds follow independent H-20 plans, then actual DOC and retain cancelled preparation history", async () => {
+test("two ponds follow independent H-20 plans, then actual DOC and retain cancelled preparation history", async (t) => {
+  t.mock.method(Date, "now", () => Date.parse("2026-10-01T07:00:00Z"));
   const f = await fixture(),
     runtime = createSopRuntime(db);
   const definition = {
@@ -169,6 +170,7 @@ test("two ponds follow independent H-20 plans, then actual DOC and retain cancel
     expectedTargetSignature: preview.targetSignature,
   });
   const at = (date) => Date.parse(`${date}T07:00:00Z`);
+  await f.ref.collection("sopAdoptions").doc(ad.adoptionId).update({ activatedAt: at("2026-10-01"), scheduleCursorAt: at("2026-10-01") });
   await runtime.tickAdoption(f.companyId, ad.adoptionId, at("2026-10-12"));
   const first = await f.ref.collection("tasks").get();
   assert.equal(first.size, 1);
@@ -343,4 +345,64 @@ test("updating unrelated SOP rules preserves an unchanged task awaiting manager 
   assert.equal(migrated.submissionId, "submission-1");
   assert.equal(migrated.versionId, "v2");
   assert.equal((await task.ref.collection("revisions").get()).size, 1);
+});
+
+
+test("ownership reconciliation synchronizes both assignees, pages active work and leaves completed history untouched", async () => {
+  const f = await fixture(), runtime = createSopRuntime(db);
+  await f.ref.collection("cycles").doc("cycle").set({ assignedTechnicianId: f.tech });
+  await f.ref.collection("ponds").doc("pond").set({ physicalPondId: "a", pondCycleId: "cycle", cycleId: "cycle", cycleStatus: "active" });
+  const step = timedStep("record", ["growout"], 1, 10);
+  const batch = db.batch();
+  for (let i = 0; i < 220; i++) batch.set(f.ref.collection("tasks").doc(`done-${i}`), {
+    status: "completed", target: { id: "a", scope: "pond", pondId: "pond", assigneeId: f.owner },
+    step, assigneeId: f.owner, managerId: f.owner, visibleTo: [f.owner], revision: 1,
+  });
+  for (let i = 0; i < 105; i++) batch.set(f.ref.collection("tasks").doc(`active-${String(i).padStart(3, "0")}`), {
+    status: "open", target: { id: "a", scope: "pond", pondId: "pond", assigneeId: f.owner },
+    step, assigneeId: f.owner, managerId: f.owner, visibleTo: [f.owner], revision: 1,
+  });
+  await batch.commit();
+  await runtime.refreshAssignments(f.companyId);
+  assert.equal((await f.ref.collection("tasks").doc("active-104").get()).data().assigneeId, f.owner, "First pass has a fixed page budget");
+  await runtime.refreshAssignments(f.companyId);
+  for (const id of ["active-000", "active-104"]) {
+    const t = (await f.ref.collection("tasks").doc(id).get()).data();
+    assert.equal(t.assigneeId, f.tech);
+    assert.equal(t.target.assigneeId, f.tech);
+    assert.deepEqual(t.visibleTo, [f.tech, f.owner]);
+  }
+  const revision = (await f.ref.collection("tasks").doc("active-000").get()).data().revision;
+  await runtime.refreshAssignments(f.companyId);
+  assert.equal((await f.ref.collection("tasks").doc("active-000").get()).data().revision, revision, "Reconciliation is idempotent");
+  assert.equal((await f.ref.collection("tasks").doc("done-0").get()).data().revision, 1);
+});
+
+test("routine records entered later satisfy their performed day without spawning overdue corrections", async () => {
+  const f = await fixture(), runtime = createSopRuntime(db);
+  const day = "2026-10-10", morning = Date.parse(day + "T06:00Z");
+  const step = { ...timedStep("water", ["growout"], 1, 20),
+    check: { ...emptySopStep().check, field: "water.doMorning", operator: "present", exactTime: true },
+  };
+  const target = { id: "a", scope: "pond", pondId: "pond", cycleId: "cycle", name: "A", stage: "growout", stockingDate: "2026-10-01", assigneeId: f.tech };
+  const ad = { id: "ad", managerId: f.owner, versionId: "v1", status: "active", timeZone: "UTC", recipients: [], definition: { title: "Water", description: "", language: "en", steps: [step] }, targets: [target] };
+  await f.ref.collection("sopAdoptions").doc("ad").set(ad);
+  const t = runtime.taskFrom(ad, step, target, day, morning, morning + 3600000);
+  await f.ref.collection("tasks").doc(t.id).set(t);
+  await runtime.evaluateTask(f.companyId, t.id, Date.parse(day + "T14:00Z"));
+  assert.equal((await f.ref.collection("sopIssues").get()).size, 0, "An awaiting record is not a biological failure");
+  await f.ref.collection("ponds").doc("pond").set({ physicalPondId: "a", pondCycleId: "cycle", cycleStatus: "active", docStart: "2026-10-01", samplings: [{ id: "reading", date: day, observedAtByField: { doMorning: Date.parse(day + "T09:00Z") }, doMorning: 6 }] });
+  await runtime.project(f.companyId, "ponds", "pond", (await f.ref.collection("ponds").doc("pond").get()).data(), "late-record", Date.parse(day + "T14:00Z"));
+  await runtime.evaluateTask(f.companyId, t.id, Date.parse(day + "T14:00Z"));
+  assert.equal((await f.ref.collection("tasks").doc(t.id).get()).data().status, "completed");
+  assert.equal((await f.ref.collection("sopIssues").get()).size, 0);
+  await f.ref.collection("sopAdoptions").doc("another-active").set({ ...ad, id: "another-active" });
+  await f.ref.collection("sopAdoptions").doc("ad").update({ status: "paused" });
+  await f.ref.collection("ponds").doc("pond").update({ samplings: [] });
+  await runtime.project(f.companyId, "ponds", "pond", (await f.ref.collection("ponds").doc("pond").get()).data(), "retract-late", Date.parse(day + "T15:00Z"));
+  assert.equal((await f.ref.collection("tasks").doc(t.id).get()).data().status, "completed", "Paused work is preserved until its invalidation can be processed");
+  assert.ok((await f.ref.collection("sopReevaluationJobs").where("status", "==", "pending").get()).size > 0);
+  await f.ref.collection("sopAdoptions").doc("ad").update({ status: "active", nextDueAt: 0 });
+  await runtime.project(f.companyId, "ponds", "pond", (await f.ref.collection("ponds").doc("pond").get()).data(), "resume-reconciliation", Date.parse(day + "T16:00Z"));
+  assert.equal((await f.ref.collection("tasks").doc(t.id).get()).data().status, "open", "Source retraction still reopens completed work after resuming without scanning history");
 });
