@@ -1,0 +1,1 @@
+{"emulators":{"firestore":{"host":"127.0.0.1","port":8287},"storage":{"host":"127.0.0.1","port":9397},"ui":{"enabled":false},"singleProjectMode":true},"firestore":{"rules":"firestore.rules","indexes":"firestore.indexes.json"},"storage":{"rules":"storage.rules"}}

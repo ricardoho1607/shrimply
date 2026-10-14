@@ -25,7 +25,8 @@
     "test:mobile-pdf": "node --test src/lib/mobilePdfExport.test.cjs",
     "test:signup-location": "node --test src/lib/googlePlacesClient.test.cjs",
     "test:dev-bundler": "node --test scripts/dev-bundler.test.cjs",
-    "test:vercel-build-path": "node --test scripts/vercel-build-path.test.cjs"
+    "test:vercel-build-path": "node --test scripts/vercel-build-path.test.cjs",
+    "postbuild": "node scripts/finalize-sop-rollout.cjs"
   },
   "dependencies": {
     "firebase": "^12.12.1",

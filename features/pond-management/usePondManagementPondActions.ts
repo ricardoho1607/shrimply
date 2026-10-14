@@ -1,3 +1,4 @@
+import { assertSopStageGate, previewSopPondChange } from "../../app/services/sopGuards";
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useCallback } from 'react';
 import {
@@ -92,6 +93,7 @@ export function usePondManagementPondActions(context: Context) {
   } = context;
   const createPhysicalPondOnServer = useCallback(async (pond: PhysicalPond) => {
     if (!currentCompanyId) throw new Error('Company not found.');
+    if (!await previewSopPondChange(currentCompanyId, pond)) throw new Error("Pond creation was cancelled.");
     const createPhysicalPond = httpsCallable<
       { companyId: string; pondId: string; pond: { pondName: string; pondArea: number; blockId?: string; blockName?: string } },
       { id: string }
@@ -286,6 +288,7 @@ export function usePondManagementPondActions(context: Context) {
         return;
       }
 
+      if (!isMidcycle && currentCompanyId) await assertSopStageGate(currentCompanyId, sourcePond.id, "stocking");
       const baselineDateString = formatLocalDateKey(baselineDate);
       const baselineSampling = isMidcycle ? [{
         id: `baseline-${Date.now()}`,
@@ -375,6 +378,7 @@ export function usePondManagementPondActions(context: Context) {
     canManageFarmCycle,
     canManagePonds,
     closeModal,
+    currentCompanyId,
     company,
     convertPlToGrams,
     cycles,

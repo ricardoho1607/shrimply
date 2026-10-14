@@ -101,6 +101,36 @@ service firebase.storage {
           && request.resource.metadata.assetId == assetId));
     }
 
+    function canManageSop(companyId) {
+      return isCompanyMember(companyId) && (companyDoc(companyId).data.ownerId == request.auth.uid
+        || userDoc().data.role in ['owner', 'co-owner', 'manager']);
+    }
+    function canAccessSopTask(companyId, taskId) {
+      let task = firestore.get(/databases/(default)/documents/companies/$(companyId)/tasks/$(taskId));
+      let company = companyDoc(companyId).data;
+      let user = userDoc().data;
+      let target = task.data.get('target', {});
+      return task.data != null && request.auth.uid in task.data.visibleTo
+        && (company.get('businessSize','small') != 'enterprise' || user.get('role','') != 'technician'
+          || target.get('scope','') == 'company'
+          || (target.get('blockId','') != '' && firestore.get(/databases/(default)/documents/companies/$(companyId)/blocks/$(target.blockId)).data.assignedTechnicianId == request.auth.uid));
+    }
+    match /companies/{companyId}/sopAttachments/{uid}/{fileName} {
+      allow read: if currentSessionAllowed() && hasCompanyPermission(companyId, 'viewFarm')
+        && (request.auth.uid == uid || canManageSop(companyId) || resource.metadata.get('taskId', '') == 'guidance'
+          || canAccessSopTask(companyId, resource.metadata.get('taskId', 'missing')));
+      allow create: if currentSessionAllowed() && hasCompanyPermission(companyId, 'viewFarm') && request.auth.uid == uid
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType in ['image/jpeg','image/png','image/webp','application/pdf','text/plain','application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+        && request.resource.metadata.companyId == companyId;
+      allow update, delete: if false;
+    }
+
+    match /communitySops/{publicationId}/{fileName} {
+      allow read: if currentSessionAllowed() && hasCompanyPermission(userDoc().data.companyId, 'viewFarm')
+        && firestore.get(/databases/(default)/documents/communitySops/$(publicationId)).data.status == 'published';
+      allow write: if false;
+    }
     match /users/{userId}/profile/{fileName} {
       allow read: if currentSessionAllowed();
       allow write: if currentSessionAllowed()

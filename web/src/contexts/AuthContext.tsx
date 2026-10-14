@@ -229,14 +229,31 @@ interface AuthContextType {
 
 let lastResolvedAuthState: {
   initialized: boolean;
+  uid: string | null;
   user: User | null;
   company: Company | null;
   companyResolved: boolean;
 } = {
   initialized: false,
+  uid: null,
   user: null,
   company: null,
   companyResolved: true,
+};
+
+const isModuleCacheValid = (currentUid: string | null): boolean => {
+  if (!lastResolvedAuthState.initialized) return false;
+  if (!currentUid) {
+    return lastResolvedAuthState.user === null;
+  }
+  if (lastResolvedAuthState.user?.uid !== currentUid) return false;
+  if (lastResolvedAuthState.uid && lastResolvedAuthState.uid !== currentUid) return false;
+  if (lastResolvedAuthState.user?.companyId) {
+    if (lastResolvedAuthState.company && lastResolvedAuthState.company.id !== lastResolvedAuthState.user.companyId) {
+      return false;
+    }
+  }
+  return true;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -250,37 +267,68 @@ export const useAuth = () => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentLanguage } = useLanguage();
-  const [user, setUser] = useState<User | null>(() => lastResolvedAuthState.user);
+  const currentFirebaseUid = auth.currentUser?.uid ?? null;
+  const moduleCacheValid = isModuleCacheValid(currentFirebaseUid);
+  const initialUser = moduleCacheValid ? lastResolvedAuthState.user : null;
+  const initialCompany = moduleCacheValid ? lastResolvedAuthState.company : null;
+
+  const [user, setUser] = useState<User | null>(() => initialUser);
   const [emailVerified, setEmailVerified] = useState(() => auth.currentUser?.emailVerified ?? false);
-  const [company, setCompany] = useState<Company | null>(() => lastResolvedAuthState.company);
-  const [companyResolved, setCompanyResolved] = useState(() => lastResolvedAuthState.companyResolved);
+  const [company, setCompany] = useState<Company | null>(() => initialCompany);
+  const [companyResolved, setCompanyResolved] = useState(() => !initialUser?.companyId);
   const [loading, setLoading] = useState(false);
-  const [initializing, setInitializing] = useState(() => !lastResolvedAuthState.initialized);
+  const [initializing, setInitializing] = useState(true);
+
+  const initialAuthUidRef = useRef<string | null>(initialUser?.uid ?? null);
+  const authSessionRef = useRef<number>(0);
+  const companySessionRef = useRef<number>(0);
+  const isMountedRef = useRef<boolean>(true);
   const timeZoneMigrationRef = useRef<Set<string>>(new Set());
   const publicMemberCountSyncRef = useRef<Map<string, number>>(new Map());
   const router = useRouter();
 
-  const setupCompanyListener = useCallback((companyId: string, canSyncPublicProfile: boolean) => {
-    if (lastResolvedAuthState.company?.id !== companyId) {
-      setCompanyResolved(false);
-    }
-    return onSnapshot(doc(db, 'companies', companyId), (companyDoc) => {
+  const setupCompanyListener = useCallback((companyId: string, canSyncPublicProfile: boolean, authSessionId: number) => {
+    const companySessionId = ++companySessionRef.current;
+
+    // Starting company listener marks pending and clears mismatched company.
+    setCompanyResolved(false);
+    setCompany((prev) => (prev?.id === companyId ? prev : null));
+
+    return onSnapshot(doc(db, 'companies', companyId), { includeMetadataChanges: true }, (companyDoc) => {
+      if (!isMountedRef.current || authSessionRef.current !== authSessionId || companySessionRef.current !== companySessionId) {
+        return;
+      }
+
+      const isFromCache = Boolean(companyDoc.metadata?.fromCache);
+
       if (companyDoc.exists()) {
         const companyData = companyDoc.data() as Company;
-        setCompany({ ...companyData, id: companyData.id || companyDoc.id });
+        const fullCompany = { ...companyData, id: companyData.id || companyDoc.id };
+        setCompany(fullCompany);
+
+        // Cached COMPLETE user/company must ALSO remain provisional; only !metadata.fromCache clears initializing/companyResolved.
+        if (!isFromCache) {
+          setCompanyResolved(true);
+        }
+
         const publicMemberCount = new Set([
           ...(Array.isArray(companyData.teamMembers) ? companyData.teamMembers : []),
           companyData.ownerId,
         ].filter((memberId): memberId is string => typeof memberId === 'string' && Boolean(memberId.trim()))).size;
+
         if ((canSyncPublicProfile || companyData.ownerId === auth.currentUser?.uid)
           && (companyData.isPublicProfile === true || companyData.isSearchable === true)
           && publicMemberCountSyncRef.current.get(companyId) !== publicMemberCount) {
           publicMemberCountSyncRef.current.set(companyId, publicMemberCount);
           void syncPublicCompanyMemberCount(companyId, companyData).catch((error) => {
+            if (!isMountedRef.current || authSessionRef.current !== authSessionId || companySessionRef.current !== companySessionId) {
+              return;
+            }
             publicMemberCountSyncRef.current.delete(companyId);
             console.warn('Public company member count sync failed:', error);
           });
         }
+
         if (!isValidTimeZone(companyData.timeZone)
           && companyData.ownerId === auth.currentUser?.uid
           && !timeZoneMigrationRef.current.has(companyId)) {
@@ -297,20 +345,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               ? await getLocationTimeZone(location.latitude as number, location.longitude as number)
                 .catch(() => fallbackTimeZone)
               : fallbackTimeZone;
+
+            if (!isMountedRef.current || authSessionRef.current !== authSessionId || companySessionRef.current !== companySessionId) {
+              return;
+            }
+
             await updateDoc(doc(db, 'companies', companyId), {
               timeZone: resolveFarmTimeZone(detectedTimeZone, fallbackTimeZone),
               updatedAt: serverTimestamp(),
             });
           })().catch((error) => {
+            if (!isMountedRef.current || authSessionRef.current !== authSessionId || companySessionRef.current !== companySessionId) {
+              return;
+            }
             timeZoneMigrationRef.current.delete(companyId);
             console.warn('Company timezone migration failed:', error);
           });
         }
       } else {
+        // Cache-only missing company remains unresolved.
+        if (isFromCache) {
+          return;
+        }
+        // Server-confirmed absence:
         setCompany(null);
+        setCompanyResolved(true);
       }
-      setCompanyResolved(true);
     }, (error) => {
+      if (!isMountedRef.current || authSessionRef.current !== authSessionId || companySessionRef.current !== companySessionId) {
+        return;
+      }
+      companySessionRef.current += 1;
+      // Listener permission errors clear inaccessible/stale state and terminate loading without profile writes.
       console.error('Company listener error:', error);
       setCompany(null);
       setCompanyResolved(true);
@@ -321,6 +387,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (initializing) return;
     lastResolvedAuthState = {
       initialized: true,
+      uid: user?.uid ?? null,
       user,
       company,
       companyResolved,
@@ -328,13 +395,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [company, companyResolved, initializing, user]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     let userUnsubscribe: (() => void) | null = null;
     let companyUnsubscribe: (() => void) | null = null;
     let currentCompanyId: string | null = null;
     let currentCompanyCanSync = false;
+    let activeAuthUid: string | null = initialAuthUidRef.current;
 
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
-      setEmailVerified(Boolean(firebaseUser?.emailVerified));
+      const authSessionId = ++authSessionRef.current;
+      companySessionRef.current += 1;
+
       // Clean up previous listeners
       if (userUnsubscribe) userUnsubscribe();
       if (companyUnsubscribe) companyUnsubscribe();
@@ -343,29 +414,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       currentCompanyId = null;
       currentCompanyCanSync = false;
 
+      setEmailVerified(Boolean(firebaseUser?.emailVerified));
+
       if (firebaseUser) {
-        // Real-time listener for User Doc
-        userUnsubscribe = onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
+        // Validate against previous UID; restart initialization and clear incompatible state at UID change.
+        if (activeAuthUid !== firebaseUser.uid) {
+          setUser(null);
+          setCompany(null);
+          setCompanyResolved(true);
+          setInitializing(true);
+          lastResolvedAuthState = {
+            initialized: false,
+            uid: null,
+            user: null,
+            company: null,
+            companyResolved: true,
+          };
+        } else {
+          // Same-UID module cache can display data but restart server readiness at subscription.
+          setInitializing(true);
+        }
+        activeAuthUid = firebaseUser.uid;
+
+        // Real-time listener for User Doc with metadata changes enabled
+        userUnsubscribe = onSnapshot(doc(db, 'users', firebaseUser.uid), { includeMetadataChanges: true }, (uDoc) => {
+          if (!isMountedRef.current || authSessionRef.current !== authSessionId) return;
+
+          const isFromCache = Boolean(uDoc.metadata?.fromCache);
+
           if (uDoc.exists()) {
             const userData = uDoc.data() as User;
             setUser(userData);
-            
+
             // Manage Company Listener
             const canSyncPublicProfile = isOwnerRole(userData.role);
             if (userData.companyId
               && (userData.companyId !== currentCompanyId || canSyncPublicProfile !== currentCompanyCanSync)) {
+              companySessionRef.current += 1;
               if (companyUnsubscribe) companyUnsubscribe();
               currentCompanyId = userData.companyId;
               currentCompanyCanSync = canSyncPublicProfile;
-              companyUnsubscribe = setupCompanyListener(userData.companyId, canSyncPublicProfile);
+              companyUnsubscribe = setupCompanyListener(userData.companyId, canSyncPublicProfile, authSessionId);
             } else if (!userData.companyId) {
+              companySessionRef.current += 1;
               if (companyUnsubscribe) companyUnsubscribe();
+              companyUnsubscribe = null;
               currentCompanyId = null;
               currentCompanyCanSync = false;
               setCompany(null);
               setCompanyResolved(true);
             }
+
+            // Cached COMPLETE user/company must ALSO remain provisional; only !metadata.fromCache clears initializing/companyResolved.
+            if (!isFromCache) {
+              setInitializing(false);
+            }
           } else {
+            // Cache-only missing user snapshot stays unresolved, NEVER creates/merges incomplete profile.
+            if (isFromCache) {
+              return;
+            }
+
+            // Only server-confirmed absence creates sanitized new profile.
+            companySessionRef.current += 1;
+            if (companyUnsubscribe) companyUnsubscribe();
+            companyUnsubscribe = null;
+            currentCompanyId = null;
+            currentCompanyCanSync = false;
             const newUser: User = {
               id: firebaseUser.uid,
               uid: firebaseUser.uid,
@@ -382,21 +497,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             void setDoc(doc(db, 'users', firebaseUser.uid), removeUndefinedFields(newUser), { merge: true }).catch((error) => {
               console.error('User profile creation failed:', error);
             });
+            setInitializing(false);
           }
-          setInitializing(false);
         }, (error) => {
+          if (!isMountedRef.current || authSessionRef.current !== authSessionId) return;
+          authSessionRef.current += 1;
+          if (userUnsubscribe) userUnsubscribe();
+          userUnsubscribe = null;
+          // Listener permission errors clear inaccessible/stale state and terminate loading without profile writes.
           console.error('User listener error:', error);
+          companySessionRef.current += 1;
+          if (companyUnsubscribe) companyUnsubscribe();
+          companyUnsubscribe = null;
+          currentCompanyId = null;
+          currentCompanyCanSync = false;
+          setUser(null);
+          setCompany(null);
+          setCompanyResolved(true);
           setInitializing(false);
         });
       } else {
+        activeAuthUid = null;
         setUser(null);
         setCompany(null);
         setCompanyResolved(true);
         setInitializing(false);
+        lastResolvedAuthState = {
+          initialized: true,
+          uid: null,
+          user: null,
+          company: null,
+          companyResolved: true,
+        };
       }
     });
 
     return () => {
+      isMountedRef.current = false;
+      authSessionRef.current += 1;
+      companySessionRef.current += 1;
       unsubscribe();
       if (userUnsubscribe) userUnsubscribe();
       if (companyUnsubscribe) companyUnsubscribe();
@@ -513,9 +652,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     await firebaseSignOut(auth);
+    authSessionRef.current += 1;
+    companySessionRef.current += 1;
     setEmailVerified(false);
     lastResolvedAuthState = {
       initialized: true,
+      uid: null,
       user: null,
       company: null,
       companyResolved: true,
@@ -523,6 +665,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setCompany(null);
     setCompanyResolved(true);
+    setInitializing(false);
     router.push('/auth');
   };
 

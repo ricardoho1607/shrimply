@@ -1,4 +1,6 @@
 "use client";
+import { ADAPTIVE_SOPS_ENABLED } from "@/lib/sopFeature";
+import { parseObservationTimes } from "../../../../../shared/sop/observationTimes";
 import { app, db, storage } from '@/lib/firebase';
 import { getManualLabColumns } from '@/lib/manualLabColumns';
 import { createRecordOnce, prepareSaveData as removeUndefinedFields, updateRecordOnline, uploadSaveFile } from '@/lib/saveData';
@@ -16,6 +18,8 @@ import { LAB_PDF_PENDING_MS, LabPdfUsageType, LabPondResult, LabReport, LabRepor
 import type { useWaterQualityState } from './useWaterQualityState';
 type Context = Pick<ReturnType<typeof useWaterQualityState>,
   'formData'
+  | 'sopTimes'
+  | 'setSopTimes'
   | 'accessiblePonds'
   | 'save'
   | 'setFormData'
@@ -51,6 +55,7 @@ type Context = Pick<ReturnType<typeof useWaterQualityState>,
 export function useWaterQualityActions(context: Context) {
   const {
     formData,
+    sopTimes, setSopTimes,
     accessiblePonds,
     save,
     setFormData,
@@ -90,6 +95,8 @@ export function useWaterQualityActions(context: Context) {
 
   const createWaterDraft = (pondId: string, date: string) => {
     const pond = accessiblePonds.find(pond => pond.id === pondId);
+    const record = pond?.samplings.find(row => isDailyWaterRecord(row, date));
+    setSopTimes(record?.observedAtByField || {});
     return initializeWaterDraft(pondId, date, pond?.samplings || []);
   };
 
@@ -126,6 +133,7 @@ export function useWaterQualityActions(context: Context) {
         const existingIndex = samplings.findIndex((record: Sampling) => isDailyWaterRecord(record, formData.date));
 
         const wqData = {
+          ...(ADAPTIVE_SOPS_ENABLED ? { observedAtByField: { ...(existingIndex >= 0 ? samplings[existingIndex].observedAtByField : {}), ...parseObservationTimes(sopTimes) }, ammoniaBasis: formData.ammoniaBasis } : {}),
           cycleId: pondData.cycleId,
           cycleName: pondData.cycleName,
           pondCycleId: pondData.pondCycleId || formData.pondId,

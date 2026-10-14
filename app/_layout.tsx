@@ -1,3 +1,4 @@
+import { useSopPush } from './hooks/useSopPush';
 // app/_layout.tsx
 import { Stack, useGlobalSearchParams, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import * as Sentry from '@sentry/react-native';
@@ -64,6 +65,7 @@ function RootLayoutNav() {
 
   useNotificationChecker();
   useMobileActivityTracker();
+  useSopPush();
 
   useEffect(() => {
     if (loading || !rootNavigationState?.key) return;

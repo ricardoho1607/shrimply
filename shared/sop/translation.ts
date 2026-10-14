@@ -1,0 +1,114 @@
+import type { SopContent, SopDefinition } from "./contracts";
+import { validateSopContent } from "./content";
+
+export interface SopTranslation {
+  title: string;
+  description: string;
+  content: SopContent;
+  steps: {
+    id: string;
+    title: string;
+    instructions: string;
+    correctiveInstructions: string;
+    rubric: string;
+  }[];
+}
+/** Translations cannot drop tables, sections or change source numbers. */
+export function validateSopTranslation(
+  source: SopDefinition,
+  value: unknown,
+): string[] {
+  const translated = value as SopTranslation | undefined;
+  const sameNumbers = (a: string, b: unknown) =>
+    typeof b === "string" &&
+    JSON.stringify(
+      a.match(/(?:[<>≤≥]=?\s*)?[+-]?\d+(?:[.,]\d+)?/g)?.map((s) => s.trim()) ||
+        [],
+    ) ===
+      JSON.stringify(
+        b
+          .match(/(?:[<>≤≥]=?\s*)?[+-]?\d+(?:[.,]\d+)?/g)
+          ?.map((s) => s.trim()) || [],
+      ) &&
+    JSON.stringify(
+      a.match(/\b(?:mg\/L|g\/L|mg|kg|ppt|NTU|mL|ml|cm|g)\b|°C|m³/g) || [],
+    ) ===
+      JSON.stringify(
+        b.match(/\b(?:mg\/L|g\/L|mg|kg|ppt|NTU|mL|ml|cm|g)\b|°C|m³/g) || [],
+      );
+  if (
+    !translated ||
+    typeof translated.title !== "string" ||
+    typeof translated.description !== "string" ||
+    !translated.content ||
+    !Array.isArray(translated.content.sections) ||
+    !Array.isArray(translated.content.omissions) ||
+    !Array.isArray(translated.steps) ||
+    translated.steps.length !== source.steps.length ||
+    !sameNumbers(source.title, translated.title) ||
+    !sameNumbers(source.description, translated.description)
+  )
+    return ["Translation changed the document structure or source numbers."];
+  const sections = source.content?.sections || [];
+  if (
+    translated.content.sections.length !== sections.length ||
+    translated.content.omissions.length !==
+      (source.content?.omissions.length || 0) ||
+    (sections.length &&
+      validateSopContent(translated.content).some(
+        (item) => !item.startsWith("Resolve omitted source content:"),
+      ))
+  )
+    return ["Translation omitted document sections or review notes."];
+  for (let i = 0; i < sections.length; i++) {
+    const a = sections[i],
+      b = translated.content.sections[i];
+    if (
+      !b ||
+      a.id !== b.id ||
+      !sameNumbers(a.title, b.title) ||
+      !sameNumbers(a.body, b.body) ||
+      JSON.stringify(a.sourcePages) !== JSON.stringify(b.sourcePages) ||
+      a.tables.length !== b.tables.length
+    )
+      return ["Translation changed section identity, source pages or numbers."];
+    for (let j = 0; j < a.tables.length; j++) {
+      const x = a.tables[j],
+        y = b.tables[j];
+      if (
+        !y ||
+        !sameNumbers(x.title, y.title) ||
+        x.columns.length !== y.columns.length ||
+        x.rows.length !== y.rows.length ||
+        x.columns.some((cell, k) => !sameNumbers(cell, y.columns[k])) ||
+        x.rows.some(
+          (row, k) =>
+            row.cells.length !== y.rows[k]?.cells.length ||
+            row.cells.some((cell, l) => !sameNumbers(cell, y.rows[k].cells[l])),
+        )
+      )
+        return ["Translation changed a source table or its numeric values."];
+    }
+  }
+  if (
+    (source.content?.omissions || []).some(
+      (item, i) => !sameNumbers(item, translated.content.omissions[i]),
+    ) ||
+    source.steps.some((step, i) => {
+      const other = translated.steps[i];
+      return (
+        !other ||
+        other.id !== step.id ||
+        !sameNumbers(step.title, other.title) ||
+        !sameNumbers(step.instructions, other.instructions) ||
+        !sameNumbers(
+          step.correctiveInstructions,
+          other.correctiveInstructions,
+        ) ||
+        !sameNumbers(step.check.rubric, other.rubric)
+      );
+    })
+  )
+    return ["Translation changed workflow identity or source numbers."];
+  return [];
+}

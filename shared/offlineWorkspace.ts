@@ -52,7 +52,7 @@ export interface OfflineCollectionSnapshot<T = unknown> {
   data: T[];
 }
 
-export type OfflineMutationKind = 'set' | 'delete' | 'inventory';
+export type OfflineMutationKind = 'set' | 'delete' | 'inventory' | 'callable';
 
 export interface OfflineInventoryAdjustment {
   itemId: string;
@@ -145,13 +145,14 @@ const isOfflineMutation = (
     || value.userId !== expectedUserId
     || value.companyId !== expectedCompanyId
     || typeof value.createdAt !== 'number'
-    || (value.kind !== 'set' && value.kind !== 'delete' && value.kind !== 'inventory')
+    || (value.kind !== 'set' && value.kind !== 'delete' && value.kind !== 'inventory' && value.kind !== 'callable')
     || !Array.isArray(value.path)
     || value.path.length < 2
     || value.path.length % 2 !== 0
     || !value.path.every((segment) => typeof segment === 'string' && segment.length > 0)) return false;
 
   if (value.kind === 'set' && !isRecord(value.data)) return false;
+  if (value.kind === 'callable' && (!isRecord(value.data) || !isRecord(value.functionCall) || value.functionCall.name !== 'sopCommand' || value.data.action !== 'submitEvidence' || value.data.companyId !== expectedCompanyId)) return false;
   if (value.kind === 'inventory') {
     const inventory = value.inventory;
     if (!isRecord(inventory)
@@ -242,6 +243,7 @@ export const applyOfflineMutationToCollection = <T extends { id: string }>(
   collection: T[],
   mutation: OfflineMutation,
 ): T[] => {
+  if (mutation.kind === 'callable') return collection;
   if (mutation.dailyFeed) {
     const intent = mutation.dailyFeed;
     const desired = new Map(intent.allocations.map(row => [row.inventoryFeedId, row.quantityKg]));
