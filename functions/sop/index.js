@@ -17,10 +17,11 @@ exports.getSopHistory = onCall(async (request) =>
     request.data?.cursor,
   ),
 );
-exports.getSopTaskUpdates = onCall(async (request) =>
-  require("./taskUpdates").taskUpdates(admin.firestore(), request.auth?.uid,
-    request.data?.companyId, request.data?.taskIds));
-exports.getSopWorkspace = onCall({ timeoutSeconds: 120 }, async (request) => ({
+exports.getSopWorkspace = onCall({ timeoutSeconds: 120 }, async (request) => {
+  if (request.data?.taskUpdates === true)
+    return require("./taskUpdates").taskUpdates(admin.firestore(), request.auth?.uid,
+      request.data?.companyId, request.data?.taskIds);
+  return ({
   ...(await service().snapshot(request.auth?.uid, request.data?.companyId, {
     compact: request.data?.compact === true, statusOnly: request.data?.statusOnly === true,
     liveTasks: request.data?.liveTasks === true, notificationsAfter: request.data?.notificationsAfter,
@@ -28,7 +29,8 @@ exports.getSopWorkspace = onCall({ timeoutSeconds: 120 }, async (request) => ({
   canModerate:
     request.auth?.token?.platformOwner === true ||
     request.auth?.token?.platformRole === "owner",
-}));
+});
+});
 exports.previewSopPondChange = onCall(async (request) =>
   require("./guards").previewPondChange(
     admin.firestore(),
