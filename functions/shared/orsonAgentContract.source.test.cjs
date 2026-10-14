@@ -3,6 +3,39 @@ const assert = require("node:assert/strict");
 require("../../scripts/register-typescript.cjs");
 const { ORSON_ACTIONS, normalizeCommand } = require("../../shared/orsonAgentContract.ts");
 
+test("polite Indonesian and English input requests route to farm entries", () => {
+  const { isExplicitFarmAction } = require("../../shared/orsonAgentContract.ts");
+  for (const message of [
+    "Bisa tolong bantu input pH Kolam sim a1 untuk hari ini pagi 7.8 dan sore 7.9",
+    "Tolong input pakan kolam A1 hari ini 25 kg",
+    "Can you help me save the plankton lab report for pond A1?",
+    "Please enter mineral lab results for pond A1 today",
+  ]) assert.equal(isExplicitFarmAction(message), true, message);
+  for (const message of ["How do I input pH?", "Apa itu pH?", "If I save feed, what happens?", "The report says to input pH daily"])
+    assert.equal(isExplicitFarmAction(message), false, message);
+});
+
+test('lab entries preserve explicit zero and source units and reject incomplete measurements', () => {
+  const lab = values => normalizeCommand({ id: 'lab-1', type: 'record_lab_report', date: '2026-10-14', pondId: 'pond-a', values });
+  assert.equal(lab({ reportType: 'plankton', totalCellPerMl: 0, planktonUnit: 'cells/mL' }).values.totalCellPerMl, 0);
+  assert.equal(lab({ reportType: 'water_quality', hardnessCa: 200, hardnessCaUnit: 'mg/L', hardnessCaBasis: 'Ca' }).values.hardnessCaBasis, 'Ca');
+  for (const values of [
+    { reportType: 'plankton', totalCellPerMl: 1 },
+    { reportType: 'plankton', cyanophytaPercent: 101 },
+    { reportType: 'water_quality', hardnessCa: 200 },
+    { reportType: 'water_quality', labName: 'Lab' },
+    { reportType: 'plankton', totalCellPerMl: 1, planktonUnit: 'cells/mL', hardnessCa: 200 },
+    { reportType: 'water_quality', hardnessCa: -1, hardnessCaUnit: 'mg/L', hardnessCaBasis: 'Ca' },
+  ]) assert.throws(() => lab(values));
+});
+
+test('lab review cards expose missing source units for correction', () => {
+  const { agentFields } = require('../../shared/orsonAgentPresentation.ts');
+  const fields = agentFields({ type: 'record_lab_report', values: { reportType: 'water_quality', hardnessCa: 200 } });
+  assert.ok(fields.includes('hardnessCaUnit')); assert.ok(fields.includes('hardnessCaBasis'));
+  assert.ok(!fields.includes('totalCellPerMl'));
+});
+
 test("upsert_water_quality exposes structured pond observations", () => {
   assert.deepEqual(
     [

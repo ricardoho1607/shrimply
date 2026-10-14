@@ -3,6 +3,7 @@ import {
   ORSON_ACTIVITY_LABELS,
   type OrsonCommand,
 } from "./orsonAgentContract";
+import { LAB_WATER_KEYS, LAB_MICROBIOLOGY_KEYS, LAB_PLANKTON_KEYS } from './orsonLabReport';
 const fieldLabels: Record<string, string> = {
   pondName: "Pond name",
   pondArea: "Pond area (m²)",
@@ -41,6 +42,15 @@ export const agentFieldLabel = (field: string) =>
   fieldLabels[field] ||
   field.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase());
 export const agentFields = (command: OrsonCommand): readonly string[] => {
+  if (command.type === 'record_lab_report') {
+    const fields = new Set(['reportType', 'labName', ...Object.keys(command.values || {})]);
+    for (const key of LAB_WATER_KEYS) if (command.values[key] !== undefined) {
+      fields.add(`${key}Unit`); fields.add(`${key}Basis`);
+    }
+    if (LAB_PLANKTON_KEYS.some(key => key.endsWith('CellPerMl') && command.values[key] !== undefined)) fields.add('planktonUnit');
+    if (LAB_MICROBIOLOGY_KEYS.some(key => !key.endsWith('Percent') && command.values[key] !== undefined)) fields.add('microbiologyUnit');
+    return [...fields];
+  }
   if (command.type === "stock_in_inventory" && command.itemId) {
     return (ORSON_ACTIONS[command.type]?.fields || []).filter(
       (field) => field !== "itemName" && field !== "category",
@@ -70,6 +80,7 @@ export const agentActivityLabel = (step: string, language = "en") =>
   ORSON_ACTIVITY_LABELS.working;
 export const agentFieldOptions: Record<string, { id: string; name: string }[]> =
   {
+    reportType: [{ id: 'water_quality', name: 'Mineral / water quality' }, { id: 'plankton', name: 'Plankton' }],
     observationType: [
       { id: "estimated_total", name: "Estimated total deaths" },
       { id: "none_observed", name: "No deaths observed" },

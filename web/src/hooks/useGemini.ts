@@ -353,7 +353,7 @@ export const useGemini = () => {
         setLoading(false);
         throw err;
       }
-      console.error("Orson Error:", err);
+      console.warn("Orson request failed:", err);
       if (latestRequestId.current === requestId) {
         setLoading(false);
       }
@@ -395,7 +395,9 @@ export const useGemini = () => {
         return limitMessage;
       }
 
-      const message = getErrorMessage(err, ORSON_FALLBACK_RESPONSE);
+      const message = explicitAction
+        ? 'Orson could not prepare your entry. No save was confirmed. Please retry, or enter the values in the pond or Lab Reports form.'
+        : getErrorMessage(err, ORSON_FALLBACK_RESPONSE);
       if (latestRequestId.current === requestId) {
         setError(message);
       }

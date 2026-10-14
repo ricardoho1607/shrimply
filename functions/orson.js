@@ -1,6 +1,6 @@
-const { isExplicitFarmAction } = require('./shared/orsonDomain/orsonAgentContract');
+const { isExplicitFarmAction, isExplicitFarmCorrection } = require('./shared/orsonDomain/orsonAgentContract');
 const { randomUUID: orsonRequestId } = require('node:crypto');
-const { createAgentTools, AGENT_INSTRUCTION, DELETE_AGENT_INSTRUCTION, EDIT_AGENT_INSTRUCTION, INVENTORY_CATEGORY_INSTRUCTION } = require('./orsonAgentTools');
+const { createAgentTools, farmActionToolReply, AGENT_INSTRUCTION, DELETE_AGENT_INSTRUCTION, EDIT_AGENT_INSTRUCTION, INVENTORY_CATEGORY_INSTRUCTION } = require('./orsonAgentTools');
 const { authorizeAgent } = require('./shared/orsonActionAuth');
 const { createOrsonAppDataReader } = require('./shared/orsonAppData');
 const { fetchLabelPage } = require('./shared/orsonLabelEvidence');
@@ -645,6 +645,7 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
   const operation = request.data?.operation === "mortality_context" ? "mortality_context" : "generate";
   const prompt = typeof request.data?.prompt === "string" ? request.data.prompt.trim() : "";
   const userMessage = typeof request.data?.userMessage === "string" ? request.data.userMessage.trim().slice(0, 8000) : "";
+  const farmEntryRequest = request.data?.agentVersion === 1 && isExplicitFarmAction(userMessage);
   let questionRoute = ORSON_QUESTION_ROUTES.has(request.data?.questionRoute) ? request.data.questionRoute : "farm_analysis";
   if (request.data?.agentVersion === 1 && isExplicitFarmAction(userMessage)) questionRoute = "farm_analysis";
   const mode = request.data?.mode === "mortality_diagnostic"
@@ -732,7 +733,7 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
     await sendActivity('working');
     const classificationStartedAt = Date.now();
     const requestConstraints = getOrsonRequestConstraints(userMessage);
-    const treatmentRequest = requestConstraints.suppressTreatmentAdvice
+    const treatmentRequest = farmEntryRequest || requestConstraints.suppressTreatmentAdvice
       ? false
       : await classifyDosingRequest({ question: userMessage, prompt, generate: safetyGenerate });
     const classificationMs = Date.now() - classificationStartedAt;
@@ -743,11 +744,11 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
       ? await loadOrsonProductContext(db, companyId, userMessage)
       : null;
     const productContextMs = Date.now() - productContextStartedAt;
-    const groundedPrompt = productContext
+    let groundedPrompt = productContext
       ? `${prompt}\n\nORSON SAVED PRODUCT CONTEXT:\n${JSON.stringify(productContext)}`
       : prompt;
     const verificationRequest = treatmentRequest && !(request.data?.agentVersion === 1 && isExplicitFarmAction(userMessage));
-    const useWebLookup = shouldUseOrsonWebLookup(questionRoute, userMessage);
+    const useWebLookup = !farmEntryRequest && shouldUseOrsonWebLookup(questionRoute, userMessage);
     const systemInstruction = buildServerOrsonSystemInstruction(mode, aiFunction, questionRoute);
     const { maxOutputTokens, reasoningEffort, timeoutMs } = getOrsonGenerationSettings(mode);
     const userSnap = await db.collection("users").doc(uid).get();
@@ -760,6 +761,11 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
         agentOperations.push(operation);
       },
     }) : null;
+    const newFarmEntry = farmEntryRequest && !isExplicitFarmCorrection(userMessage);
+    if (newFarmEntry) {
+      const catalog = await agent.execute('discover_farm_action_targets', {});
+      groundedPrompt = `Prepare the latest requested farm entry only. Do not analyse pond health or look up unrelated history. Use the authorized catalog below; ask for missing values rather than guessing. Call prepare_farm_actions once with all requested rows. Nothing is saved until the user confirms.\nFARM DATE: ${farmDateKey(company.timeZone)}\nAUTHORIZED TARGETS: ${JSON.stringify(catalog)}\nLATEST USER REQUEST: ${JSON.stringify(userMessage)}`;
+    }
     const activeLookups = new Map();
     const executeOrsonTool = async (name, args) => {
       if (agent?.tools.some(tool => tool.name === name)) return agent.execute(name, args);
@@ -805,7 +811,10 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
         timeoutMs,
         useWebLookup: withWebLookup,
         ...overrides,
-        ...(overrides?.systemInstruction ? {} : { tools: [...appData.tools, ...(agent?.tools || [])], executeTool: executeOrsonTool }),
+        ...(overrides?.systemInstruction ? {} : {
+          tools: [...(newFarmEntry ? [] : appData.tools), ...(agent?.tools || [])], executeTool: executeOrsonTool,
+          completeToolResult: agent ? evidence => farmActionToolReply(evidence, userMessage) : undefined,
+        }),
       }),
     });
     let generated;

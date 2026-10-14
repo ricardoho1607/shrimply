@@ -135,6 +135,7 @@ const generateMetaModelResponse = async ({
   onTextDelta,
   tools = [],
   executeTool,
+  completeToolResult,
   timeoutMs = 45000,
   signal = AbortSignal.timeout(timeoutMs),
   fetchImpl = fetch,
@@ -160,7 +161,7 @@ const generateMetaModelResponse = async ({
         max_output_tokens: maxOutputTokens,
         reasoning: { effort: reasoningEffort },
         store: false,
-        ...((tools.length || useWebLookup) ? { tools: [...tools, ...(useWebLookup ? [{ type: 'web_search' }] : [])] } : {}),
+        ...((tools.length || useWebLookup) && round < 5 ? { tools: [...tools, ...(useWebLookup ? [{ type: 'web_search' }] : [])] } : {}),
         ...(streaming ? { stream: true } : {}),
       }),
     });
@@ -206,11 +207,26 @@ const generateMetaModelResponse = async ({
         try {
           if (!tools.some(tool => tool.name === call.name)) throw new Error('Unknown data tool');
           result = await executeTool(call.name, JSON.parse(call.arguments));
-        } catch (_) { result = { error: 'This record lookup is unavailable or not permitted. Do not invent its contents.' }; }
+        } catch (error) {
+          result = { error: 'This record lookup is unavailable or not permitted. Do not invent its contents.' };
+          if (call.name === 'prepare_farm_actions' && ['invalid-argument', 'failed-precondition', 'permission-denied'].includes(error?.code)) {
+            result.status = 'needs_clarification';
+            result.message = error.message;
+          }
+        }
         const output = JSON.stringify(result);
         evidence.push({ tool: call.name, arguments: call.arguments, result });
         return { type: 'function_call_output', call_id: call.call_id || call.id, output };
       }));
+      // A prepared draft is the result of an entry request, not another lookup.
+      // Finish from the server's validated result without asking the model to
+      // repeat preparation or turn a clarification into a lookup loop.
+      const completedText = completeToolResult?.(evidence.slice(-calls.length));
+      if (completedText) {
+        if (streaming) await onTextDelta(completedText);
+        return { text: completedText, finishReason: 'STOP', inputTokens, outputTokens,
+          toolEvidence: JSON.stringify(evidence), sources: [] };
+      }
       input = [...(Array.isArray(input) ? input : [{ role: 'user', content: input }]), ...outputList, ...outputs];
       continue;
     }

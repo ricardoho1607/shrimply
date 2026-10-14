@@ -13,6 +13,43 @@ const jsonResponse = (body, status = 200) => new Response(JSON.stringify(body), 
   headers: { 'content-type': 'application/json' },
 });
 
+test('a prepared farm entry finishes immediately without repeated model tool rounds', async () => {
+  const { farmActionToolReply } = require('../orsonAgentTools');
+  let requests = 0, preparations = 0;
+  const emitted = [];
+  const result = await generateMetaModelResponse({
+    apiKey: 'test-key', prompt: 'Bisa tolong bantu input pH Kolam sim a1 untuk hari ini pagi 7.8 dan sore 7.9',
+    tools: [{ type: 'function', name: 'prepare_farm_actions' }],
+    executeTool: async () => { preparations++; return { status: 'awaiting_user_confirmation', rows: [{ valid: true }] }; },
+    completeToolResult: evidence => farmActionToolReply(evidence, 'Tolong input pH kolam'),
+    onTextDelta: async text => emitted.push(text),
+    fetchImpl: async () => {
+      requests++;
+      return new Response(`data: ${JSON.stringify({ type: 'response.completed', response: { status: 'completed', output: [{ type: 'function_call', name: 'prepare_farm_actions', arguments: '{}', call_id: 'draft' }] } })}\n\n`);
+    },
+  });
+  assert.equal(requests, 1); assert.equal(preparations, 1);
+  assert.equal(result.finishReason, 'STOP'); assert.match(result.text, /Belum ada data yang disimpan/);
+  assert.deepEqual(emitted, [result.text]);
+});
+
+test('the final lookup round requests an answer without more tools', async () => {
+  let requests = 0;
+  const result = await generateMetaModelResponse({
+    apiKey: 'test-key', prompt: 'read records',
+    tools: [{ type: 'function', name: 'read_app_records' }], executeTool: async () => ({ records: [] }),
+    fetchImpl: async (_, options) => {
+      requests++;
+      if (requests === 6) {
+        assert.equal(JSON.parse(options.body).tools, undefined);
+        return jsonResponse({ status: 'completed', output_text: 'No matching records.' });
+      }
+      return jsonResponse({ status: 'completed', output: [{ type: 'function_call', name: 'read_app_records', arguments: '{}', call_id: `lookup-${requests}` }] });
+    },
+  });
+  assert.equal(result.text, 'No matching records.'); assert.equal(requests, 6);
+});
+
 test('diagnostic requests send high reasoning while routine requests stay low', async () => {
   assert.equal(getOrsonGenerationSettings('standard').timeoutMs, 60000);
   assert.equal(getOrsonGenerationSettings('pond_diagnostic').timeoutMs, 90000);

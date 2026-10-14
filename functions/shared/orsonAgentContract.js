@@ -44,6 +44,8 @@ const validDate = (date) =>
   Number.isFinite(Date.parse(date)) &&
   new Date(date).toISOString().slice(0, 10) === date;
 function normalizeCommand(input) {
+  if (input?.type === "record_lab_report")
+    return require("./orsonDomain/orsonAgentContract").normalizeCommand(input);
   if (!input || !Object.hasOwn(ORSON_ACTIONS, input.type))
     fail("Choose a supported action.", "invalid-argument");
   if (!validId(input.id) || !validDate(input.date))

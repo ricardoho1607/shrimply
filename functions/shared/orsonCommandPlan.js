@@ -41,6 +41,8 @@ const {
 const { resolvePhysicalPond } = require("./orsonDomain/physicalPondIdentity");
 const { farmDateKey } = require("../farmDate");
 const { createHash } = require("node:crypto");
+const { LAB_WATER_KEYS, LAB_MICROBIOLOGY_KEYS, LAB_PLANKTON_KEYS } = require("./orsonDomain/orsonLabReport");
+const { validateLabRow, labMeasurementWarnings } = require("./labMeasurementContract");
 const clean = (value) => JSON.parse(JSON.stringify(value));
 const INVENTORY_CATEGORIES = {
   feed: ["Starter", "Grower", "Finisher", "Other"],
@@ -153,6 +155,7 @@ async function planCommands({ auth, commands, operationId, transaction }) {
     };
     const generatedId = `orson-${hash([operationId, c.id]).slice(0, 32)}`;
     const pondAction = [
+      "record_lab_report",
       "update_pond_details",
       "upsert_water_quality",
       "record_sampling",
@@ -214,7 +217,35 @@ async function planCommands({ auth, commands, operationId, transaction }) {
         mobile: `/ponddetails?pondId=${encodeURIComponent(c.type === "start_cycle" ? generatedId : pond.id)}`,
       });
     }
-    if (c.type === "update_pond_details") {
+    if (c.type === "record_lab_report") {
+      const section = (keys) => Object.fromEntries(keys.filter(key => v[key] !== undefined).map(key => [key, v[key]]));
+      const result = {
+        pondId: pond.id,
+        pondCode: pond.pondName || pond.id,
+        ...cycleKeys(pond),
+        ...(v.transparencyCm !== undefined ? { transparencyCm: v.transparencyCm } : {}),
+        waterQuality: section(LAB_WATER_KEYS),
+        microbiology: section(LAB_MICROBIOLOGY_KEYS),
+        plankton: section(LAB_PLANKTON_KEYS),
+        measurementUnits: Object.fromEntries(LAB_WATER_KEYS.filter(key => v[key] !== undefined)
+          .map(key => [key, { unit: v[`${key}Unit`], basis: v[`${key}Basis`] }])),
+      };
+      const issues = validateLabRow(result);
+      if (issues.length) fail(issues.join(' '));
+      row.warnings.push(...labMeasurementWarnings(result));
+      row.effects.push(`Save ${v.reportType === 'plankton' ? 'plankton' : 'mineral'} lab report for ${row.target} on ${c.date}.`);
+      for (const [key, value] of Object.entries(v)) row.effects.push(`${key}: ${value}`);
+      row.effects.push('Lab insights and pond summaries are processed after confirmation.');
+      put("labReports", generatedId, {
+        companyId: auth.companyId, reportType: v.reportType, entryMode: "manual",
+        source: "orson", status: "confirmed", sampleDate: c.date,
+        labName: v.labName || "", farmName: auth.company.companyName || "",
+        pondResults: [result], createdBy: auth.uid, confirmedBy: auth.uid,
+        createdAt: now, confirmedAt: now, ...metadata,
+        insights: { status: "pending" }, processing: { status: "pending" },
+      }, true);
+      links.push({ label: 'Lab Reports', web: '/dashboard/water', mobile: '/water-quality' });
+    } else if (c.type === "update_pond_details") {
       if (v.pondName !== undefined && !v.pondName)
         fail("Pond name cannot be empty.");
       const before = Object.fromEntries(
@@ -277,7 +308,7 @@ async function planCommands({ auth, commands, operationId, transaction }) {
       if (c.recordId && index < 0)
         fail("The selected record no longer exists.");
       if (!c.recordId && c.type !== "record_sampling") {
-        const candidates = samplings
+        let candidates = samplings
           .map((r, i) => ({ r, i }))
           .filter(
             ({ r }) =>
@@ -287,6 +318,18 @@ async function planCommands({ auth, commands, operationId, transaction }) {
               r.source !== "midcycle_onboarding" &&
               (c.type !== "record_feeding" || r.feedData),
           );
+        if (c.type === "upsert_water_quality" && candidates.length > 1) {
+          // Daily feeding and biological sampling share this array, but do not
+          // make a single measured water record ambiguous. Notes alone are not
+          // water readings (QA/import notes can also appear on sampling rows).
+          const waterFields = [
+            ...ORSON_ACTIONS.upsert_water_quality.fields.filter(field => field !== "operationalNotes"),
+            "transparency", "temperature", "waterAppearance", "waterAppearanceMorning",
+            "waterAppearanceEvening", "waterDepthCm",
+          ];
+          candidates = candidates.filter(({ r }) => waterFields.some(field =>
+            r[field] !== undefined && r[field] !== null && String(r[field]).trim() !== ""));
+        }
         if (candidates.length > 1)
           fail("Several records match this date. Choose the exact record ID.");
         if (candidates.length === 1) index = candidates[0].i;

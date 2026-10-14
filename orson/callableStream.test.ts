@@ -32,3 +32,14 @@ test('real activity events advance independently of answer text and ignore old e
   const result=await consumeOrsonCallableStream({callable,request:{},timeoutMs:1000,onActivity:event=>activity.push(`${event.step}:${event.state}`),onPartialResponse:value=>text.push(value)});
   assert.deepEqual(activity,['pond_lookup:running','sampling_lookup:running','answer:completed']);assert.deepEqual(text,['Answer']);assert.equal(result.finishReason,'STOP');
 });
+
+test('a failed stream handles the separately rejected final response', async () => {
+  const failure = new Error('Orson could not generate a response right now.');
+  const callable = { stream: async () => ({
+    stream: (async function* () { throw failure; yield { type: 'text_delta' as const, text: '' }; })(),
+    data: Promise.reject(failure),
+  }) };
+  await assert.rejects(consumeOrsonCallableStream({ callable, request: {}, timeoutMs: 1000 }), failure);
+  // Let Node's unhandled-rejection detection run before this test completes.
+  await new Promise(resolve => setImmediate(resolve));
+});

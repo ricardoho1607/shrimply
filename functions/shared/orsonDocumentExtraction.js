@@ -615,7 +615,9 @@ function normalizeExtractedCommands(commands, options = {}) {
           if (v === null || v === undefined || v === "") continue;
           if (typeof v === "string" && v.trim() === "") continue;
           if (typeof v === "string" && isAdviceInstructionOrHypothetical(v)) continue;
-          cleanedValues[k] = v;
+          const feedingResponse = command.type === "record_feeding" && k === "feedingResponse" && typeof v === "string"
+            ? v.trim().toLowerCase() : null;
+          cleanedValues[k] = ["strong", "normal", "weak"].includes(feedingResponse) ? feedingResponse : v;
         }
         command.values = cleanedValues;
       }

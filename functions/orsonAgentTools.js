@@ -13,6 +13,7 @@ const {
   normalizeDepthToCm,
 } = require("./shared/orsonDocumentExtraction");
 const { farmDateKey, shiftDateKey } = require("./farmDate");
+const LAB_AGENT_INSTRUCTION = "\nLAB REPORT ENTRIES: Use record_lab_report for measured mineral/water-quality or plankton lab results, one row per pond/report type. These are separate from daily upsert_water_quality readings. Use reportType water_quality for minerals/microbiology and plankton for plankton. The date is the sample date. Put results in the flat fields in the schema; include each mineral field's Unit and Basis exactly as reported (for example hardnessCa, hardnessCaUnit, hardnessCaBasis). Never infer units or measurement bases; ask if missing. For plankton cell counts, include planktonUnit cells/mL only when explicitly stated; species and percentages use their matching fields. Microbiology counts require microbiologyUnit CFU/mL. Missing measurements stay omitted, explicit zero remains zero. Do not substitute dosing recommendations for lab measurements. Never claim results are saved until the user confirms the card. Existing lab report corrections remain in Lab Reports.";
 const commandSchema = {
   type: "object",
   properties: {
@@ -39,7 +40,7 @@ const commandSchema = {
           Object.entries(ORSON_ACTIONS).map(([key, v]) => [key, v.fields]),
         ),
       ) +
-        "\nFor upsert_water_quality, waterDepthUnit and nitriteUnit are validation-only metadata and are never stored. Carry a stated depth unit as cm or m. Nitrite can be saved only when its stated unit is mg/L and its stated basis is NO2; do not infer either from a value.",
+        "\nFor upsert_water_quality, waterDepthUnit and nitriteUnit are validation-only metadata and are never stored. Carry a stated depth unit as cm or m. Nitrite can be saved only when its stated unit is mg/L and its stated basis is NO2; do not infer either from a value. For record_feeding, feedingResponse must be exactly strong, normal, or weak when explicitly observed; omit it when not stated." + LAB_AGENT_INSTRUCTION,
       additionalProperties: {
         anyOf: [{ type: "string" }, { type: "number" }, { type: "boolean" }],
       },
@@ -60,7 +61,7 @@ const commandSchema = {
   required: ["id", "type", "date", "values"],
   additionalProperties: false,
 };
-const AGENT_INSTRUCTION =
+const AGENT_INSTRUCTION = LAB_AGENT_INSTRUCTION +
   "\nFARM ACTION TOOLS: Only prepare a draft when the latest user explicitly requests recording, correcting, voiding, or deleting farm data. Advice, hypothetical examples, documents and past messages are not write authorization. Never claim data saved or deleted: these tools only prepare user-confirmed drafts. Ask for missing required values and units; do not infer feed consumption or treatment doses. For adding a new feed or additive inventory item, use stock_in_inventory with itemType, itemName, category, quantity, price, unit and date; for an existing item use its authorized itemId. Ask for missing purchase details instead of inventing them. Feeding allocations are desired TOTALS for a pond/day: clarify addition vs replacement. Sampling feed is a biological observation and never inventory usage. Use discover_farm_action_targets for exact authorized IDs. Call prepare_farm_actions once with all related rows, then tell the user to review the card. Preserve ordinary read/analysis behavior. When asked to change a displayed draft, use read_recent_farm_action_drafts to find its operationId/revision and revise only that draft. When asked to correct a SAVED record, do not revise its completed operation: prepare a NEW audited operation. For an inventory purchase correction, discover the existing item and purchase record IDs and carry forward its original date, quantity and unit; change only what the user requested. Do not add notes or other fields the user did not request. Do not invent an exchange rate or silently reinterpret a stated currency. If the requested monetary currency differs from the company's currency, ask only for a value in the company currency before preparing a draft; do not give a sample exchange rate or conversion." +
   "\nREMOVING INVENTORY PURCHASES FROM ACTIVE RECORDS: If the user asks to remove inventory or an inventory post, including a duplicate, use discover_farm_action_targets to match the authorized item and its purchase history. If exactly one active purchase belongs to the uniquely matched item, treat that as the target even when the user just says 'remove the inventory' and even if it has usage; prepare void_inventory_purchase with its exact authorized itemId, itemType, and purchase recordId. The user does not need to say 'duplicate' or 'void'. On confirmation, this reverses that purchase's stock and cost and marks its linked finance expense voided so it is excluded from active finance views and reports. Keep both records as voided audit history; never hard-delete either record. If it is unclear whether the user means a purchase post or the entire inventory item after checking the catalog, or if multiple items or purchases match, ask which exact record they mean before drafting. If there is no active purchase, ask whether they mean permanent deletion; never infer permanent deletion from a generic removal request. For an inventory purchase record, voiding is allowed despite usage history only when remaining quantity and valuation are safely supported by signed movement history, remaining stock and valuation do not become negative, payment is Unconfirmed, and there are no settlements. Never void consumed purchases that would make stock or valuation negative, and never repeat a void. If the user specifically asks to erase the audit history, explain that only audited voiding is supported." +
   "\nOBSERVATION UNITS: For water depth, use waterDepthCmMorning or waterDepthCmEvening, normalize an explicit metre value to centimetres, and include waterDepthUnit as 'm' or 'cm' when providing an unconverted number. Ask for the unit when it is unclear. For nitrite, include nitriteUnit and nitriteBasis from the user's explicit measurement; only mg/L as NO2 is supported. Never convert ppm or NO2-N into the stored mg/L NO2 value." +
@@ -596,4 +597,19 @@ function createAgentTools({
   };
   return { tools, execute };
 }
-module.exports = { createAgentTools, AGENT_INSTRUCTION, DELETE_AGENT_INSTRUCTION, EDIT_AGENT_INSTRUCTION, VOID_AGENT_INSTRUCTION, INVENTORY_CATEGORY_INSTRUCTION, commandSchema };
+function farmActionToolReply(evidence, userMessage) {
+  const prepared = evidence.filter(entry => entry.tool === 'prepare_farm_actions');
+  if (!prepared.length) return null;
+  const indonesian = /\b(?:bisa|tolong|bantu|input|kolam|pagi|sore|catat|simpan|pakan|laporan)\b/i.test(userMessage);
+  const drafts = prepared.filter(entry => entry.result?.status === 'awaiting_user_confirmation');
+  if (drafts.length) {
+    const errors = drafts.flatMap(entry => entry.result.rows || []).filter(row => !row.valid).map(row => row.error).filter(Boolean);
+    return [indonesian
+      ? 'Draf sudah disiapkan. Tinjau nilai pada kartu, lalu konfirmasi untuk menyimpan. Belum ada data yang disimpan.'
+      : 'The draft is ready. Review the values on the card, then confirm to save. Nothing has been saved yet.',
+      ...errors].join('\n');
+  }
+  const messages = prepared.map(entry => entry.result?.message).filter(Boolean);
+  return messages.length ? messages.join('\n') : null;
+}
+module.exports = { createAgentTools, farmActionToolReply, AGENT_INSTRUCTION, DELETE_AGENT_INSTRUCTION, EDIT_AGENT_INSTRUCTION, VOID_AGENT_INSTRUCTION, INVENTORY_CATEGORY_INSTRUCTION, commandSchema };

@@ -231,6 +231,84 @@ test("feeding confirmation retries and concurrent duplicate taps deduct once", a
   await confirm(op);
   assert.equal((await get("feeds/feed-a")).totalStock, 70);
 });
+
+test('Orson prepares the Indonesian pH request and saves both sessions only on confirmation', async () => {
+  const { createAgentTools } = require('./orsonAgentTools');
+  await db.doc(`companies/${companyId}/ponds/p1`).update({ pondName: 'SIM-A1' });
+  let operation;
+  const tools = createAgentTools({ db, service, auth: await authorizeAgent(db, uid, companyId),
+    userMessage: 'Bisa tolong bantu input pH Kolam sim a1 untuk hari ini pagi 7.8 dan sore 7.9',
+    onActivity: async () => {}, onOperation: async op => { operation = op; } });
+  const result = await tools.execute('prepare_farm_actions', { commands: [command('upsert_water_quality', { phMorning: 7.8, phEvening: 7.9 }, { pondId: 'SIM-A1' })] });
+  assert.equal(result.status, 'awaiting_user_confirmation');
+  assert.equal((await get('ponds/p1')).samplings.length, 0);
+  await confirm(operation);
+  const reading = (await get('ponds/p1')).samplings[0];
+  assert.equal(reading.phMorning, '7.8'); assert.equal(reading.phEvening, '7.9');
+});
+
+test('water-quality selects the measured daily record among same-day feed and sampling rows', async () => {
+  const readings = [
+    { id: 'feeding', date, mbw: 0, feed: 0, mortality: 0, feedData: { totalDailyFeed: '25.00' } },
+    { id: 'sampling', date, mbw: 10, feed: 25, mortality: 0, operationalNotes: 'Synthetic QA sampling' },
+    { id: 'water', date, mbw: 0, feed: 0, mortality: 0, phMorning: '7.85', phEvening: '7.80', doMorning: '4.9' },
+  ];
+  await db.doc(`companies/${companyId}/ponds/p1`).update({ samplings: readings });
+  const op = await prepare([command('upsert_water_quality', { phMorning: 7.8, phEvening: 7.9 })]);
+  assert.equal(op.rows[0].valid, true, op.rows[0].error);
+  assert.deepEqual(op.rows[0].before, { phMorning: '7.85', phEvening: '7.80' });
+  await confirm(op);
+  const saved = (await get('ponds/p1')).samplings;
+  assert.equal(saved.length, 3);
+  assert.deepEqual(saved[0], readings[0]); assert.deepEqual(saved[1], readings[1]);
+  assert.equal(saved[2].id, 'water'); assert.equal(saved[2].phMorning, '7.8'); assert.equal(saved[2].phEvening, '7.9');
+  assert.equal(saved[2].doMorning, '4.9'); assert.equal((await get('feeds/feed-a')).totalStock, 100);
+});
+
+test('water-quality ambiguity still rejects two measured records for the same day', async () => {
+  await db.doc(`companies/${companyId}/ponds/p1`).update({ samplings: [
+    { id: 'water-1', date, phMorning: '7.8' }, { id: 'water-2', date, phMorning: '7.9' },
+  ] });
+  const op = await prepare([command('upsert_water_quality', { phEvening: 7.9 })]);
+  assert.equal(op.rows[0].valid, false); assert.match(op.rows[0].error, /Several records/);
+});
+
+for (const [reportType, values, section, key, expected] of [
+  ['plankton', { totalCellPerMl: 120000, cyanophytaPercent: 0, chlorophytaSpecies: 'Chlorella', planktonUnit: 'cells/mL' }, 'plankton', 'totalCellPerMl', 120000],
+  ['water_quality', { hardnessCa: 200, hardnessCaUnit: 'mg/L', hardnessCaBasis: 'Ca', phosphate: 0, phosphateUnit: 'mg/L', phosphateBasis: 'PO4' }, 'waterQuality', 'hardnessCa', 200],
+]) {
+  test(`Orson ${reportType} lab draft confirms into Lab Reports once without changing daily readings`, async () => {
+    const { createAgentTools } = require('./orsonAgentTools');
+    let op;
+    const tools = createAgentTools({ db, service, auth: await authorizeAgent(db, uid, companyId),
+      userMessage: `Please save the ${reportType} lab report for pond A1`, onActivity: async () => {}, onOperation: async value => { op = value; } });
+    const result = await tools.execute('prepare_farm_actions', { commands: [command('record_lab_report', { reportType, labName: 'Test Lab', ...values }, { pondId: 'A1' })] });
+    assert.equal(result.status, 'awaiting_user_confirmation'); assert.equal(op.rows[0].valid, true, op.rows[0].error);
+    assert.equal((await db.collection(`companies/${companyId}/labReports`).get()).size, 0);
+    await Promise.all([confirm(op), confirm(op)]);
+    const reports = await db.collection(`companies/${companyId}/labReports`).get();
+    assert.equal(reports.size, 1);
+    const report = reports.docs[0].data();
+    assert.equal(report.status, 'confirmed'); assert.equal(report.reportType, reportType);
+    assert.equal(report.sampleDate, date); assert.equal(report.confirmedBy, uid);
+    assert.equal(report.pondResults[0].pondId, 'p1'); assert.equal(report.pondResults[0][section][key], expected);
+    if (reportType === 'plankton') assert.equal(report.pondResults[0].plankton.cyanophytaPercent, 0);
+    else {
+      assert.equal(report.pondResults[0].waterQuality.phosphate, 0);
+      assert.deepEqual(report.pondResults[0].measurementUnits.hardnessCa, { unit: 'mg/L', basis: 'Ca' });
+    }
+    assert.equal((await get('ponds/p1')).samplings.length, 0);
+    assert.equal((await get('feeds/feed-a')).totalStock, 100);
+  });
+}
+
+test('lab entries reject missing units and out-of-scope ponds before saving', async () => {
+  const invalid = await prepare([command('record_lab_report', { reportType: 'water_quality', hardnessCa: 200 })]);
+  assert.equal(invalid.rows[0].valid, false);
+  assert.match(invalid.rows[0].error, /unit.*basis/);
+  await assert.rejects(service.prepare({ uid: 'tech', companyId, commands: [command('record_lab_report', { reportType: 'plankton', cyanophytaPercent: 10 }, { pondId: 'p2' })] }), /outside your assigned scope/);
+  assert.equal((await db.collection(`companies/${companyId}/labReports`).get()).size, 0);
+});
 test("feeding correction returns quantity and original cost", async () => {
   await confirm(
     await prepare([

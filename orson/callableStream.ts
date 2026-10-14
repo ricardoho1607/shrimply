@@ -33,6 +33,12 @@ export const consumeOrsonCallableStream = async <Request, Response extends { tex
 
   const consume = async (): Promise<Response> => {
     const result = await params.callable.stream(params.request, { signal: controller.signal });
+    // Firebase rejects both channels on a server failure. Observe the final
+    // promise immediately even if iteration throws before we can await it.
+    const data = result.data.then(
+      response => ({ response, error: undefined }),
+      error => ({ response: undefined, error }),
+    );
     for await (const chunk of result.stream) {
       if (controller.signal.aborted) throw new Error('Stream interrupted');
       if (chunk?.type === 'status_step') {
@@ -45,7 +51,9 @@ export const consumeOrsonCallableStream = async <Request, Response extends { tex
       accumulated += chunk.text;
       params.onPartialResponse?.(accumulated);
     }
-    const response = await result.data;
+    const settled = await data;
+    if (settled.error !== undefined) throw settled.error;
+    const response = settled.response!;
     if (controller.signal.aborted) throw new Error('Stream interrupted');
     if (response.text && response.text !== accumulated) params.onPartialResponse?.(response.text);
     return response;

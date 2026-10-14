@@ -1,5 +1,11 @@
+import { ORSON_LAB_FIELDS, isLabTextField, validateOrsonLabValues } from './orsonLabReport';
 /** Shared wire contract. Runtime validation is enforced again by the server. */
 export const ORSON_ACTIONS = {
+  record_lab_report: {
+    label: "Lab report",
+    permission: "manageLabReports",
+    fields: ORSON_LAB_FIELDS,
+  },
   update_pond_details: {
     label: "Pond details",
     permission: "managePonds",
@@ -203,6 +209,7 @@ export function isExplicitFarmAction(text: string): boolean {
   )
     return false;
   return (
+    /^(?:(?:please|tolong|bisa|boleh|mohon|bantu|can you|could you|would you|help me(?: to)?|help us(?: to)?)\s+)*(?:input|enter|masukkan|isi|record|log|save|add|catat|simpan|tambahkan)\b/i.test(value) ||
     /(?:^|[.!?]\s*|\bplease\s+|\btolong\s+)(?:(?:please|tolong|can you|could you)\s+)?(?:record|log|save|add|update|correct|edit|change|fix|replace|adjust|set|delete|remove|stock in|start|end|close|void|cancel|catat|simpan|tambahkan|perbarui|koreksi|ganti|ubah|mulai|akhiri|batalkan)\b/i.test(
       value,
     ) ||
@@ -414,7 +421,7 @@ export function normalizeCommand(input: any): OrsonCommand {
         fail(`${key} must be a boolean.`);
       }
       result.values[key] = raw;
-    } else if (textFields.has(key)) {
+    } else if (textFields.has(key) || (input.type === 'record_lab_report' && isLabTextField(key))) {
       if (typeof raw !== "string" || raw.length > 1000) fail(`Invalid ${key}.`);
       const trimmed = raw.trim();
       if (key === "nitriteBasis" && trimmed !== "NO2") {
@@ -450,6 +457,12 @@ export function normalizeCommand(input: any): OrsonCommand {
       }
       result.values[key] = n;
     }
+  }
+
+  if (input.type === 'record_lab_report') {
+    if (input.recordId) fail('Correct existing lab reports through Lab Reports.');
+    try { validateOrsonLabValues(result.values); }
+    catch (error) { fail(error instanceof Error ? error.message : 'Check the lab results.'); }
   }
 
   if (result.values.nitriteMgL !== undefined && result.values.nitriteBasis !== "NO2") {

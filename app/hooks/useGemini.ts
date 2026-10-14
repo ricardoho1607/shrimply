@@ -390,7 +390,7 @@ export const useGemini = () => {
         setLoading(false);
         throw err;
       }
-      console.error("Orson Error:", err);
+      console.warn("Orson request failed:", err);
       setLoading(false);
 
       // Handle Rate Limiting (Free Tier 429)
@@ -423,7 +423,9 @@ export const useGemini = () => {
         return `Today's Orson ${label} limit is full (${err.used}/${err.limit}). Please try again after 3:00 AM farm time.`;
       }
 
-      const localFallback = buildLocalOrsonFallback(analysis);
+      const localFallback = explicitAction
+        ? 'Orson could not prepare your entry. No save was confirmed. Please retry, or enter the values in the pond or Lab Reports form.'
+        : buildLocalOrsonFallback(analysis);
       setError(localFallback);
       return localFallback;
     }

@@ -8,8 +8,14 @@ exports.isExplicitFarmCorrection = isExplicitFarmCorrection;
 exports.mergeOrsonOperation = mergeOrsonOperation;
 exports.fail = fail;
 exports.normalizeCommand = normalizeCommand;
+const orsonLabReport_1 = require("./orsonLabReport");
 /** Shared wire contract. Runtime validation is enforced again by the server. */
 exports.ORSON_ACTIONS = {
+    record_lab_report: {
+        label: "Lab report",
+        permission: "manageLabReports",
+        fields: orsonLabReport_1.ORSON_LAB_FIELDS,
+    },
     update_pond_details: {
         label: "Pond details",
         permission: "managePonds",
@@ -157,7 +163,8 @@ function isExplicitFarmAction(text) {
     const value = text.trim();
     if (/^(?:what|why|when|how|should|if|suppose|imagine|apa|mengapa|bagaimana|jika)\b/i.test(value))
         return false;
-    return (/(?:^|[.!?]\s*|\bplease\s+|\btolong\s+)(?:(?:please|tolong|can you|could you)\s+)?(?:record|log|save|add|update|correct|edit|change|fix|replace|adjust|set|delete|remove|stock in|start|end|close|void|cancel|catat|simpan|tambahkan|perbarui|koreksi|ganti|ubah|mulai|akhiri|batalkan)\b/i.test(value) ||
+    return (/^(?:(?:please|tolong|bisa|boleh|mohon|bantu|can you|could you|would you|help me(?: to)?|help us(?: to)?)\s+)*(?:input|enter|masukkan|isi|record|log|save|add|catat|simpan|tambahkan)\b/i.test(value) ||
+        /(?:^|[.!?]\s*|\bplease\s+|\btolong\s+)(?:(?:please|tolong|can you|could you)\s+)?(?:record|log|save|add|update|correct|edit|change|fix|replace|adjust|set|delete|remove|stock in|start|end|close|void|cancel|catat|simpan|tambahkan|perbarui|koreksi|ganti|ubah|mulai|akhiri|batalkan)\b/i.test(value) ||
         /^(?:(?:i|we)\s+(?:need|want)\s+(?:you\s+to\s+|to\s+)?|(?:i|we)(?:'d| would)\s+like\s+(?:you\s+to\s+|to\s+)|help\s+(?:me|us)\s+(?:to\s+)?)(?:record|log|save|add|update|correct|edit|change|fix|replace|adjust|set|delete|remove|stock in|start|end|close|void|cancel)\b/i.test(value) ||
         /^(?:记录|保存|修改|添加|开始|结束|作废|取消|บันทึก|เพิ่ม|แก้ไข|ยกเลิก|ghi lại|lưu|cập nhật|hủy)/i.test(value));
 }
@@ -335,7 +342,7 @@ function normalizeCommand(input) {
             }
             result.values[key] = raw;
         }
-        else if (textFields.has(key)) {
+        else if (textFields.has(key) || (input.type === 'record_lab_report' && (0, orsonLabReport_1.isLabTextField)(key))) {
             if (typeof raw !== "string" || raw.length > 1000)
                 fail(`Invalid ${key}.`);
             const trimmed = raw.trim();
@@ -368,6 +375,16 @@ function normalizeCommand(input) {
                 fail("Mortality count must be a whole number.");
             }
             result.values[key] = n;
+        }
+    }
+    if (input.type === 'record_lab_report') {
+        if (input.recordId)
+            fail('Correct existing lab reports through Lab Reports.');
+        try {
+            (0, orsonLabReport_1.validateOrsonLabValues)(result.values);
+        }
+        catch (error) {
+            fail(error instanceof Error ? error.message : 'Check the lab results.');
         }
     }
     if (result.values.nitriteMgL !== undefined && result.values.nitriteBasis !== "NO2") {

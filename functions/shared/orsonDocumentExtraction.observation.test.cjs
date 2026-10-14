@@ -16,6 +16,20 @@ const {
 const { createAgentTools } = require("../orsonAgentTools");
 const { normalizeCommand } = require("../../shared/orsonAgentContract.ts");
 
+test('feeding response casing from model and document entries preserves the canonical enum', () => {
+  for (const response of ['Normal', 'STRONG', ' Weak ']) {
+    const [command] = normalizeExtractedCommands([{
+      id: 'feed-row', type: 'record_feeding', date: '2026-10-14', pondId: 'pond-a',
+      values: { feedingResponse: response }, allocations: [{ inventoryFeedId: 'feed-a', quantityKg: 42.9 }],
+    }]);
+    assert.equal(command.values.feedingResponse, response.trim().toLowerCase());
+    assert.equal(normalizeCommand(command).values.feedingResponse, response.trim().toLowerCase());
+  }
+  const [invalid] = normalizeExtractedCommands([{ id: 'invalid-feed', type: 'record_feeding', date: '2026-10-14',
+    values: { feedingResponse: 'invented' }, allocations: [{ inventoryFeedId: 'feed-a', quantityKg: 1 }] }]);
+  assert.throws(() => normalizeCommand(invalid), /feedingResponse/);
+});
+
 test("no scum maps to false across explicit negative observation phrases", () => {
   const negatives = [
     "no scum",
