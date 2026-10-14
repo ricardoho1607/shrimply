@@ -74,8 +74,10 @@ export default function CompanyBillingPanel({ companyId }: { companyId: string }
 
   useEffect(() => {
     queueMicrotask(() => { void loadSummary(); });
-    const refresh = window.setInterval(() => { if (document.visibilityState === "visible") void loadSummary(true); }, 60000);
-    return () => window.clearInterval(refresh);
+    const refresh = window.setInterval(() => { if (document.visibilityState === "visible") void loadSummary(true); }, 300000);
+    const onVisible = () => { if (document.visibilityState === "visible") void loadSummary(true); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { window.clearInterval(refresh); document.removeEventListener("visibilitychange", onVisible); };
   }, [loadSummary]);
 
   const changePlan = async (plan: PlanDefinition) => {

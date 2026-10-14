@@ -1,4 +1,6 @@
 "use client";
+import { ADAPTIVE_SOPS_ENABLED } from "@/lib/sopFeature";
+import { SopObservationTimes } from "@/components/SopObservationTimes";
 import {
   X
 } from 'lucide-react';
@@ -6,6 +8,8 @@ import {
 import type { WaterQualityViewModel } from './useWaterQuality';
 type Props = Pick<WaterQualityViewModel,
   'isModalOpen'
+  | 'sopTimes'
+  | 'setSopTimes'
   | 'copy'
   | 'setModalOpen'
   | 'savePending'
@@ -16,7 +20,7 @@ type Props = Pick<WaterQualityViewModel,
   | 'setFormData'
   | 't'
   | 'waterSubmitting'>;
-export function WaterReadingDialog({ isModalOpen, copy, setModalOpen, savePending, handleAddWQ, formData, selectWaterRecord, accessiblePonds, setFormData, t, waterSubmitting }: Props) {
+export function WaterReadingDialog({ sopTimes, setSopTimes, isModalOpen, copy, setModalOpen, savePending, handleAddWQ, formData, selectWaterRecord, accessiblePonds, setFormData, t, waterSubmitting }: Props) {
   return (<>{isModalOpen && (
     <div className="responsive-modal-overlay water-log-overlay">
       <div className="glass-card responsive-modal animate-fade-up water-log-modal">
@@ -32,6 +36,7 @@ export function WaterReadingDialog({ isModalOpen, copy, setModalOpen, savePendin
 
         <form onSubmit={handleAddWQ} className="water-log-form"><fieldset disabled={savePending} style={{ display: 'contents' }}>
           <div className="responsive-modal-body water-log-form-grid">
+            {ADAPTIVE_SOPS_ENABLED && <SopObservationTimes values={formData} times={sopTimes} onChange={setSopTimes} />}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', gridColumn: 'span 2' }}>
               <label className="form-label">{copy('Target Pond')}</label>
               <select

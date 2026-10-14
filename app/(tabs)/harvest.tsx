@@ -1,3 +1,4 @@
+import { filterPondRecordsForUser } from '../../shared/pondAssignments';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useRef, useState } from "react";
@@ -22,7 +23,6 @@ import {
   type HarvestType,
 } from '../../shared/harvestCalculations';
 import { getSamplingMbw } from '../../shared/pondCalculations';
-import { filterEnterpriseRecordsForUser } from '../../shared/enterpriseBlocks';
 import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
 import AppDatePicker from '../components/forms/AppDatePicker';
 import CycleSelector from '../components/forms/CycleSelector';
@@ -76,12 +76,13 @@ export default function HarvestScreen() {
     company?.businessSize === 'enterprise' ? company?.id : undefined,
     user?.uid,
   );
-  const accessiblePonds = React.useMemo(() => filterEnterpriseRecordsForUser(ponds, {
+  const accessiblePonds = React.useMemo(() => filterPondRecordsForUser(ponds, {
     businessSize: company?.businessSize,
     role: user?.role,
     userId: user?.uid,
     blocks: enterpriseBlocks.blocks,
-  }), [company?.businessSize, enterpriseBlocks.blocks, ponds, user?.role, user?.uid]);
+    cycles, companyOwnerId: company?.ownerId,
+  }), [cycles, company?.ownerId, company?.businessSize, enterpriseBlocks.blocks, ponds, user?.role, user?.uid]);
   const activePonds = React.useMemo(() => accessiblePonds.filter(isPondCycleActive), [accessiblePonds]);
   const activePondCycleIds = React.useMemo(() => new Set(
     activePonds.map((pond) => pond.cycleId).filter((cycleId): cycleId is string => Boolean(cycleId)),

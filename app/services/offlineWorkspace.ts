@@ -11,7 +11,7 @@ import {
   Timestamp,
   runTransaction,
 } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { getDownloadURL, getMetadata, ref, uploadBytes } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Platform } from 'react-native';
 import app, { auth, db, storage } from '../../config/firebase';
@@ -89,14 +89,18 @@ const uploadMutationLocalFiles = async (mutation: OfflineMutation): Promise<Reco
     const storagePath = assetId
       ? `companies/${mutation.companyId}/assets/${assetId}/${mutation.data?.maintenanceHistory && !mutation.data?.photos ? 'maintenance' : 'asset'}/${mutation.id}-${fileIndex}.jpg`
       : labReportId ? `companies/${mutation.companyId}/labReports/${labReportId}/source.pdf` : mutation.uploadPath;
-    if (!storagePath || (!assetId && !labReportId)) throw new Error('Unsupported upload destination');
+    const sopUpload = mutation.kind === 'callable' && mutation.uploadPath?.startsWith(`companies/${mutation.companyId}/sopAttachments/${mutation.userId}/`);
+    if (!storagePath || (!assetId && !labReportId && !sopUpload)) throw new Error('Unsupported upload destination');
     fileIndex += 1;
-    const storageRef = ref(storage, storagePath);
-    await uploadBytes(storageRef, blob, {
-      contentType: labReportId ? 'application/pdf' : (blob.type?.startsWith('image/') ? blob.type : 'image/jpeg'),
-      customMetadata: { companyId: mutation.companyId, ...(labReportId ? { labReportId } : { assetId: assetId! }) },
+    const destination = sopUpload ? `${storagePath}-${fileIndex}` : storagePath;
+    const storageRef = ref(storage, destination);
+    let sopAlreadyUploaded = false;
+    if (sopUpload) { try { const metadata = await getMetadata(storageRef); sopAlreadyUploaded = Number(metadata.size) === blob.size; if (!sopAlreadyUploaded) throw new Error('Evidence file changed after upload'); } catch (error) { if ((error as {code?:string}).code !== 'storage/object-not-found') throw error; } }
+    if (!sopAlreadyUploaded) await uploadBytes(storageRef, blob, {
+      contentType: sopUpload ? (String((mutation.data?.attachments as {path:string;contentType:string}[] | undefined)?.find(a => a.path === value)?.contentType || blob.type || 'image/jpeg')) : labReportId ? 'application/pdf' : (blob.type?.startsWith('image/') ? blob.type : 'image/jpeg'),
+      customMetadata: { companyId: mutation.companyId, ...(sopUpload ? { taskId: String(mutation.data?.taskId || '') } : labReportId ? { labReportId } : { assetId: assetId! }) },
     });
-    return getDownloadURL(storageRef);
+    return sopUpload ? destination : getDownloadURL(storageRef);
   }) as Record<string, unknown>;
 };
 
@@ -275,6 +279,12 @@ const removeOfflineMutation = async (mutation: OfflineMutation): Promise<void> =
 };
 
 const applyRemoteMutation = async (mutation: OfflineMutation): Promise<void> => {
+  if (mutation.kind === 'callable') {
+    if (mutation.functionCall?.name !== 'sopCommand' || mutation.data?.action !== 'submitEvidence') throw new Error('Unsupported offline command');
+    const payload = await uploadMutationLocalFiles(mutation);
+    await httpsCallable(getFunctions(app), 'sopCommand')(payload);
+    return;
+  }
   if (mutation.dailyFeed) { await applyDailyFeedMutation(mutation); return; }
   if (mutation.kind === 'inventory') {
     if (mutation.inventory?.adjustments.some(adjustment => adjustment.historyEntry.source === 'daily_feed_record')) {
@@ -509,6 +519,7 @@ export const flushOfflineMutations = async (
         try {
           await applyRemoteMutation(mutation);
           await removeOfflineMutation(mutation);
+          if(mutation.kind==='callable')await cleanupMutationLocalFiles(mutation);
           applied += 1;
         } catch (error) {
           firstError ??= error;

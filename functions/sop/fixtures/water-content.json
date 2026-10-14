@@ -1,0 +1,160 @@
+{
+  "sections": [
+    {
+      "id": "water-parameters",
+      "title": "Parameter kimia dan fisika air",
+      "body": "Gunakan tabel sebagai referensi sumber untuk pemantauan kualitas air. Semua nilai masih berupa panduan draf, bukan batas operasional tambak yang telah disetujui. Sumber belum menjelaskan basis analitis amonia dan nitrit; konfirmasi sebelum mengaktifkan pemeriksaan otomatis. Metode pengambilan sampel, alat, penanggung jawab dan frekuensi pengukuran perlu ditetapkan saat peninjauan tambak.",
+      "sourcePages": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "tables": [
+        {
+          "title": "Parameter air — nilai yang tercantum dalam sumber",
+          "columns": [
+            "Parameter",
+            "Nilai sumber",
+            "Satuan",
+            "Halaman"
+          ],
+          "rows": [
+            {
+              "cells": [
+                "pH",
+                "7,5–8,5",
+                "—",
+                "5"
+              ]
+            },
+            {
+              "cells": [
+                "Suhu",
+                "28–32",
+                "°C",
+                "5"
+              ]
+            },
+            {
+              "cells": [
+                "Salinitas",
+                "15–30",
+                "ppt",
+                "5"
+              ]
+            },
+            {
+              "cells": [
+                "DO",
+                "5–7",
+                "mg/L",
+                "5"
+              ]
+            },
+            {
+              "cells": [
+                "Ammonia (NH₃/NH₄⁺)",
+                "<0,2",
+                "mg/L",
+                "5"
+              ]
+            },
+            {
+              "cells": [
+                "Nitrit (NO₂⁻)",
+                "<0,1",
+                "mg/L",
+                "6"
+              ]
+            },
+            {
+              "cells": [
+                "Nitrat (NO₃⁻)",
+                "<10",
+                "mg/L",
+                "6"
+              ]
+            },
+            {
+              "cells": [
+                "Fosfat (PO₄³⁻)",
+                "0,1–0,5",
+                "mg/L",
+                "6"
+              ]
+            },
+            {
+              "cells": [
+                "Kekeruhan",
+                "<20",
+                "NTU",
+                "6"
+              ]
+            },
+            {
+              "cells": [
+                "CO₂",
+                "<15",
+                "mg/L",
+                "6"
+              ]
+            },
+            {
+              "cells": [
+                "Kedalaman air",
+                "1–1,5",
+                "m",
+                "6–7"
+              ]
+            },
+            {
+              "cells": [
+                "Alkalinitas",
+                "100–200",
+                "mg/L",
+                "8"
+              ]
+            },
+            {
+              "cells": [
+                "Kecepatan arus",
+                "Cukup rendah agar udang bergerak tanpa stres; tidak ada angka",
+                "—",
+                "6"
+              ]
+            },
+            {
+              "cells": [
+                "BOD",
+                "Tidak ada batas angka dalam sumber",
+                "—",
+                "7"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "alkalinity",
+      "title": "Menjaga alkalinitas dan kestabilan pH",
+      "body": "Alkalinitas berfungsi sebagai penyangga pH. Sumber mencantumkan rentang 100–200 mg/L dan menyatakan nilai di bawah 50 mg/L dapat menyebabkan ketidakstabilan pH. Metode dalam sumber: penggunaan kapur/kalk CaCO₃, pengelolaan limbah organik dan sisa pakan, pemantauan rutin menggunakan kit, dan penggunaan air sumur dengan alkalinitas tinggi. Dosis dan frekuensi pasti tidak diberikan dalam bagian ini; jangan mengarangnya.",
+      "sourcePages": [
+        7,
+        8
+      ],
+      "tables": []
+    },
+    {
+      "id": "circulation",
+      "title": "Sirkulasi air dan sipon",
+      "body": "1. Sumber memulai sirkulasi pada DOC 3 atau DOC 5; pilihan hari harus ditinjau dan disetujui tambak. Pada DOC awal, sirkulasi dilakukan malam hari untuk mencegah blooming plankton.\n2. Acuan pergantian air dalam sumber: 4 m³ air per kg pakan. Lakukan pengetapan sebelum jam pakan; buang air terlebih dahulu, kemudian isi.\n3. Contoh sumber untuk kebutuhan harian 15 cm: pagi buang/isi 5 cm, siang buang/isi 5 cm, malam buang/isi 5 cm. Angka ini merupakan contoh, bukan jadwal wajib untuk semua kolam.\n4. Sipon menggunakan selang yang tersambung ke saluran pembuangan di luar tambak untuk mengangkat lumpur dasar. Periksa juga molting dan kematian yang terdeteksi.\n5. Sipon pertama pada DOC 10, sekaligus melepas waring hijau di tengah; pada usia awal dilakukan 1–2 hari sekali atau disesuaikan kebutuhan. Peninjauan tambak harus menentukan interval yang digunakan.",
+      "sourcePages": [
+        45
+      ],
+      "tables": []
+    }
+  ],
+  "omissions": []
+}

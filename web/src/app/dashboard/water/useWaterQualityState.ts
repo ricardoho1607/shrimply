@@ -23,6 +23,8 @@ export function useWaterQualityState() {
 
   const today = useFarmDateKey(company?.timeZone);
 
+  const [sopTimes, setSopTimes] = useState<Record<string, string>>({});
+
   const [activeView, setActiveView] = useState<WaterPageView>('daily');
 
   const { save, busy: savePending } = useSaveOperation();
@@ -96,6 +98,7 @@ export function useWaterQualityState() {
     waterDepthCm: '',
     alkalinity: '',
     ammonia: '',
+    ammoniaBasis: '',
     operationalNotes: '',
     weatherEvent: null as Sampling['weatherEvent'],
     waterExchangePercent: '',
@@ -126,6 +129,7 @@ export function useWaterQualityState() {
     return () => window.clearInterval(interval);
   }, []);
   return {
+    sopTimes, setSopTimes,
     copy,
     user,
     company,

@@ -1,5 +1,6 @@
 "use client";
 
+import { previewSopPondChange } from '@/lib/sopGuards';
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -561,6 +562,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
         )) physicalPondIds.add(physicalPond.id);
       });
 
+      for (const physicalPondId of physicalPondIds) { if (!await previewSopPondChange(company.id, { id: physicalPondId, pondName: assignment.pondName || 'Pond', blockId: block.id })) return; }
       physicalPondIds.forEach((physicalPondId) => {
         batch.update(doc(db, 'companies', company.id, 'physicalPonds', physicalPondId), assignmentData);
       });

@@ -31,6 +31,8 @@ import AccessibleDialog from '@/components/AccessibleDialog';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { useCompanyBlocks, useCompanyCycles, useCompanyHarvestRecords, useCompanyPhysicalPonds, useCompanyPonds, useDebouncedValue } from '@/hooks/useDashboardData';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCompanyTechnicians } from '@/hooks/useCompanyTechnicians';
+import { resolveCycleTechnicianId } from '../../../../../shared/cycleTechnicianAssignment';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import { FARM_OPERATIONAL_DAY_ROLLOVER_HOUR } from '../../../../../shared/farmDate';
 import { hasFinalHarvestForPondCycle, type HarvestType } from '../../../../../shared/harvestCalculations';
@@ -266,6 +268,7 @@ export default function PondsPage() {
   const hasPermission = useFarmPermissions();
   const canEditPonds = hasPermission('managePonds');
   const isEnterpriseFarm = company?.businessSize === 'enterprise';
+  const { technicians: companyTechnicians } = useCompanyTechnicians(isEnterpriseFarm ? null : companyId, user?.uid);
   const canManageFarmCycle = hasPermission('manageCycles');
   const availableFarmBlocks = useMemo(() => {
     if (!isEnterpriseFarm || !canEditPonds) return [];
@@ -300,7 +303,7 @@ export default function PondsPage() {
     queueMicrotask(() => setCycleNameDraft(activeFarmCycle?.cycleName || ''));
   }, [activeFarmCycle?.id, activeFarmCycle?.cycleName]);
 
-  const ensureActiveCycle = async (stockingDate: string) => {
+  const ensureActiveCycle = async (stockingDate: string, assignedTechnicianId?: string | null) => {
     if (!companyId || !user || !canEditPonds) return null;
     const activeCycle = cycles.find(isOpenFarmCycle);
     if (activeCycle) return activeCycle;
@@ -312,6 +315,7 @@ export default function PondsPage() {
     const cycleName = `${copy('Cycle')} ${cycles.length + 1}`;
     const docRef = doc(db, 'companies', companyId, 'cycles', save.id(`farm-cycle:${companyId}`));
     await createRecordOnce(db, docRef, {
+      assignedTechnicianId: assignedTechnicianId || null,
       cycleName,
       status: 'stocking',
       plannedStartDate: stockingDate,
@@ -699,7 +703,7 @@ export default function PondsPage() {
       if (!isNewCycle) {
         targetCycle = (form.targetCycleId ? openFarmCycles.find((c) => c.id === form.targetCycleId) : null) || activeFarmCycle;
         if (!targetCycle) {
-          targetCycle = await ensureActiveCycle(form.docStart);
+          targetCycle = await ensureActiveCycle(form.docStart, resolveCycleTechnicianId(form.assignedTechnicianId, companyTechnicians));
         }
         if (!targetCycle) return;
       }
@@ -710,7 +714,7 @@ export default function PondsPage() {
         pond: startCyclePond,
         pondType: 'cycleStatus' in startCyclePond ? 'cycle' : 'physical',
         activeCycle: targetCycle,
-        form,
+        form: { ...form, assignedTechnicianId: !isEnterpriseFarm ? resolveCycleTechnicianId(form.assignedTechnicianId, companyTechnicians) : undefined },
         today,
         activePonds: ponds,
         operationId: save.id(`pond-cycle:${companyId}:${startCyclePond.id}`),
@@ -1320,11 +1324,13 @@ export default function PondsPage() {
 
       {startCyclePond && (
         <StartPondCycleModal
-          key={startCyclePond.id}
+          key={`${companyId}:${startCyclePond.id}`}
           pond={startCyclePond}
           today={today}
           openCycles={openFarmCycles}
           activeCycleId={activeFarmCycle?.id}
+          technicians={companyTechnicians}
+          allowTechnicianAssignment={!isEnterpriseFarm}
           saving={startingPondCycle}
           onClose={() => { if (!save.busy) setStartCyclePond(null); }}
           onSubmit={handleStartCycle}

@@ -1,3 +1,4 @@
+import { assertSopStageGate } from "../../app/services/sopGuards";
 import { useCallback } from 'react';
 import {
   Alert
@@ -143,6 +144,8 @@ export function usePondManagementEnterpriseActions(context: Context) {
       baselineCumulativeFeed?: number;
     }[];
   }) => {
+    if (company?.id && input.cycleStartMode !== "midcycle")
+      for (const entry of input.ponds) await assertSopStageGate(company.id, entry.pond.id, "stocking");
     const stockingRange = getEnterpriseStockingDateRange([
       input.cycle?.stockingStartDate,
       input.cycle?.stockingEndDate,
@@ -221,7 +224,7 @@ export function usePondManagementEnterpriseActions(context: Context) {
       });
       if (!added) throw new Error('Could not start this pond. Sync the farm and check its physical pond link before trying again.');
     }
-  }, [addFarmCycle, addPond, company?.timeZone, updateFarmCycle]);
+  }, [addFarmCycle, addPond, company, updateFarmCycle]);
 
   const handleCreateEnterprisePhysicalPond = useCallback(async (input: {
     pondName: string;

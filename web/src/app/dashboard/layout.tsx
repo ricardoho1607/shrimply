@@ -1,6 +1,7 @@
 "use client";
 
 import "@/app/globals.css";
+import { ADAPTIVE_SOPS_ENABLED } from "@/lib/sopFeature";
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth } from '@/lib/firebase';
@@ -55,6 +56,10 @@ const NAV_STRUCTURE = (t: DashboardTranslations, copy: (text: string) => string)
   management: [
     { label: getString(t.nav.home, 'Home'), icon: 'home', href: '/dashboard' },
     { label: getString(t.nav.ponds, 'Ponds'), icon: 'ponds', href: '/dashboard/ponds' },
+    ...(ADAPTIVE_SOPS_ENABLED ? [
+      { label: copy('SOPs'), icon: 'reports', href: '/dashboard/sops' } as const,
+      { label: copy('To-do'), icon: 'daily-operations', href: '/dashboard/todo' } as const,
+    ] : []),
     { label: getString(t.nav.waterQuality, 'Water Quality'), icon: 'water-quality', href: '/dashboard/water' },
     { label: getString(t.nav.feed, 'Feed'), icon: 'feed', href: '/dashboard/feed' },
     { label: getString(t.nav.harvest, 'Harvest'), icon: 'harvest', href: '/dashboard/harvest' },
@@ -781,8 +786,8 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                   type="button"
                   onClick={handleSignOut}
                   className="sidebar-link"
-                  aria-label={getString(t.auth.signOut, 'Logout')}
-                  title={getString(t.auth.signOut, 'Logout')}
+                  aria-label={getString(t.sidebar.signOut, getString(t.auth.signOut, 'Logout'))}
+                  title={getString(t.sidebar.signOut, getString(t.auth.signOut, 'Logout'))}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -801,7 +806,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                   }}
                 >
                   <DashboardIcon name="logout" />
-                  <span className="sidebar-item-label">{getString(t.auth.signOut, 'Logout')}</span>
+                  <span className="sidebar-item-label">{getString(t.sidebar.signOut, getString(t.auth.signOut, 'Logout'))}</span>
                 </button>
               )}
             </div>

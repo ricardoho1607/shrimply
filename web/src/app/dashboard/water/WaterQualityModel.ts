@@ -1,6 +1,8 @@
 import { type LabMeasurementUnits } from "../../../../../functions/shared/labMeasurementContract";
 import type { PlanktonOverwatchSnapshot } from "../../../../../shared/planktonOverwatch";
 export interface Sampling {
+  observedAtByField?: Record<string, string>;
+  ammoniaBasis?: string;
   id: string; date: string; mbw: number; mortality: number; feed: number;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
   isBaselineEstimate?: boolean; source?: string;

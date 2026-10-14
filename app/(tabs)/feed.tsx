@@ -1,3 +1,4 @@
+import { filterPondRecordsForUser } from '../../shared/pondAssignments';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useRef, useState } from "react";
@@ -15,7 +16,7 @@ import {
   sumFeedAllocations,
 } from '../../shared/feedInventoryUsage';
 import { getFarmDateKey, normalizeFarmDateKey } from '../../shared/farmDate';
-import { filterEnterpriseRecordsForUser, isEnterpriseOwner } from '../../shared/enterpriseBlocks';
+import { isEnterpriseOwner } from '../../shared/enterpriseBlocks';
 import EnterprisePondGrid from '../components/enterprise/EnterprisePondGrid';
 import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
 import AppDatePicker from '../components/forms/AppDatePicker';
@@ -49,6 +50,7 @@ export default function FeedManagementScreen() {
   const router = useRouter();
   const { t } = useLanguage();
   const { user, company } = useAuth();
+  const cycles = usePondStore((state) => state.cycles);
   const { ponds, addFeedData } = usePondStore();
   const { feeds: inventoryFeeds, initializeForCompany, reconcileDailyFeedAllocations } = useFeedAdditiveStore();
   const canEditPonds = hasFarmPermission(user, 'manageFeedInventory', company?.ownerId);
@@ -57,12 +59,13 @@ export default function FeedManagementScreen() {
     company?.businessSize === 'enterprise' ? company?.id : undefined,
     user?.uid,
   );
-  const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
+  const accessiblePonds = useMemo(() => filterPondRecordsForUser(ponds, {
     businessSize: company?.businessSize,
     role: user?.role,
     userId: user?.uid,
     blocks: enterpriseBlocks.blocks,
-  }), [company?.businessSize, enterpriseBlocks.blocks, ponds, user?.role, user?.uid]);
+    cycles, companyOwnerId: company?.ownerId,
+  }), [cycles, company?.ownerId, company?.businessSize, enterpriseBlocks.blocks, ponds, user?.role, user?.uid]);
   const activePonds = useMemo(() => accessiblePonds.filter(isPondCycleActive), [accessiblePonds]);
 
   const [isModalVisible, setIsModalVisible] = useState(false);

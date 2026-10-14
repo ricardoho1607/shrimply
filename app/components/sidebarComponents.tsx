@@ -1,3 +1,5 @@
+import { ADAPTIVE_SOPS_ENABLED } from "../services/sopFeature";
+import {sopCopy} from '../../shared/sop/copy';
 // app/components/SidebarComponents.tsx
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
@@ -76,7 +78,7 @@ export const RegularSidebar: React.FC = () => {
 
   const router = useRouter();
   const { user, company, signOut, getTeamMembers, getCompanyLocationString } = useAuth();
-  const { t } = useLanguage();
+  const { t, currentLanguage } = useLanguage();
   const { manualBackup, isLoggedIn, isBackingUp, isRestoring, lastBackupDisplay } = useDataBackup();
   const {
     sidebarVisible,
@@ -355,6 +357,8 @@ export const RegularSidebar: React.FC = () => {
 
               <View style={styles.menuContainer}>
                 <MenuButton icon="home" text={t.nav.home} onPress={() => navigateAndClose('/')} active />
+                {ADAPTIVE_SOPS_ENABLED && (<MenuButton icon="document-text-outline" text={sopCopy(currentLanguage).sops} onPress={() => navigateAndClose('/sops')} />)}
+                {ADAPTIVE_SOPS_ENABLED && (<MenuButton icon="checkmark-circle-outline" text={sopCopy(currentLanguage).todo} onPress={() => navigateAndClose('/todo')} />)}
                 <MenuButton icon="marketplace" text="Marketplace" onPress={() => navigateAndClose('/marketplace')} />
                 <MenuButton icon="disease-report" text={t.diseaseReport?.title || "Disease Report"} onPress={() => navigateAndClose('/disease-report')} />
                 {canUseOrson && <MenuButton icon="orson-ai" text="Orson AI" onPress={() => navigateAndClose('/AIChat')} />}
@@ -463,7 +467,7 @@ export const BuyerSidebar: React.FC = () => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, company, signOut, getCompanyLocationString } = useAuth();
-  const { t } = useLanguage();
+  const { t, currentLanguage } = useLanguage();
   const { sidebarVisible, setSidebarVisible, slideAnimRef } = useSidebar();
 
   const navigateAndClose = (route: string) => {
@@ -572,7 +576,7 @@ export const BuyerSidebar: React.FC = () => {
 export const StaticSidebar: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { user, company, signOut } = useAuth();
-  const { t } = useLanguage();
+  const { t, currentLanguage } = useLanguage();
   const router = useRouter();
   const { reportsExpanded, inventoryExpanded, toggleReports, toggleInventory } = useSidebar();
   const hasFinanceAccess = hasFarmPermission(user, 'viewFinance', company?.ownerId);
@@ -628,6 +632,8 @@ export const StaticSidebar: React.FC = () => {
       <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.menuContainer}>
           <MenuButton icon="home" text={t.nav.home} onPress={() => navigateTo('/')} active />
+          {ADAPTIVE_SOPS_ENABLED && (<MenuButton icon="document-text-outline" text={sopCopy(currentLanguage).sops} onPress={() => navigateTo('/sops')} />)}
+          {ADAPTIVE_SOPS_ENABLED && (<MenuButton icon="checkmark-circle-outline" text={sopCopy(currentLanguage).todo} onPress={() => navigateTo('/todo')} />)}
           <MenuButton icon="marketplace" text="Marketplace" onPress={() => navigateTo('/marketplace')} />
           {canUseOrson && <MenuButton icon="orson-ai" text="Orson AI" onPress={() => navigateTo('/AIChat')} />}
           {canUseOrson && hasFinanceAccess && <MenuButton icon="harvest-projections" text={t.financialReports?.harvestProjection || 'Harvest Projections'} onPress={() => navigateTo('/harvest-projection')} />}
@@ -661,7 +667,7 @@ export const StaticSidebar: React.FC = () => {
 
 export const StaticBuyerSidebar: React.FC = () => {
   const { user, signOut } = useAuth();
-  const { t } = useLanguage();
+  const { t, currentLanguage } = useLanguage();
   const router = useRouter();
   const navigateTo = (route: string) => router.push(route as any);
   const handleSignOut = () => {
