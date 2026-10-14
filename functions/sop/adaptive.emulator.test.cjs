@@ -296,7 +296,8 @@ test("cross-company, direct forged compliance, and unassigned task access are de
       query(
         collection(techDb, "companies/farm/tasks"),
         where("visibleTo", "array-contains", "tech"),
-        where("target.blockId", "==", "block"),
+        where("target.blockId", "in", ["block"]),
+        where("status", "in", ["open", "scheduled", "submitted", "needs_review"]),
       ),
     ),
   );

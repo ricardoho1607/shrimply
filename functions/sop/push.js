@@ -185,7 +185,7 @@ async function deliverSopPush(
   return { processed: pending.size };
 }
 exports.deliverSopNotifications = onSchedule(
-  { schedule: "every 1 minutes", timeoutSeconds: 120, maxInstances: 1 },
+  { schedule: "every 5 minutes", timeoutSeconds: 120, maxInstances: 1 },
   () => deliverSopPush(admin.firestore()),
 );
 exports.deliverSopPush = deliverSopPush;

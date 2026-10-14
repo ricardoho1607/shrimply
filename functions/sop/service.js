@@ -127,35 +127,53 @@ async function access(db, uid, companyId) {
 }
 function createSopService(db, storage) {
   const base = (companyId) => db.collection("companies").doc(companyId);
-  async function snapshot(uid, companyId) {
+  async function snapshot(uid, companyId, options = {}) {
     const a = await access(db, uid, companyId),
       ref = base(companyId);
     const scoped = (name) =>
       a.manage
         ? ref.collection(name)
         : ref.collection(name).where("visibleTo", "array-contains", uid);
+    const refreshedAt = Date.now();
+    const statusOnly = options.statusOnly === true;
+    const liveTasks = options.liveTasks === true;
+    const compact = options.compact === true;
+    const empty = { docs: [], size: 0 };
+    const activeStatuses = ["open", "scheduled", "submitted", "needs_review"];
+    const taskLimit = compact ? 25 : 250;
+    const activeTasks = compact && !statusOnly && !liveTasks
+      ? await scoped("tasks").where("status", "in", activeStatuses).orderBy("dueAt", "asc").limit(100).get()
+      : empty;
+    const criticalTasks = compact && !statusOnly && !liveTasks
+      ? await scoped("tasks").where("status", "in", activeStatuses).where("step.severity", "==", "critical").orderBy("dueAt", "asc").limit(100).get()
+      : empty;
+    const notificationLimit = compact && !statusOnly ? 25 : 100;
+    const taskQuery = compact
+      ? scoped("tasks").where("status", "in", ["completed", "waived", "cancelled"])
+      : scoped("tasks");
+    const notificationQuery = ref.collection("sopNotifications").where("recipientId", "==", uid);
+    const notificationSince = Number.isFinite(options.notificationsAfter)
+      ? Math.max(refreshedAt - 30 * 60000, Math.min(refreshedAt, options.notificationsAfter)) : 0;
     const sets = await Promise.all([
-      ref.collection("sops").limit(200).get(),
-      ref.collection("sopAdoptions").limit(200).get(),
-      scoped("tasks").orderBy("dueAt", "desc").limit(250).get(),
-      scoped("sopIssues").orderBy("openedAt", "desc").limit(200).get(),
-      ref.collection("blocks").get(),
-      ref.collection("physicalPonds").get(),
-      ref.collection("ponds").get(),
-      db
+      statusOnly ? empty : ref.collection("sops").limit(200).get(),
+      statusOnly ? empty : ref.collection("sopAdoptions").limit(200).get(),
+      statusOnly ? empty : taskQuery.orderBy("dueAt", "desc").limit(taskLimit).get(),
+      (statusOnly ? scoped("sopIssues").where("updatedAt", ">=", notificationSince).orderBy("updatedAt", "desc") : scoped("sopIssues").orderBy("openedAt", "desc")).limit(200).get(),
+      statusOnly && a.manage ? empty : ref.collection("blocks").get(),
+      statusOnly && a.manage ? empty : ref.collection("physicalPonds").get(),
+      statusOnly && a.manage ? empty : ref.collection("ponds").get(),
+      statusOnly ? empty : db
         .collection("communitySops")
         .where("status", "==", "published")
         .limit(100)
         .get(),
-      ref
-        .collection("sopNotifications")
-        .where("recipientId", "==", uid)
+      (statusOnly ? notificationQuery.where("createdAt", ">=", notificationSince) : notificationQuery)
         .orderBy("createdAt", "desc")
-        .limit(100)
+        .limit(notificationLimit)
         .get(),
-      ref.collection("cycles").get(),
+      statusOnly && a.manage ? empty : ref.collection("cycles").get(),
     ]);
-    const sourceSets = await Promise.all([
+    const sourceSets = statusOnly ? [empty, empty, empty] : await Promise.all([
       ref.collection("feeds").get(),
       ref.collection("additives").get(),
       db.collection("assets").where("companyId", "==", companyId).get(),
@@ -182,7 +200,7 @@ function createSopService(db, storage) {
         unit: item.unit || "",
       })),
     );
-    const members = await Promise.all(
+    const members = statusOnly ? [] : await Promise.all(
       [...new Set([a.company.ownerId, ...(a.company.teamMembers || [])])]
         .filter(Boolean)
         .map((uid) => db.doc(`users/${uid}`).get()),
@@ -251,7 +269,11 @@ function createSopService(db, storage) {
         period: date,
       };
     }
-    return {
+    const result = {
+      compact,
+      refreshedAt,
+      nextNotificationCursor: sets[8].size === notificationLimit ? sets[8].docs.at(-1).id : "",
+      nextActiveTaskCursor: compact && liveTasks ? "__first__" : activeTasks.size === 100 ? activeTasks.docs.at(-1).id : "",
       sources,
       manage: a.manage,
       summary: summary || null,
@@ -259,7 +281,7 @@ function createSopService(db, storage) {
       nextAdoptionCursor: sets[1].size === 200 ? sets[1].docs.at(-1).id : "",
       nextCommunityCursor: sets[7].size === 100 ? sets[7].docs.at(-1).id : "",
       nextTaskCursor:
-        sets[2].size === 250 ? sets[2].docs[sets[2].docs.length - 1].id : "",
+        sets[2].size === taskLimit ? sets[2].docs.at(-1).id : "",
       nextIssueCursor:
         sets[3].size === 200 ? sets[3].docs[sets[3].docs.length - 1].id : "",
       timeZone: a.company.timeZone || "",
@@ -276,7 +298,7 @@ function createSopService(db, storage) {
               ),
             },
       ),
-      tasks: rows(sets[2]).filter((t) => targetAllowed(t.target)),
+      tasks: [...new Map([...rows(activeTasks), ...rows(criticalTasks), ...rows(sets[2])].map((task) => [task.id, task])).values()].filter((t) => targetAllowed(t.target)),
       issues: rows(sets[3]).filter((t) => targetAllowed(t.target)),
       blocks,
       physicalPonds,
@@ -298,8 +320,15 @@ function createSopService(db, storage) {
           name: s.data().name || s.data().displayName || s.data().email || s.id,
           role: s.id === a.company.ownerId ? "owner" : s.data().role,
         })),
-      truncated: sets[2].size === 250 || sets[3].size === 200,
+      truncated: activeTasks.size === 100 || sets[2].size === taskLimit || sets[3].size === 200,
     };
+    if (statusOnly) return { refreshedAt, notificationDelta: true, issueDelta: true,
+      refreshRequired: sets[3].size === 200 || sets[8].size === 100, notifications: result.notifications,
+      summary: result.summary, issues: result.issues,
+      manage: result.manage,
+      ...(!a.manage ? { blocks: result.blocks, physicalPonds: result.physicalPonds, ponds: result.ponds } : {}),
+      timeZone: result.timeZone };
+    return result;
   }
   async function resolveTargets(
     tx,
@@ -783,6 +812,7 @@ function createSopService(db, storage) {
                   cursor: "",
                   createdAt: now,
                   nextDueAt: now,
+                  wakeRevision: require("firebase-admin/firestore").FieldValue.increment(1),
                 },
               );
             }
@@ -942,6 +972,7 @@ function createSopService(db, storage) {
             cursor: "",
             createdAt: now,
             nextDueAt: now,
+                  wakeRevision: require("firebase-admin/firestore").FieldValue.increment(1),
           });
         }
       } else if (
@@ -1277,6 +1308,7 @@ function createSopService(db, storage) {
                 .filter((t) => t.scope === "pond")
                 .map((t) => ({ targetId: t.id, cycleId: t.cycleId })),
             nextDueAt: now,
+                  wakeRevision: require("firebase-admin/firestore").FieldValue.increment(1),
             source: source || adoption?.source || null,
           };
           tx.set(adRef, next);
@@ -1620,6 +1652,7 @@ function createSopService(db, storage) {
             task.step?.severity === "critical"
           )
             tx.update(issue.ref, {
+              updatedAt: now,
               status: "closure_review",
               closureInvalidatedAt: now,
               closureInvalidationReason:
@@ -1764,6 +1797,7 @@ function createSopService(db, storage) {
             task.purpose === "recheck"
           )
             tx.update(issue.ref, {
+              updatedAt: now,
               recoveryVerified: true,
               recoveryTaskId: taskRef.id,
               status: "closed",
@@ -1772,6 +1806,7 @@ function createSopService(db, storage) {
             });
           if (issue?.exists && resultValue === "not_applicable")
             tx.update(issue.ref, {
+              updatedAt: now,
               status: "exempted",
               exemptionReason: reason,
               exemptedBy: uid,
@@ -1856,7 +1891,7 @@ function createSopService(db, storage) {
               .data()
               .targets.some((t) => t.scope === "pond" && t.id === targetId)
           )
-            tx.update(ad.ref, { nextDueAt: now });
+            tx.update(ad.ref, { nextDueAt: now, wakeRevision: require("firebase-admin/firestore").FieldValue.increment(1) });
       } else if (input.action === "stage") {
         const targetId = id(input.targetId);
         const physical = await tx.get(

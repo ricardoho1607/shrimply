@@ -54,7 +54,7 @@ exports.notifySopWithdrawal = onDocumentCreated(
     event.data ? processWithdrawal(admin.firestore(), event.data.ref) : null,
 );
 exports.retrySopWithdrawals = onSchedule(
-  { schedule: "every 1 minutes", timeoutSeconds: 540, maxInstances: 1 },
+  { schedule: "every 5 minutes", timeoutSeconds: 540, maxInstances: 1 },
   async () => {
     const jobs = await admin
       .firestore()

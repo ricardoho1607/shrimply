@@ -18,6 +18,7 @@ const {
   sopPondStage,
   obsoleteSopTaskReason,
 } = require("../shared/orsonDomain/sop/lifecycle");
+const { canWaitForTask } = require("./usagePolicy");
 const PAGE_SIZE = 100;
 const ACTIVE_STATUSES = ["open", "scheduled", "submitted", "needs_review"];
 const documentId = () => require("firebase-admin/firestore").FieldPath.documentId();
@@ -139,7 +140,9 @@ function createSopRuntime(db) {
       snap = await adRef.get();
     if (!snap.exists || snap.data().status !== "active") return;
     const ad = { id: adId, ...snap.data() };
-    await refreshAssignments(companyId);
+    let createdTasks = false;
+    let pendingBaselineCursor = ad.baselineCursor || "";
+    const assignments = await refreshAssignments(companyId);
     if (
       !isFullyValidManualOnly(ad.definition) &&
       (!ad.baselineReconciledAt || now - ad.baselineReconciledAt > 6 * 3600000)
@@ -179,6 +182,7 @@ function createSopRuntime(db) {
         kind = kinds[kinds.indexOf(kind) + 1];
         cursor = "";
       }
+      pendingBaselineCursor = baselineCursor;
       await adRef.update({ baselineCursor, ...(!baselineCursor ? { baselineReconciledAt: now } : {}) });
     }
 
@@ -188,12 +192,15 @@ function createSopRuntime(db) {
     const [stageSnap, pondSnap, taskSnap, cycleSnap, blockSnap, companySnap] =
       await Promise.all([
         ref.collection("sopStages").get(),
-        ref.collection("ponds").get(),
+        assignments?.productionPonds || ref.collection("ponds").get(),
         taskQuery.limit(PAGE_SIZE).get(),
-        ref.collection("cycles").get(),
-        ref.collection("blocks").get(),
-        ref.get(),
+        assignments?.cycles || ref.collection("cycles").get(),
+        assignments?.blocks || ref.collection("blocks").get(),
+        assignments?.company || ref.get(),
       ]);
+    const knownTaskIds = new Set(taskSnap.docs.map((doc) => doc.id));
+    const ensureTask = (task) => knownTaskIds.has(task.id)
+      ? Promise.resolve(false) : createTask(companyId, task, now);
     const stages = rows(stageSnap),
       ponds = rows(pondSnap),
       tasks = rows(taskSnap);
@@ -624,8 +631,7 @@ function createSopRuntime(db) {
                           e.data().cycleId,
                     ))
               )
-                await createTask(
-                  companyId,
+                createdTasks = (await ensureTask(
                   taskFrom(
                     ad,
                     step,
@@ -634,8 +640,7 @@ function createSopRuntime(db) {
                     start,
                     start + step.trigger.windowMinutes * 60000,
                   ),
-                  now,
-                );
+                )) || createdTasks;
             }
           }
           const occurrences = ["daily", "weekly", "doc"].includes(
@@ -677,13 +682,14 @@ function createSopRuntime(db) {
               }))).every(Boolean)
             )
               continue;
-            await createTask(
-              companyId,
+            createdTasks = (await ensureTask(
               taskFrom(ad, step, target, due.key, due.start, due.due),
-              now,
-            );
+            )) || createdTasks;
           }
         }
+    for (const task of tasks) {
+      if (!terminal(task) && !canWaitForTask(task, ad, now)) await evaluateTask(companyId, task.id, now);
+    }
     const gates = await ref
       .collection("sopGates")
       .where("adoptionIds", "array-contains", adId)
@@ -706,16 +712,21 @@ function createSopRuntime(db) {
           ]);
           return !passed.empty || !waived.empty;
         }))).every(Boolean);
-      await gate.ref.update({ allowed, updatedAt: now });
-    }
-    for (const task of tasks) {
-      if (!terminal(task)) await evaluateTask(companyId, task.id, now);
+      if (data.allowed !== allowed)
+        await gate.ref.update({ allowed, updatedAt: now });
     }
     await db.runTransaction(async (tx) => {
       const current = await tx.get(adRef);
       if (current.exists && current.data().revision === ad.revision)
         tx.update(adRef, {
-          nextDueAt: caughtUp ? now + 60000 : now,
+          // A source event arriving during this tick must retain its immediate wake-up.
+          ...(current.data().wakeRevision === ad.wakeRevision ? {
+            nextDueAt: require("./usagePolicy").nextSopCheckAt(ad, now, {
+              caughtUp, createdTasks,
+              moreTasks: taskSnap.size === PAGE_SIZE,
+              baselinePending: !!pendingBaselineCursor,
+            }),
+          } : {}),
           taskCursor: taskSnap.size === PAGE_SIZE ? taskSnap.docs.at(-1).id : "",
           scheduleCursorAt: caughtUp
             ? now
@@ -738,11 +749,18 @@ function createSopRuntime(db) {
       if (adSnap.data()?.status === "paused") return false;
       if (!adSnap.exists || adSnap.data().status !== "active") return;
       const ad = { id: adSnap.id, ...adSnap.data() };
-      const evidenceSnap = await tx.get(
-        ref
-          .collection("sopEvidence")
-          .where("targetId", "==", task.target.id)
-          .where("field", "==", task.step.check.field),
+      // Unchanged waiting tasks can sleep until their next time boundary.
+      // Automatic checks also require the adoption's source wake revision to match.
+      if (canWaitForTask(task, ad, now)) return;
+      let evidenceStart = task.windowStart, evidenceEnd = task.dueAt;
+      if (recordingOnly(task) && ["daily", "weekly", "doc"].includes(task.step.trigger.kind)) {
+        const date = farmDate(task.windowStart, ad.timeZone);
+        const nextDate = new Date(Date.parse(date + "T00:00Z") + 86400000).toISOString().slice(0, 10);
+        evidenceStart = localInstant(date, "00:00", ad.timeZone);
+        evidenceEnd = localInstant(nextDate, "00:00", ad.timeZone) - 1;
+      }
+      const evidenceSnap = await require("./evidenceQuery").taskEvidence(
+        tx, ref, task, ad.timeZone, evidenceStart, evidenceEnd, now,
       );
       const episodeKey = hash([
         task.adoptionId,
@@ -761,13 +779,6 @@ function createSopRuntime(db) {
         );
       let issueSnap = await tx.get(issueRef),
         issue = issueSnap.exists ? issueSnap.data() : null;
-      let evidenceStart = task.windowStart, evidenceEnd = task.dueAt;
-      if (recordingOnly(task) && ["daily", "weekly", "doc"].includes(task.step.trigger.kind)) {
-        const date = farmDate(task.windowStart, ad.timeZone);
-        const nextDate = new Date(Date.parse(date + "T00:00Z") + 86400000).toISOString().slice(0, 10);
-        evidenceStart = localInstant(date, "00:00", ad.timeZone);
-        evidenceEnd = localInstant(nextDate, "00:00", ad.timeZone) - 1;
-      }
       let evaluation = evaluateSopStep(task.step, rows(evidenceSnap), {
         target: task.target,
         start: evidenceStart,
@@ -987,7 +998,23 @@ function createSopRuntime(db) {
           evidenceIds: evaluation.evidenceIds,
         });
       }
-      if (!previous.exists || task.evaluationId !== decisionId || task.result !== evaluation.result)
+      const inputEmpty = !evaluation.recorded && !evaluation.evidenceIds.length &&
+        evaluation.result === "insufficient_evidence" && !activeIssue && !shouldFail && !sourcePending;
+      let nextEvaluationAt = 0;
+      if (task.purpose === "routine" && !task.submittedAt && inputEmpty) {
+        const deadline = recordingOnly(task) ? Math.max(task.dueAt + 1, evidenceEnd + 1) : task.dueAt + 1;
+        nextEvaluationAt = deadline > now ? deadline : recordingOnly(task) ? Number.MAX_SAFE_INTEGER : 0;
+        // A future-dated observation can become eligible without another source write.
+        for (const evidence of rows(evidenceSnap)) {
+          const time = Number.isFinite(evidence.observedAt) ? evidence.observedAt :
+            isSopDate(evidence.date) ? localInstant(evidence.date, "00:00", ad.timeZone) : 0;
+          if (time > now && time >= evidenceStart && time <= evidenceEnd)
+            nextEvaluationAt = Math.min(nextEvaluationAt || time, time);
+        }
+      }
+      if (!previous.exists || task.evaluationId !== decisionId || task.result !== evaluation.result ||
+          task.evaluatedTaskRevision !== task.revision || task.evaluatedAdoptionRevision !== (ad.revision || 0) ||
+          task.evaluatedWakeRevision !== (ad.wakeRevision || 0) || task.nextEvaluationAt !== nextEvaluationAt)
         tx.update(taskRef, {
           result: evaluation.result,
           status:
@@ -1005,10 +1032,16 @@ function createSopRuntime(db) {
             ? "Evidence was submitted against changed rules, assignment, or a previously closed critical issue. A manager must review it."
             : evaluation.explanation,
           evaluationId: decisionId,
+          nextEvaluationAt,
+          evaluationInputEmpty: inputEmpty,
+          evaluatedWakeRevision: ad.wakeRevision || 0,
+          evaluatedTaskRevision: task.revision + 1,
+          evaluatedAdoptionRevision: ad.revision || 0,
         });
 
       if (corrective) {
         tx.create(issueRef, {
+          updatedAt: now,
           id: issueRef.id,
           adoptionId: ad.id,
           stepId: task.step.id,
@@ -1043,6 +1076,7 @@ function createSopRuntime(db) {
       }
       if (activeIssue && shouldFail && !previous.exists)
         tx.update(issueRef, {
+          updatedAt: now,
           lastFailureAt: now,
           lastFailureTaskId: taskId,
           lastFailureEvaluationId: decisionId,
@@ -1050,6 +1084,7 @@ function createSopRuntime(db) {
       if (nextRecheck) {
         tx.create(ref.collection("tasks").doc(nextRecheck.id), nextRecheck);
         tx.update(issueRef, {
+          updatedAt: now,
           rechecks: (issue.rechecks || 1) + 1,
           recheckTaskId: nextRecheck.id,
           lastFailedTaskId: taskId,
@@ -1063,6 +1098,7 @@ function createSopRuntime(db) {
       ) {
         const critical = issue.severity === "critical" || !sequenceVerified;
         tx.update(issueRef, {
+          updatedAt: now,
           recoveryVerified: true,
           actionSequenceVerified: sequenceVerified,
           recoveryTaskId: taskId,
@@ -1094,6 +1130,7 @@ function createSopRuntime(db) {
         evaluation.result !== "pass"
       ) {
         tx.update(issueRef, {
+          updatedAt: now,
           status: "open",
           recoveryVerified: false,
           reopenedAt: now,
@@ -1122,6 +1159,7 @@ function createSopRuntime(db) {
           ad.recipients,
         );
         tx.update(issueRef, {
+          updatedAt: now,
           nextEscalationAt: now + task.step.escalationMinutes * 60000,
           lastEscalatedAt: now,
         });
@@ -1137,7 +1175,8 @@ function createSopRuntime(db) {
   }
   async function refreshAssignments(companyId) {
     const ref = base(companyId),
-      company = (await ref.get()).data();
+      companySnapshot = await ref.get(),
+      company = companySnapshot.data();
     if (!company) return;
     const stateRef = ref.collection("sopRuntimeState").doc("assignments");
     const state = (await stateRef.get()).data() || {};
@@ -1226,6 +1265,7 @@ function createSopRuntime(db) {
             ? { assigneeId: assignee, revision: (data.revision || 0) + 1 }
             : {}),
           assignmentUpdatedAt: Date.now(),
+          ...(snapshot.ref.parent.id === "sopIssues" ? { updatedAt: Date.now() } : {}),
         };
         tx.update(snapshot.ref, change);
         tx.create(ref.collection("sopAudit").doc(), {
@@ -1243,6 +1283,7 @@ function createSopRuntime(db) {
       issueCursor: issues.size === PAGE_SIZE ? issues.docs.at(-1).id : "",
       updatedAt: Date.now(),
     });
+    return { company: companySnapshot, productionPonds, blocks, cycles };
   }
   async function project(
     companyId,
@@ -1441,7 +1482,10 @@ function createSopRuntime(db) {
       .collection("sopAdoptions")
       .where("status", "==", "active")
       .get();
-    for (const ad of ads.docs) await ad.ref.update({ nextDueAt: Date.now() });
+    for (const ad of ads.docs) await ad.ref.update({
+      nextDueAt: Date.now(),
+      wakeRevision: require("firebase-admin/firestore").FieldValue.increment(1),
+    });
   }
   async function reconcileSourceChanges(companyId) {
     const ref = base(companyId);
