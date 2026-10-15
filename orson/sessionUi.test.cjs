@@ -6,11 +6,12 @@ const { createRequire } = require('node:module');
 const path = require('node:path');
 
 // Render the real component with disposable identities and controllable snapshots/requests.
-const setup = () => {
+const setup = (kind = 'web') => {
   let authState;
   let current;
   let instance;
   let view;
+  let hookLoading = false;
   const requests = [];
   const snapshots = [];
   const timers = new Set();
@@ -28,6 +29,7 @@ const setup = () => {
       return [owner.hooks[index], next => { owner.hooks[index] = typeof next === 'function' ? next(owner.hooks[index]) : next; }];
     },
     useCallback: callback => callback,
+    useMemo: factory => factory(),
     useRef: initial => { const owner = current, index = owner.cursor++; return owner.hooks[index] ||= { current: initial }; },
     useEffect: (effect, deps) => {
       const owner = current, index = owner.cursor++, previous = owner.hooks[index];
@@ -36,7 +38,7 @@ const setup = () => {
       }
     },
   };
-  const filename = path.resolve(__dirname, '../web/src/app/dashboard/ai/page.tsx');
+  const filename = path.resolve(__dirname, kind === 'mobile' ? '../app/AIChat.tsx' : '../web/src/app/dashboard/ai/page.tsx');
   const localRequire = createRequire(filename);
   const source = process.env.SHRIMPLY_QA_BASELINE
     ? require('node:child_process').execFileSync('git', ['show', 'HEAD:web/src/app/dashboard/ai/page.tsx'], { encoding: 'utf8' })
@@ -49,6 +51,22 @@ const setup = () => {
   } }).outputText;
   const mockedRequire = name => {
     if (name === 'react') return react;
+    if (name === 'react-native') return new Proxy({
+      StyleSheet: { create: value => value }, Platform: { OS: 'ios' },
+      Alert: { alert: (_, __, actions) => actions.find(action => action.text === 'Clear')?.onPress() },
+    }, { get: (object, key) => object[key] || String(key) });
+    if (name === '@expo/vector-icons/Ionicons') return { __esModule: true, default: 'Icon' };
+    if (name === 'expo-router') return { useRouter: () => ({ back() {} }) };
+    if (name === 'react-native-safe-area-context') return { SafeAreaView: 'SafeAreaView', useSafeAreaInsets: () => ({ bottom: 0 }) };
+    if (name === '@react-native-async-storage/async-storage' || name === '@react-native-community/netinfo') return { __esModule: true, default: {} };
+    if (name === './store/pondStore') return { isPondCycleActive: () => true, usePondStore: () => ({
+      currentCompanyId: authState.company?.id, farmCacheUserId: authState.user?.uid,
+      ponds: [{ id: 'pond-1', pondName: 'A1' }],
+    }) };
+    if (name === '../shared/permissions') return { hasFarmPermission: () => true };
+    if (name === '../config/firebase') return { __esModule: true, default: {}, auth };
+    if (name === '../context/AuthContext') return { useAuth: () => authState };
+    if (name === './components/OrsonAgentCards' || name === './components/OrsonAgentInput') return { __esModule: true, default: 'AgentTools' };
     if (name.startsWith('@/components/orson/')) return { __esModule: true, default: name };
     if (name.endsWith('/orson/useAgentOperations')) return { useAgentOperations: () => ({ busy: false, operations: [], activity: null, elapsed: 0, onActivity() {}, receive() {}, clearActivity() {} }) };
     if (name === 'lucide-react') return new Proxy({}, { get: (_, key) => String(key) });
@@ -61,9 +79,15 @@ const setup = () => {
       collection: (_, ...parts) => parts, doc: (_, ...parts) => parts,
       onSnapshot: (ref, callback) => { snapshots.push({ ref, callback }); return () => {}; },
     };
-    if (name === '@/hooks/useGemini') return { useGemini: () => ({
-      loading: false, clearChat() {}, error: null,
-      sendMessage: (question, ponds, options) => new Promise((resolve, reject) => requests.push({ question, ponds, options, resolve, reject })),
+    if (name === '@/hooks/useGemini' || name === './hooks/useGemini') return { useGemini: () => ({
+      loading: hookLoading, clearChat() { hookLoading = false; }, error: null,
+      sendMessage: (question, ponds, options) => {
+        hookLoading = true;
+        return new Promise((resolve, reject) => requests.push({ question, ponds, options,
+          resolve: value => { hookLoading = false; resolve(value); },
+          reject: error => { hookLoading = false; reject(error); },
+        }));
+      },
     }) };
     if (name.endsWith('/orson/session')) return { OrsonSessionChangedError, orsonIdentityKey: (uid, companyId) => uid && companyId ? `${uid}:${companyId}` : null };
     if (name.endsWith('/orson/responseCompletion')) return { OrsonIncompleteResponseError };
@@ -73,7 +97,8 @@ const setup = () => {
   const loaded = { exports: {} };
   const window = { setTimeout: callback => { timers.add(callback); return callback; }, clearTimeout: callback => timers.delete(callback), confirm: () => true };
   const sessionStorage = { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) };
-  new Function('require', 'module', 'exports', 'window', 'sessionStorage', compiled)(mockedRequire, loaded, loaded.exports, window, sessionStorage);
+  new Function('require', 'module', 'exports', 'window', 'sessionStorage', 'setInterval', 'clearInterval', 'setTimeout', compiled)(
+    mockedRequire, loaded, loaded.exports, window, sessionStorage, () => 1, () => {}, window.setTimeout);
   const makeInstance = () => ({ hooks: [], pending: [], cursor: 0 });
   const root = makeInstance();
   const cleanup = owner => owner?.hooks.forEach(hook => hook?.cleanup?.());
@@ -94,6 +119,7 @@ const setup = () => {
   const elements = (node = view) => !node || typeof node !== 'object' ? [] : [node, ...(node.props?.children || []).flat(Infinity).filter(child => child !== undefined).flatMap(elements)];
   const text = (node = view) => typeof node === 'string' ? node : !node || typeof node !== 'object' ? '' : (node.props?.children || []).flat(Infinity).filter(child => child !== undefined).map(text).join(' ');
   const signIn = (uid, companyId) => {
+    hookLoading = false;
     auth.currentUser = uid ? { uid } : null;
     authState = { user: uid ? { uid, companyId } : null, company: companyId ? { id: companyId } : null, loading: false, companyLoading: false };
     render();
@@ -101,9 +127,11 @@ const setup = () => {
     render();
   };
   const send = async message => {
-    elements().find(node => node.type === 'textarea').props.onChange({ target: { value: message } });
+    if (kind === 'mobile') elements().find(node => node.type === 'TextInput').props.onChangeText(message);
+    else elements().find(node => node.type === 'textarea').props.onChange({ target: { value: message } });
     render();
-    elements().find(node => node.type === 'form').props.onSubmit({ preventDefault() {} });
+    if (kind === 'mobile') elements().find(node => node.props.accessibilityLabel === 'Send message').props.onPress();
+    else elements().find(node => node.type === 'form').props.onSubmit({ preventDefault() {} });
     render();
     await Promise.resolve();
   };
@@ -204,4 +232,96 @@ test('refresh restores only scoped history and retry replaces an incomplete bubb
   assert.ok(!ui.text().includes('Incomplete answer'));
   assert.equal(ui.text().split('Complete answer.').length - 1, 1);
   assert.ok(!ui.text().includes('Response interrupted.'));
+});
+
+const savedPreview = { title: 'Saved-record preview', text: 'PRIVATE PREVIEW: Pond A morning DO 3.2 mg/L on 2026-09-02' };
+
+test('saved-record preview appears with activity, then only the answer is saved and sent', async () => {
+  const ui = setup(); ui.signIn('A', 'company-A');
+  await ui.send('Why is oxygen low?');
+  const request = ui.requests[0];
+  request.options.onPreview(savedPreview); ui.render(); ui.flush();
+  assert.ok(ui.text().includes(savedPreview.text));
+  assert.ok(ui.text().includes('Working on your request'));
+  assert.ok([...ui.storage.values()].every(value => !value.includes('PRIVATE PREVIEW')));
+  request.options.onPartialResponse(' \n '); ui.render();
+  assert.ok(ui.text().includes(savedPreview.text), 'empty text must not hide the preview');
+  request.options.onPartialResponse('The checked answer'); ui.render();
+  assert.ok(!ui.text().includes(savedPreview.text));
+  request.options.onPreview(savedPreview); ui.render();
+  assert.ok(!ui.text().includes(savedPreview.text), 'late preview must not replace answer text');
+  request.resolve('The complete checked answer'); await Promise.resolve(); ui.render(); ui.flush();
+  request.options.onPreview(savedPreview); ui.render();
+  assert.ok(!ui.text().includes(savedPreview.text));
+  assert.ok([...ui.storage.values()].every(value => !value.includes('PRIVATE PREVIEW')));
+  await ui.send('Next question');
+  assert.ok(!JSON.stringify(ui.requests.at(-1).options.conversationHistory).includes('PRIVATE PREVIEW'));
+  ui.requests.at(-1).resolve('Next answer'); await Promise.resolve();
+});
+
+test('failed requests clear previews and retry never treats them as an answer', async () => {
+  const ui = setup(); ui.signIn('A', 'company-A');
+  await ui.send('Why is oxygen low?');
+  const request = ui.requests[0];
+  request.options.onPreview(savedPreview); ui.render();
+  request.reject(new ui.OrsonIncompleteResponseError('', 'TIMEOUT'));
+  await Promise.resolve(); ui.render(); ui.flush();
+  assert.ok(!ui.text().includes(savedPreview.text));
+  assert.ok(ui.text().includes('Response interrupted.'));
+  request.options.onPreview(savedPreview); ui.render();
+  assert.ok(!ui.text().includes(savedPreview.text));
+  const retry = ui.elements().find(node => node.type === 'button' && node.props.children.includes('Retry'));
+  const retryPromise = retry.props.onClick();
+  const next = ui.requests.at(-1);
+  assert.ok(!JSON.stringify(next.options.conversationHistory).includes('PRIVATE PREVIEW'));
+  next.resolve('Recovered answer'); await retryPromise; ui.render();
+  assert.ok(ui.text().includes('Recovered answer'));
+});
+
+test('reset, unmount and account/company changes reject delayed previews', async () => {
+  for (const transition of ['reset', 'reload', 'account', 'company']) {
+    const ui = setup(); ui.signIn('A', 'company-A');
+    await ui.send('Why is oxygen low?');
+    const request = ui.requests[0]; request.options.onPreview(savedPreview); ui.render();
+    if (transition === 'reset') ui.elements().find(node => node.type === 'button' && ui.text(node).includes('Reset')).props.onClick();
+    if (transition === 'reload') ui.reload();
+    if (transition === 'account') ui.signIn('B', 'company-B');
+    if (transition === 'company') ui.signIn('A', 'company-B');
+    request.options.onPreview(savedPreview); request.resolve('Delayed old answer');
+    await Promise.resolve(); ui.render(); ui.flush();
+    assert.ok(!ui.text().includes(savedPreview.text), transition);
+    assert.ok(!ui.text().includes('Delayed old answer'), transition);
+    assert.ok([...ui.storage.values()].every(value => !value.includes('PRIVATE PREVIEW')), transition);
+  }
+});
+
+test('real mobile screen replaces preview on text and rejects callbacks after reset or account change', async () => {
+  const ui = setup('mobile'); ui.signIn('A', 'company-A');
+  await ui.send('Why is oxygen low in A1?');
+  const first = ui.requests[0]; first.options.onPreview(savedPreview); ui.render();
+  assert.ok(ui.text().includes(savedPreview.text));
+  assert.ok(ui.text().includes('Working on your request'));
+  first.options.onPartialResponse(' '); ui.render();
+  assert.ok(ui.text().includes(savedPreview.text));
+  first.options.onPartialResponse('The answer starts here'); ui.render();
+  assert.ok(!ui.text().includes(savedPreview.text));
+  first.options.onPreview(savedPreview); ui.render();
+  assert.ok(!ui.text().includes(savedPreview.text));
+  first.resolve('Complete answer'); await Promise.resolve(); ui.render();
+  first.options.onPreview(savedPreview); ui.render();
+  assert.ok(!ui.text().includes(savedPreview.text));
+  await ui.send('Second question');
+  const second = ui.requests[1];
+  assert.ok(!JSON.stringify(second.options.conversationHistory).includes('PRIVATE PREVIEW'));
+  second.options.onPreview(savedPreview); ui.render();
+  ui.elements().find(node => node.props.accessibilityLabel === 'Reset conversation').props.onPress(); ui.render();
+  second.options.onPreview(savedPreview); second.resolve('Old answer after reset'); await Promise.resolve(); ui.render();
+  assert.ok(!ui.text().includes(savedPreview.text));
+  assert.ok(!ui.text().includes('Old answer after reset'));
+  await ui.send('Third question'); const third = ui.requests[2];
+  third.options.onPreview(savedPreview); ui.render();
+  ui.signIn('A', 'company-B'); third.options.onPreview(savedPreview); third.resolve('Old company reply');
+  await Promise.resolve(); ui.render();
+  assert.ok(!ui.text().includes(savedPreview.text));
+  assert.ok(!ui.text().includes('Old company reply'));
 });

@@ -17,6 +17,7 @@ import { agentActivityLabel } from '../../../../../shared/orsonAgentPresentation
 import { orsonIdentityKey, OrsonSessionChangedError } from '../../../../../orson/session';
 import { cleanOrsonResponse } from '../../../../../orson/promptBuilder';
 import { OrsonIncompleteResponseError } from '../../../../../orson/responseCompletion';
+import type { OrsonResponsePreview } from '../../../../../orson/responsePreview';
 import { useGemini } from '@/hooks/useGemini';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
@@ -96,6 +97,7 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
   });
   const [inputText, setInputText] = useState('');
   const [streamingReplyId, setStreamingReplyId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<OrsonResponsePreview | null>(null);
   const [analyzingDots, setAnalyzingDots] = useState('.');
 
   const { sendMessage, loading, clearChat, error } = useGemini();
@@ -138,7 +140,7 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages, loading, preview]);
 
   const handleSend = async (textToSubmit?: string, retryId?: string) => {
     const text = textToSubmit || inputText;
@@ -157,6 +159,8 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
     if (!retryId) setMessages(prev => [...prev, userMessage]);
     setInputText('');
     setAnalyzingDots('.');
+    setPreview(null);
+    let previewOpen = true;
     const replyId = retryId || `orson-${replyTimestamp.getTime()}-${currentGeneration}`;
     const upsertReply = (message: string, retryPrompt?: string) => {
       if (!isCurrent()) return;
@@ -168,6 +172,7 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
     try {
       const aiResponse = await sendMessage(text.trim(), ponds, {
         companyId,
+        onPreview: value => { if (isCurrent() && previewOpen) setPreview(value); },
         onActivity: event => { if (isCurrent()) agent.onActivity(event); },
         onOperation: operation => {
           if (!isCurrent()) return;
@@ -183,7 +188,9 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
           .slice(-20)
           .map((message) => ({ role: message.type === 'ai' ? 'model' : 'user', text: message.message })),
         onPartialResponse: (partialResponse) => {
-          if (!isCurrent()) return;
+          if (!isCurrent() || !partialResponse.trim()) return;
+          previewOpen = false;
+          setPreview(null);
           setStreamingReplyId(replyId);
           upsertReply(partialResponse);
         },
@@ -194,13 +201,15 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
       if (err instanceof OrsonIncompleteResponseError) upsertReply(err.partialText || copy('No answer received.'), text.trim());
       else upsertReply(copy('No answer received.'), text.trim());
     } finally {
-      if (isCurrent()) { setStreamingReplyId(null); agent.clearActivity(); }
+      previewOpen = false;
+      if (isCurrent()) { setPreview(null); setStreamingReplyId(null); agent.clearActivity(); }
     }
   };
 
   const handleClearChat = () => {
     if (window.confirm(copy('Clear conversation history?'))) {
       generation.current += 1;
+      setPreview(null);
       setStreamingReplyId(null);
       clearChat();
       sessionStorage.removeItem(storageKey);
@@ -261,6 +270,13 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
                 );
               })}
 
+              {loading && !streamingReplyId && preview && (
+                <div className="orson-message-row is-ai" role="status" aria-live="polite">
+                  <div className="orson-message-stack">
+                    <div className="orson-bubble"><strong>{preview.title}</strong>{'\n'}{preview.text}</div>
+                  </div>
+                </div>
+              )}
               {loading && !agent.activityFinished && (!streamingReplyId || (agent.activity && agent.activity.step !== 'answer')) && (
                 <div className="orson-message-row is-ai">
                   <div className="orson-message-stack">

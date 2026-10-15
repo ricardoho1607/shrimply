@@ -29,6 +29,7 @@ import { useAuth } from '../context/AuthContext';
 import { orsonIdentityKey, OrsonSessionChangedError } from '../orson/session';
 import { cleanOrsonResponse } from '../orson/promptBuilder';
 import { OrsonIncompleteResponseError } from '../orson/responseCompletion';
+import type { OrsonResponsePreview } from '../orson/responsePreview';
 import { hasFarmPermission } from '../shared/permissions';
 
 interface ChatMessage {
@@ -88,6 +89,7 @@ function AIChatSession() {
   const [inputText, setInputText] = useState('');
   const [conversationLanguage, setConversationLanguage] = useState('en');
   const [streamingReplyId, setStreamingReplyId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<OrsonResponsePreview | null>(null);
   const [analyzingDots, setAnalyzingDots] = useState('.');
   
   const { sendMessage, loading, clearChat } = useGemini();
@@ -124,7 +126,7 @@ function AIChatSession() {
 
   useEffect(() => {
     setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-  }, [messages, loading]);
+  }, [messages, loading, preview]);
 
   const confirmClearChat = () => {
     Alert.alert(
@@ -138,6 +140,7 @@ function AIChatSession() {
           onPress: () => {
             generation.current += 1;
             clearChat();
+            setPreview(null);
             setStreamingReplyId(null);
             setAnalyzingDots('.');
             setMessages([{
@@ -171,6 +174,8 @@ function AIChatSession() {
     if (!retryId) setMessages(prev => [...prev, userMessage]);
     setInputText('');
     setAnalyzingDots('.');
+    setPreview(null);
+    let previewOpen = true;
     const replyId = retryId || `orson-${Date.now()}`;
     const replyTimestamp = new Date();
     const upsertReply = (message: string, retryPrompt?: string) => {
@@ -182,6 +187,7 @@ function AIChatSession() {
     try {
       const aiResponse = await sendMessage(userText, activePonds, {
         companyId: company?.id,
+        onPreview: value => { if (isCurrent() && previewOpen) setPreview(value); },
         onActivity: event => { if (isCurrent()) agent.onActivity(event); },
         onOperation: operation => {
           if (!isCurrent()) return;
@@ -197,7 +203,9 @@ function AIChatSession() {
           .slice(-20)
           .map((message) => ({ role: message.type === 'ai' ? 'model' : 'user', text: message.message })),
         onPartialResponse: (partialResponse) => {
-          if (!isCurrent()) return;
+          if (!isCurrent() || !partialResponse.trim()) return;
+          previewOpen = false;
+          setPreview(null);
           setStreamingReplyId(replyId);
           upsertReply(partialResponse);
         },
@@ -207,7 +215,8 @@ function AIChatSession() {
       if (!isCurrent() || error instanceof OrsonSessionChangedError) return;
       upsertReply(error instanceof OrsonIncompleteResponseError ? error.partialText : '', userText);
     } finally {
-      if (isCurrent()) { setStreamingReplyId(null); agent.clearActivity(); }
+      previewOpen = false;
+      if (isCurrent()) { setPreview(null); setStreamingReplyId(null); agent.clearActivity(); }
     }
   }, [inputText, loading, conversationLanguage, sendMessage, activePonds, company, messages, agent]);
 
@@ -294,6 +303,15 @@ function AIChatSession() {
                 </View>
               </View>
             ))}
+            {loading && !streamingReplyId && preview && (
+              <View style={[styles.messageContainer, styles.aiMessage]} accessibilityLiveRegion="polite">
+                <View style={styles.messageStack}>
+                  <View style={styles.messageBubble}>
+                    <Text style={[styles.messageText, styles.aiText]}>{preview.title}{'\n'}{preview.text}</Text>
+                  </View>
+                </View>
+              </View>
+            )}
             {loading && !agent.activityFinished && (!streamingReplyId || (agent.activity && agent.activity.step !== 'answer')) && (
               <View style={styles.messageContainer}>
                 <View style={styles.messageStack}>

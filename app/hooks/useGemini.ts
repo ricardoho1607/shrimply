@@ -28,6 +28,7 @@ import { buildOrsonPredictionSnapshotRequest } from '../../orson/predictionSnaps
 import type { OrsonCalibrationProfile, OrsonConversationMessage, OrsonHarvestProjection, OrsonMortalityDiagnosticContext } from '../../orson/types';
 import { loadCachedOrsonCalibration } from '../../orson/calibrationCache';
 import { consumeOrsonCallableStream, type OrsonTextStreamChunk } from '../../orson/callableStream';
+import { buildOrsonResponsePreview, type OrsonResponsePreview } from '../../orson/responsePreview';
 
 // Types for the chat history
 interface Message {
@@ -44,6 +45,7 @@ type SendMessageOptions = {
   calibration?: OrsonCalibrationProfile | null;
   conversationHistory?: OrsonConversationMessage[];
   onPartialResponse?: (text: string) => void;
+  onPreview?: (preview: OrsonResponsePreview) => void;
   onActivity?: (activity: OrsonActivity) => void;
   onOperation?: (operation: OrsonOperation) => void;
   agentOperationIds?: string[];
@@ -205,7 +207,8 @@ export const useGemini = () => {
       if (getAuth(app).currentUser?.uid !== user?.uid || options.companyId !== company?.id) throw new OrsonSessionChangedError();
     };
     assertCurrent();
-    const explicitAction = Boolean(options.onOperation) && isExplicitFarmAction(userMessage);
+    const farmAction = isExplicitFarmAction(userMessage);
+    const explicitAction = Boolean(options.onOperation) && farmAction;
     const requestStartedAt = Date.now();
     setLoading(true);
     setError(null);
@@ -245,6 +248,18 @@ export const useGemini = () => {
         return analysis.diagnosticRequest.status === 'ambiguous'
           ? 'More than one pond has recent mortality. Name the pond so I can trace its previous 14 days without mixing pond histories.'
           : 'I could not find a recent mortality record to investigate. Name the pond and record the mortality observation first.';
+      }
+
+      let previewCache: { key: string | null; text: string | null } | undefined;
+      if (options.onPreview && !farmAction) {
+        const preview = buildOrsonResponsePreview(analysis);
+        if (preview) {
+          const key = analysis.promptPackage.cacheKey;
+          const text = await getCachedResponse(key ? session.storageKey('cache', key) : null);
+          previewCache = { key, text };
+          assertCurrent();
+          if (!text) options.onPreview(preview);
+        }
       }
 
       if (!explicitAction && analysis.diagnosticRequest.requested && analysis.diagnosticRequest.pondId && options.companyId) {
@@ -291,7 +306,9 @@ export const useGemini = () => {
         return exactText;
       }
 
-      const cachedText = await getCachedResponse(analysis.promptPackage.cacheKey ? session.storageKey('cache', analysis.promptPackage.cacheKey) : null);
+      const cacheKey = analysis.promptPackage.cacheKey;
+      const cachedText = previewCache && previewCache.key === cacheKey ? previewCache.text
+        : await getCachedResponse(cacheKey ? session.storageKey('cache', cacheKey) : null);
       assertCurrent();
       if (!explicitAction && cachedText) {
         await emitProgressiveText(cachedText, options.onPartialResponse, assertCurrent);
