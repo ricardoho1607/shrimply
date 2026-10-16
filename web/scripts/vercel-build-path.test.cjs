@@ -40,9 +40,9 @@ test('Vercel includes shared client contracts and excludes backend secrets and c
   }
 });
 
-test('Vercel uploads the shared Orson inventory policy and its runtime dependencies', () => {
+test('Vercel uploads the shared Orson client helpers and their runtime dependencies', () => {
   const excluded = ignore().add(fs.readFileSync(path.join(repositoryRoot, '.vercelignore'), 'utf8'));
-  const pending = ['functions/shared/orsonInventoryPolicy.js'];
+  const pending = ['functions/shared/orsonInventoryPolicy.js', 'functions/shared/orsonReadableText.js'];
   const visited = new Set();
   while (pending.length) {
     const file = pending.pop();
