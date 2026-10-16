@@ -536,6 +536,7 @@ function FeedRecordsContent() {
 
   const closeHistoryDrawer = () => {
     setRevealedFeedRecordId(null);
+    setDeletingFeedRecord(null);
     setSelectedPondIdForHistory(null);
   };
 
@@ -929,7 +930,7 @@ function FeedRecordsContent() {
       )}
 
       {deletingFeedRecord && selectedPondForHistory && (
-        <div className="responsive-modal-overlay dashboard-confirm-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1300, background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+        <div className="responsive-modal-overlay dashboard-confirm-overlay" style={{ position: 'fixed', inset: 0, zIndex: 9200, background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
           <div role="alertdialog" aria-modal="true" aria-labelledby="delete-feed-title" className="glass-card animate-fade-up responsive-modal dashboard-confirm-modal" style={{ width: '100%', maxWidth: '460px', padding: '28px', background: '#FFFFFF', textAlign: 'center' }}>
             <div style={{ width: '56px', height: '56px', margin: '0 auto 14px', borderRadius: '50%', background: '#FDECEC', color: '#E74C3C', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Trash2 size={25} />

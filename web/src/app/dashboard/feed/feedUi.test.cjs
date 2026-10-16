@@ -39,6 +39,15 @@ test('feed history drawer closes only when its backdrop is clicked', () => {
   assert.match(source, /className="responsive-side-drawer-overlay feed-history-overlay" onClick=\{handleHistoryBackdropClick\}/);
 });
 
+test('feed deletion confirmation stays above history, and closing history clears its pending deletion', () => {
+  const historyLayer = source.match(/className="responsive-side-drawer-overlay feed-history-overlay"[^>]*zIndex:\s*(\d+)/);
+  const confirmationLayer = source.match(/className="responsive-modal-overlay dashboard-confirm-overlay"[^>]*zIndex:\s*(\d+)/);
+  assert.ok(historyLayer && confirmationLayer);
+  assert.ok(Number(confirmationLayer[1]) > Number(historyLayer[1]), 'Delete and cancel must remain reachable above history');
+  const closeHistory = source.slice(source.indexOf('const closeHistoryDrawer ='), source.indexOf('const handleHistoryBackdropClick ='));
+  assert.match(closeHistory, /setDeletingFeedRecord\(null\)/, 'A pending deletion must not reopen for a different pond');
+});
+
 test('phone feed history header stays below device navigation and status areas', () => {
   assert.match(source, /className="responsive-side-drawer-overlay feed-history-overlay"[\s\S]*?style=\{\{ zIndex: 9100 \}\}/);
   assert.match(source, /className="responsive-side-drawer feed-history-drawer"[\s\S]*?style=\{\{ paddingTop: 0 \}\}/);
