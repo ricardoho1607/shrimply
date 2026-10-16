@@ -3,6 +3,7 @@
 const { getOrsonGenerationSettings } = require('./metaModelApi');
 const { ORSON_EVIDENCE_PROMPT_RULES } = require('./orsonPromptPolicy');
 const { isTreatmentQuestion } = require('./orsonInventoryPolicy');
+const { createFeedAdviceStream, guardFeedAdvice } = require('./orsonFeedAdvice');
 
 const ISSUE_CODES = new Set([
   'unsupported_biomass_trend', 'unsupported_estimate_direction', 'unsupported_causal_confidence',
@@ -129,11 +130,176 @@ const readSection = (context, label) => {
   return null;
 };
 
+const MAX_DECODE_DEPTH = 64;
+const MAX_DECODE_NODES = 100000;
+const MAX_DECODE_BYTES = 2 * 1024 * 1024; // 2 MiB
+
+const decodeRiskPayload = (payload) => {
+  if (payload === null || payload === undefined) return payload;
+  if (!Array.isArray(payload) && typeof payload !== 'object') return null;
+
+  const state = {
+    nodeCount: 0,
+    byteCount: 0,
+    refEvalCount: 0,
+  };
+
+  const decodePond = (pond, baseDepth = 0) => {
+    if (!pond || typeof pond !== 'object' || Array.isArray(pond)) {
+      throw new Error('Malformed pond structure');
+    }
+
+    const hasRefs = Object.prototype.hasOwnProperty.call(pond, 'refs') && pond.refs && typeof pond.refs === 'object' && !Array.isArray(pond.refs);
+    const hasLegacyDict = Object.prototype.hasOwnProperty.call(pond, 'reference_dictionary') && pond.reference_dictionary && typeof pond.reference_dictionary === 'object' && !Array.isArray(pond.reference_dictionary);
+    const isEncoded = hasRefs || hasLegacyDict;
+
+    const activeStack = new Set();
+
+    const resolveValue = (val, depth, isRoot = false) => {
+      if (isEncoded && val !== null && typeof val === 'object' && !Array.isArray(val) && Object.prototype.hasOwnProperty.call(val, '$ref')) {
+        if (Object.keys(val).length !== 1) {
+          throw new Error('Reject non-singleton ref object with extra keys');
+        }
+        const refStr = val.$ref;
+        if (typeof refStr !== 'string') {
+          throw new Error('Malformed ref: not a string');
+        }
+
+        let table;
+        let refKey;
+        const refsMatch = refStr.match(/^#\/refs\/(r\d+)$/);
+        const legacyMatch = refStr.match(/^#\/reference_dictionary\/([a-zA-Z0-9_-]+)$/);
+
+        if (refsMatch && refsMatch[0] === refStr) {
+          table = 'refs';
+          refKey = refsMatch[1];
+        } else if (legacyMatch && legacyMatch[0] === refStr) {
+          table = 'reference_dictionary';
+          refKey = legacyMatch[1];
+        } else {
+          throw new Error('Reject external, cross-pond or arbitrary ref');
+        }
+
+        if (refKey === '__proto__' || refKey === 'constructor' || refKey === 'prototype' || Object.prototype.hasOwnProperty.call(Object.prototype, refKey)) {
+          throw new Error('Reject prototype key read');
+        }
+
+        const tableObj = table === 'refs' ? (hasRefs ? pond.refs : null) : (hasLegacyDict ? pond.reference_dictionary : null);
+        if (!tableObj || !Object.prototype.hasOwnProperty.call(tableObj, refKey)) {
+          throw new Error(`Dangling ref: key ${refKey} not found in pond table ${table}`);
+        }
+
+        const stackKey = `${table}:${refKey}`;
+        if (activeStack.has(stackKey)) {
+          throw new Error('Cycle detected in ref expansion');
+        }
+
+        if (activeStack.size >= MAX_DECODE_DEPTH) {
+          throw new Error('Exceeded ref evaluation depth limit');
+        }
+        if (++state.refEvalCount > 10000) {
+          throw new Error('Exceeded max ref evaluations');
+        }
+
+        activeStack.add(stackKey);
+        let target;
+        try {
+          target = resolveValue(tableObj[refKey], depth, false);
+        } finally {
+          activeStack.delete(stackKey);
+        }
+        return target;
+      }
+
+      if (++state.nodeCount > MAX_DECODE_NODES) {
+        throw new Error('Exceeded node count limit');
+      }
+      if (depth > MAX_DECODE_DEPTH) {
+        throw new Error('Exceeded depth limit');
+      }
+
+      if (val === null || typeof val !== 'object') {
+        const serialized = JSON.stringify(val);
+        const bytes = serialized === undefined ? 4 : Buffer.byteLength(serialized, 'utf8');
+        state.byteCount += bytes;
+        if (state.byteCount > MAX_DECODE_BYTES) throw new Error('Exceeded byte limit');
+        return val;
+      }
+
+      if (Array.isArray(val)) {
+        state.byteCount += 2;
+        if (state.byteCount > MAX_DECODE_BYTES) throw new Error('Exceeded byte limit');
+        const res = [];
+        for (let i = 0; i < val.length; i++) {
+          if (i > 0) {
+            state.byteCount += 1;
+            if (state.byteCount > MAX_DECODE_BYTES) throw new Error('Exceeded byte limit');
+          }
+          res.push(resolveValue(val[i], depth + 1, false));
+        }
+        return res;
+      }
+
+      state.byteCount += 2;
+      if (state.byteCount > MAX_DECODE_BYTES) throw new Error('Exceeded byte limit');
+
+      const result = {};
+      let first = true;
+      for (const k of Object.keys(val)) {
+        if (isRoot && ((k === 'refs' && hasRefs) || (k === 'reference_dictionary' && hasLegacyDict))) {
+          continue;
+        }
+
+        if (!first) {
+          state.byteCount += 1;
+          if (state.byteCount > MAX_DECODE_BYTES) throw new Error('Exceeded byte limit');
+        }
+        first = false;
+
+        const keyBytes = Buffer.byteLength(JSON.stringify(k), 'utf8') + 1;
+        state.byteCount += keyBytes;
+        if (state.byteCount > MAX_DECODE_BYTES) throw new Error('Exceeded byte limit');
+
+        const resolved = resolveValue(val[k], depth + 1, false);
+        Object.defineProperty(result, k, {
+          value: resolved,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+      }
+      return result;
+    };
+
+    return resolveValue(pond, baseDepth, true);
+  };
+
+  try {
+    if (Array.isArray(payload)) {
+      if (++state.nodeCount > MAX_DECODE_NODES) return null;
+      state.byteCount += 2;
+      if (state.byteCount > MAX_DECODE_BYTES) return null;
+      const res = [];
+      for (let i = 0; i < payload.length; i++) {
+        if (i > 0) {
+          state.byteCount += 1;
+          if (state.byteCount > MAX_DECODE_BYTES) return null;
+        }
+        res.push(decodePond(payload[i], 1));
+      }
+      return res;
+    }
+    return decodePond(payload, 0);
+  } catch (_) {
+    return null;
+  }
+};
+
 const getClaimLimits = (prompt) => {
   const boundary = prompt.search(/(?:^|\n\n)USER QUESTION:\n/);
   const context = boundary < 0 ? prompt : prompt.slice(0, boundary);
   const question = boundary < 0 ? prompt : prompt.slice(boundary).replace(/^\s*USER QUESTION:\n/, '');
-  const payload = readSection(context, 'ORSON RISK PAYLOAD');
+  const payload = decodeRiskPayload(readSection(context, 'ORSON RISK PAYLOAD'));
   const ponds = Array.isArray(payload) ? payload.filter(pond => pond && typeof pond === 'object') : [];
   const focus = readSection(context, 'ORSON QUESTION FOCUS') || {};
   const biomassComparisons = ponds.map(pond => pond.diagnostic_context?.comparisons?.estimated_biomass);
@@ -300,19 +466,24 @@ const isWaterQualityConcept = question => (
   && /\b(?:alkalinity|alkalinitas|dissolved oxygen|morning do|dawn do|do|ph|salinity|salinitas|temperature|suhu|hardness|ca:?mg|calcium|magnesium)\b/i.test(String(question))
 );
 
-const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standard', questionRoute, onTextDelta, reviewSafety, deadlineMs = Date.now() + 140000 }) => {
+const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standard', questionRoute, onTextDelta, reviewSafety, guardFeedAmounts = true, deadlineMs = Date.now() + 140000 }) => {
   const limits = getClaimLimits(prompt);
+  // Only trusted server code can bypass this for a user-requested farm-entry
+  // draft. A client prompt or model assertion cannot authorize an amount.
+  const protectFeed = guardFeedAmounts;
+  const feedStream = protectFeed ? createFeedAdviceStream(onTextDelta, limits.question) : null;
   const settings = getOrsonGenerationSettings(mode);
   const remainingTimeout = cap => Math.max(1, Math.min(cap, deadlineMs - Date.now()));
 
   const draft = await generate({
     ...settings,
     timeoutMs: remainingTimeout(settings.timeoutMs),
-    onTextDelta,
+    onTextDelta: feedStream ? delta => feedStream.push(delta) : onTextDelta,
   });
 
   if (draft.finishReason !== 'STOP' || !draft.text?.trim()) {
-    const text = buildFactualFallback(limits);
+    const fallback = buildFactualFallback(limits);
+    const text = protectFeed ? guardFeedAdvice(fallback, limits.question).text : fallback;
     if (onTextDelta && !draft.text?.trim()) await onTextDelta(text);
     return {
       ...draft,
@@ -332,8 +503,11 @@ const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standar
     ? 'no_application_guidance'
     : undefined;
 
+  const feedChecked = feedStream ? await feedStream.finish(draft.text) : { text: draft.text, blocked: false };
   return {
     ...draft,
+    text: feedChecked.text,
+    feedAdviceStatus: feedChecked.blocked ? 'withheld' : 'unchanged',
     doseSafety,
     groundingStatus: 'passed',
     groundingIssues: [],
@@ -344,4 +518,4 @@ const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standar
 };
 
 module.exports = { generateGroundedOrsonResponse, getClaimLimits, findUnsupportedClaims, isNitrogenThresholdGuidance, nitrogenGuidanceIssues,
-  isFeedManagementQuestion, feedManagementCoverageIssues, requiresRequestedItemCoverage, requestedItemCoverageIssues };
+  isFeedManagementQuestion, feedManagementCoverageIssues, requiresRequestedItemCoverage, requestedItemCoverageIssues, decodeRiskPayload };

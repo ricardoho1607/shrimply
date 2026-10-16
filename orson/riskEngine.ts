@@ -852,7 +852,7 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
   const qualifiedFindings = findings.map((finding) => qualifyFindingEvidence(
     finding,
     metrics,
-    metrics.evidence?.asOfTimestamp ?? generatedAt,
+    generatedAt,
   ));
   qualifiedFindings.sort(compareRiskFindings);
 

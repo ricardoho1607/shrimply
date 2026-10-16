@@ -7,7 +7,8 @@ import { requireCompleteOrsonResponse, OrsonIncompleteResponseError, type OrsonR
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, getDoc } from 'firebase/firestore';
 import { app, db } from '@/lib/firebase';
-import { getErrorMessage, withTimeout } from '@/lib/asyncUtils';
+import { withTimeout } from '@/lib/asyncUtils';
+import { friendlyOrsonRequestError } from '../../../orson/requestError';
 import { buildOrsonAnalysis } from '../../../orson/pipeline';
 import {
   type OrsonAiFunction,
@@ -288,6 +289,7 @@ export const useGemini = () => {
 
       const functions = getFunctions(app);
       if (options.companyId && options.projectionSnapshot) {
+        assertCurrent();
         try {
           const snapshotRequest = buildOrsonPredictionSnapshotRequest(
             options.companyId,
@@ -295,7 +297,9 @@ export const useGemini = () => {
             options.projectionSnapshot.projection,
           );
           const recordPrediction = httpsCallable(functions, 'recordOrsonPrediction');
-          await recordPrediction(snapshotRequest);
+          recordPrediction(snapshotRequest).catch((predictionError) => {
+            console.warn('Orson prediction snapshot could not be recorded.', predictionError);
+          });
         } catch (predictionError) {
           console.warn('Orson prediction snapshot could not be recorded.', predictionError);
         }
@@ -414,7 +418,7 @@ export const useGemini = () => {
 
       const message = explicitAction
         ? 'Orson could not prepare your entry. No save was confirmed. Please retry, or enter the values in the pond or Lab Reports form.'
-        : getErrorMessage(err, ORSON_FALLBACK_RESPONSE);
+        : friendlyOrsonRequestError(err, ORSON_FALLBACK_RESPONSE, userMessage);
       if (latestRequestId.current === requestId) {
         setError(message);
       }

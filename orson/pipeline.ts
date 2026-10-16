@@ -31,6 +31,10 @@ export const buildOrsonAnalysis = (
     reports,
     outlooks,
     conversationHistory,
+    lookupRecords: (pondId: string | null, pondName: string) => {
+      const pond = normalizedPonds.find(item => pondId ? item.id === pondId : item.pondName === pondName);
+      return pond ? extractDailyRecords14d(pond, pond.asOfDate, 14, true) : [];
+    },
   };
   const initialPromptPackage = buildOrsonPromptPackage(promptParams);
   const diagnosticRequested = initialPromptPackage.questionFocus.analysisMode === 'mortality_diagnostic';

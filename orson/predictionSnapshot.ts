@@ -53,7 +53,7 @@ export const buildOrsonPredictionSnapshotRequest = (
       survivalPercent: projection.assumedSurvivalPercent,
       fcr: projection.projectedFcr,
     },
-    learningContext: projection.learningContext,
-    riskIds: projection.risks.map((risk) => risk.id).slice(0, 12),
+    learningContext: projection.learningContext ? { ...projection.learningContext } : projection.learningContext,
+    riskIds: projection.risks ? projection.risks.map((risk) => risk.id).slice(0, 12) : [],
   };
 };

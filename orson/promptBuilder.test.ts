@@ -6,9 +6,11 @@ import {
   buildOrsonRequestPrompt,
   cleanOrsonResponse,
   estimateOrsonPromptTokens,
+  expandReferences,
   isFarmSpecificQuestion,
   ORSON_FALLBACK_RESPONSE,
   ORSON_PROMPT_TOKEN_BUDGET,
+  selectCompleteContextSections,
   withOrsonTimeout,
 } from './promptBuilder';
 import { analyzePondRisks } from './riskEngine';
@@ -320,6 +322,164 @@ export const runPromptBuilderSelfTest = () => {
     generalPackage,
     comparisonPackage,
   };
+};
+
+export const runPromptContextRecoverySelfTest = () => {
+  // Test-only decoder: read local dictionary entries directly; do not call the production decoder.
+  const decodePonds = (ponds: any[]): any[] => ponds.map((pond) => {
+    const dictionary = pond.refs;
+    const visit = (value: any): any => {
+      if (!value || typeof value !== 'object') return value;
+      if (Array.isArray(value)) return value.map(visit);
+      if (dictionary && Object.keys(value).length === 1 && typeof value.$ref === 'string') {
+        const id = value.$ref.slice('#/refs/'.length);
+        assert(value.$ref === `#/refs/${id}` && Object.prototype.hasOwnProperty.call(dictionary, id), 'valid local test reference');
+        return visit(dictionary[id]);
+      }
+      return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, visit(child)]));
+    };
+    return Object.fromEntries(Object.entries(pond).filter(([key]) => !dictionary || key !== 'refs').map(([key, value]) => [key, visit(value)]));
+  });
+  // 1. Fitting context identity and risk payload retention (with own complete fixtures)
+  const fittingTestContext = [
+    'ORSON QUESTION FOCUS:\n{"route":"farm_analysis"}',
+    'ORSON RISK PAYLOAD:\n[{"pond":"Test Pond","biomass_kg":500}]',
+  ].join('\n\n');
+  assert(selectCompleteContextSections(fittingTestContext, ORSON_PROMPT_TOKEN_BUDGET) === fittingTestContext, 'preserves fitting prompts bytewise unchanged');
+  const budgetedReqPrompt = buildOrsonRequestPrompt(fittingTestContext, 'How is the pond?');
+  assert(budgetedReqPrompt.includes('ORSON RISK PAYLOAD:'), 'retains risk payload in budgeted prompt');
+
+  // 2. Expanded references retain 14 daily records & oversized overflow check
+  const overflowTestPond = { pond: 'Oversized', data: 'x'.repeat(60000) };
+  let overflowThrew = false;
+  try {
+    selectCompleteContextSections(`ORSON RISK PAYLOAD:\n${JSON.stringify([overflowTestPond])}`, 100);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('Orson context budget exceeded')) {
+      overflowThrew = true;
+    }
+  }
+  assert(overflowThrew, 'fails explicitly on irreducible protected evidence overflow');
+
+  // 3. Genuinely reducible repeated objects within same pond (220 entries of { id, details })
+  const sharedLargeDetails = {
+    source: 'authoritative-sensor-grid',
+    model: 'pro-optical-do-ph-v3',
+    calibration: {
+      standard: 'iso-aquaculture-17025',
+      certified_date: '2026-01-01',
+      valid_until: '2027-01-01',
+      tolerances: { ph: 0.05, do: 0.1, temp: 0.2, salinity: 0.5 },
+    },
+    metadata: {
+      station: 'station-north-alpha',
+      firmware: '4.12.0-rc3',
+      operator: 'PT Central Aqua Tech',
+      telemetry: { interval_seconds: 60, retry_limit: 5, encryption: 'tls-1.3' },
+    },
+    verified: true,
+  };
+
+  const testPondWithConflicts: any = {
+    pond: 'Conflict Pond',
+    daily_records_14d: [
+      {
+        date: '2026-01-16',
+        measurement_provenance: {
+          water: { sourceId: 'lab-single', sourceIds: ['lab-single'] },
+          do: { sourceId: 'sensor-1', sourceIds: ['sensor-2'] },
+          ph: { sourceId: 'meter-1', sourceIds: ['meter-1', 'meter-2'] },
+          salinity: { sourceId: 'ref-1', source_id: 'ref-2' },
+        },
+      },
+    ],
+    repeated_provenance: Array.from({ length: 220 }, (_, i) => ({
+      id: `prov-${i}`,
+      details: sharedLargeDetails,
+    })),
+  };
+
+  const rawConflictContext = `ORSON RISK PAYLOAD:\n${JSON.stringify([testPondWithConflicts])}`;
+  assert(estimateOrsonPromptTokens(rawConflictContext) > 5000, 'uncompressed context exceeds 5000 token budget');
+  const compactedConflictContext = selectCompleteContextSections(rawConflictContext, 5000);
+  assert(estimateOrsonPromptTokens(compactedConflictContext) <= 5000, 'compacted context fits within 5000 token budget');
+
+  const parsedConflictPond = decodePonds(JSON.parse(compactedConflictContext.split('ORSON RISK PAYLOAD:\n')[1].split('\n\n')[0]))[0];
+  const prov = parsedConflictPond.daily_records_14d[0].measurement_provenance;
+  assert(prov.water.sourceId === undefined, 'removes single matching sourceId alias');
+  assert(prov.do.sourceId === 'sensor-1' && prov.do.sourceIds[0] === 'sensor-2', 'preserves non-equivalent sourceId and sourceIds');
+  assert(prov.ph.sourceId === 'meter-1' && prov.ph.sourceIds.length === 2, 'preserves sourceId when multiple sourceIds exist');
+  assert(prov.salinity.sourceId === 'ref-1' && prov.salinity.source_id === 'ref-2', 'preserves conflicting sourceId and source_id');
+  assert(parsedConflictPond.repeated_provenance.length === 220, 'roundtrip retains all 220 repeated provenance records');
+  assert(parsedConflictPond.repeated_provenance[0].details.source === 'authoritative-sensor-grid', 'roundtrip retains provenance details fields without loss');
+
+  // Full independent decoded payload equals original (EXACT approved alias norm only)
+  const expectedPond = JSON.parse(JSON.stringify(testPondWithConflicts));
+  delete expectedPond.daily_records_14d[0].measurement_provenance.water.sourceId;
+  assert(JSON.stringify(parsedConflictPond) === JSON.stringify(expectedPond), 'full independent decoded payload equals normalized original');
+
+  // Separately keep irreducible literal padding overflow test
+  let irreducibleOverflow = false;
+  try {
+    selectCompleteContextSections(`ORSON RISK PAYLOAD:\n${JSON.stringify([{ pond: 'Irreducible', dummy: 'x'.repeat(40000) }])}`, 5000);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('Orson context budget exceeded')) {
+      irreducibleOverflow = true;
+    }
+  }
+  assert(irreducibleOverflow, 'fails explicitly on irreducible literal padding overflow');
+
+  // Verify UTF-8 strings and notes preserved without corruption
+  const utf8Text = 'Pemeriksaan DO pagi 4.2 mg/L, suhu 29°C, pakan udang vannamei 🦐 normal. Anco bersih.';
+  const utf8Context = `ORSON RISK PAYLOAD:\n${JSON.stringify([{ pond: 'Kolam-UTF8', notes: utf8Text }])}`;
+  const utf8Prompt = buildOrsonRequestPrompt(utf8Context, 'Kondisi kolam?');
+  assert(utf8Prompt.includes(utf8Text), 'preserves complete UTF-8 notes and multi-byte characters');
+
+  // Protected ORSON RECENT CONVERSATION overflow throws explicit error before provider
+  let convOverflow = false;
+  try {
+    const hugeConversationContext = [
+      `ORSON RECENT CONVERSATION:\n${JSON.stringify(Array.from({ length: 50 }, (_, i) => ({ role: 'user', text: `Question ${i}: ${'q'.repeat(1000)}` })))}`,
+      `ORSON RISK PAYLOAD:\n${JSON.stringify([{ pond: 'Pond-1', data: 'data'.repeat(2000) }])}`,
+    ].join('\n\n');
+    selectCompleteContextSections(hugeConversationContext, 200);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('Orson context budget exceeded')) {
+      convOverflow = true;
+    }
+  }
+  assert(convOverflow, 'fails explicitly when protected conversation cannot fit budget');
+
+  // Verify reference interning uses refs and r1 format, genuinely reducible repeated objects within same pond, and proves nested ref roundtrip
+  const repeatedObj = { source: 'lab-report-authoritative', precision: 2, unit: 'mg/L' };
+  const nestedObj = { timestamp: '2026-01-16T00:00:00Z', details: repeatedObj, rating: 'authoritative' };
+  const pondWithRepeats: any = {
+    pond: 'Intern Test',
+    metric1: repeatedObj,
+    metric2: repeatedObj,
+    metric3: repeatedObj,
+    nested1: nestedObj,
+    nested2: nestedObj,
+    repeated_history: Array.from({ length: 80 }, (_, i) => ({
+      sample_id: `sample-${i}`,
+      observation: repeatedObj,
+      nested: nestedObj,
+    })),
+  };
+  const rawInternContext = `ORSON RISK PAYLOAD:\n${JSON.stringify([pondWithRepeats])}`;
+  assert(estimateOrsonPromptTokens(rawInternContext) > 5000, 'uncompressed context exceeds 5000 token budget');
+  const compSection = selectCompleteContextSections(rawInternContext, 5000);
+  assert(estimateOrsonPromptTokens(compSection) <= 5000, 'compacted context fits within 5000 token budget');
+  const internedPayload = JSON.parse(compSection.split('ORSON RISK PAYLOAD:\n')[1].split('\n\n')[0]);
+  assert(internedPayload[0].refs !== undefined, 'uses refs property for interning');
+  assert(internedPayload[0].refs.r1 !== undefined, 'uses r1 key format in refs');
+  const expandedPond = decodePonds(internedPayload)[0];
+  assert(expandedPond.metric1.source === 'lab-report-authoritative', 'expands refs correctly');
+  assert(expandedPond.nested1.details.source === 'lab-report-authoritative', 'expands nested refs correctly');
+  assert(expandedPond.repeated_history.length === 80, 'retains full history without loss');
+  assert(expandedPond.repeated_history[0].nested.details.precision === 2, 'roundtrips nested refs with full fidelity');
+
+  return { passed: true };
 };
 
 export const runPromptTimeoutSelfTest = async () => {

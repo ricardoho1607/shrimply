@@ -91,8 +91,7 @@ export const runRiskEngineSelfTest = () => {
     calculatePondMetrics(futurePond),
     new Date('2026-01-15T18:00:00Z'),
   ).findings.find((f) => f.id === 'low_do');
-  assert(futureDoFinding !== undefined, 'future low DO is retained as a finding');
-  assert(futureDoFinding?.severity === 'watch' && futureDoFinding?.status === 'historical', 'future measurements cannot qualify as a current risk');
+  assert(futureDoFinding === undefined, 'future measurements are excluded from observed low-oxygen findings');
 
   // Test 3: Compound current evidence compatible dates vs differing dates
   // 3a: Compatible dates (DO < 4 and temp > 32 on the same fresh date)

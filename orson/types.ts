@@ -152,6 +152,7 @@ export interface OrsonNormalizedRecord {
   mortalityObservationType: 'estimated_total' | 'observed_recovered' | 'none_observed' | null;
   mortalityNotes: string | null;
   feedKg: OrsonNumber;
+  samplingFeedEstimateKg?: OrsonNumber;
   phMorning: OrsonNumber;
   phEvening: OrsonNumber;
   doMorning: OrsonNumber;
@@ -724,6 +725,7 @@ export interface OrsonComparativePondMetric {
 export interface OrsonPromptPondPayload {
   pondId: string | null;
   pondName: string;
+  overallSeverity?: OrsonRiskSeverity;
   species: string | null;
   pondAreaM2: OrsonNumber;
   densityPerM2: OrsonNumber;
@@ -772,7 +774,7 @@ export interface OrsonPromptPondPayload {
   recentHarvests: OrsonDiagnosticHarvestEvent[];
   historicalBenchmark: OrsonPromptHistoricalBenchmark | null;
   outlook: Pick<Orson72HourOutlook, 'direction' | 'level' | 'confidence' | 'summary' | 'topReason' | 'nextAction'>;
-  findings: Pick<OrsonRiskFinding, 'id' | 'severity' | 'confidence' | 'summary' | 'evidence' | 'recommendation'>[];
+  findings: Pick<OrsonRiskFinding, 'id' | 'severity' | 'confidence' | 'summary' | 'evidence' | 'recommendation' | 'isHistorical' | 'status' | 'eventDate'>[];
   diagnosticContext: OrsonPondDiagnosticContext;
 }
 

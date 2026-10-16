@@ -29,6 +29,7 @@ import {
   type FeedAllocation,
 } from '../../shared/feedInventoryUsage';
 import { getFarmDateKey, resolveFarmTimeZone } from '../../shared/farmDate';
+import { resolveInventoryUsageDate } from '../../shared/inventoryUsageDate';
 import {
   ASSUMED_POND_DEPTH_METERS,
   calculateFifoConsumption,
@@ -159,7 +160,7 @@ interface FeedAdditiveStore {
   setCurrentCompanyId: (companyId: string | null, timeZone?: string) => void;
   addFeed: (feed: Partial<Feed>) => Promise<void>;
   stockInFeed: (feedId: string, quantity: number, price: number, notes?: string, opts?: { stockDate?: string; expiry?: string; unit?: string; operationId?: string }) => Promise<void>;
-  useFeed: (feedId: string, quantity: number, pondId?: string | null, notes?: string, operationId?: string) => Promise<void>;
+  useFeed: (feedId: string, quantity: number, pondId?: string | null, notes?: string, operationId?: string, usageDate?: string) => Promise<void>;
   adjustFeedUsage: (feedId: string, quantityDelta: number, pondId?: string | null, notes?: string) => Promise<void>;
   reconcileDailyFeedAllocations: (previousAllocations: FeedAllocation[], nextAllocations: FeedAllocation[], pondId: string, date: string, feedingResponse?: string | null) => Promise<void>;
   deleteDailyFeedRecord: (pondId: string, samplingId: string, date: string, updatedBy: string, candidateFeedIds?: string[]) => Promise<{ missingInventory: boolean }>;
@@ -167,7 +168,7 @@ interface FeedAdditiveStore {
   updateFeed: (feedId: string, patch: Partial<Feed>) => Promise<void>;
   addAdditive: (additive: Partial<Additive>) => Promise<void>;
   stockInAdditive: (additiveId: string, quantity: number, price: number, notes?: string, opts?: { stockDate?: string; expiry?: string; unit?: string; operationId?: string }) => Promise<void>;
-  useAdditive: (additiveId: string, quantity: number, pondId?: string | null, notes?: string, operationId?: string) => Promise<void>;
+  useAdditive: (additiveId: string, quantity: number, pondId?: string | null, notes?: string, operationId?: string, usageDate?: string) => Promise<void>;
   removeAdditiveUsage: (additiveId: string, usageId: string) => Promise<void>;
   createTreatmentMix: (input: { name: string; yieldLiters: number; components: TreatmentMixComponent[]; notes?: string; operationId?: string }) => Promise<string>;
   makeTreatmentMixBatch: (treatmentMixId: string, operationId?: string) => Promise<void>;
@@ -609,9 +610,10 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     set({ feeds });
   },
 
-  useFeed: async (feedId, quantity, pondId?: string | null, notes?: string, requestedOperationId?: string) => {
+  useFeed: async (feedId, quantity, pondId?: string | null, notes?: string, requestedOperationId?: string, requestedUsageDate?: string) => {
     const { currentCompanyId } = get();
     if (!currentCompanyId) throw new Error('No company selected');
+    const usageDate = resolveInventoryUsageDate(requestedUsageDate, get().currentTimeZone);
     if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('Quantity must be greater than 0');
     const feed = get().feeds.find((item) => item.id === feedId);
     if (!feed) throw new Error('Feed not found');
@@ -636,7 +638,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
         quantity,
         historyEntry: {
           id: `${operationId}:${feedId}`,
-          date: isoDate(new Date(), get().currentTimeZone),
+          date: usageDate,
           quantity,
           unitPrice,
           totalCost: quantity * unitPrice,
@@ -1030,9 +1032,10 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     set({ additives });
   },
 
-  useAdditive: async (additiveId, quantity, pondId?: string | null, notes?: string, requestedOperationId?: string) => {
+  useAdditive: async (additiveId, quantity, pondId?: string | null, notes?: string, requestedOperationId?: string, requestedUsageDate?: string) => {
     const { currentCompanyId } = get();
     if (!currentCompanyId) throw new Error('No company selected');
+    const usageDate = resolveInventoryUsageDate(requestedUsageDate, get().currentTimeZone);
     if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('Quantity must be greater than 0');
     const additive = get().additives.find((item) => item.id === additiveId);
     if (!additive) throw new Error('Additive not found');
@@ -1057,7 +1060,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
         quantity,
         historyEntry: {
           id: `${operationId}:${additiveId}`,
-          date: isoDate(new Date(), get().currentTimeZone),
+          date: usageDate,
           quantity,
           unitPrice,
           totalCost: quantity * unitPrice,

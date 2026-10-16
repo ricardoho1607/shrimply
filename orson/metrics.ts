@@ -740,7 +740,10 @@ export const extractDailyRecords14d = (
   pond: OrsonNormalizedPond,
   asOfDate = pond.asOfDate,
   windowDays = 14,
+  preserveRecordedPrecision = false,
 ): OrsonPromptDailyRecord[] => {
+  const displayNumber = (value: number | null | undefined, decimals: number) => hasNumber(value)
+    ? preserveRecordedPrecision ? value : round(value, decimals) : null;
   const windowStart = shiftDateKey(asOfDate, -(Math.max(1, Math.min(30, windowDays)) - 1));
   const dayMap = new Map<string, {
     diagnosticMeasurements?: OrsonNormalizedRecord['diagnosticMeasurements'];
@@ -926,6 +929,23 @@ export const extractDailyRecords14d = (
     }
   }
 
+  // Keep the separately recorded sampling estimate even when a daily total
+  // (including zero) wins. It is evidence, never an additional feed allocation.
+  const samplingEstimates = selectDailyFeedEntries(pond.records.map(record => ({
+    ...record, feedData: null, actualDailyFeedKg: null, feedKg: record.samplingFeedEstimateKg ?? null,
+  })), { allowSamplingEstimate: true, asOfDate: pond.asOfTimestamp ?? asOfDate, timeZone: pond.timeZone });
+  for (const entry of samplingEstimates) {
+    if (entry.farmDate < windowStart || entry.farmDate > asOfDate) continue;
+    const day = dayMap.get(entry.farmDate);
+    if (!day) continue;
+    day.samplingFeedEstimateKg = entry.feedKg;
+    day.samplingSourceId = entry.sourceIds[0] ?? null;
+    day.measurementProvenance.samplingFeedEstimateKg = {
+      sourceId: entry.sourceIds[0] ?? null, sourceIds: entry.sourceIds,
+      date: entry.farmDate, measuredAt: entry.measuredAt, precision: entry.precision,
+    };
+  }
+
   const recentDays = Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date));
 
   return recentDays.map((day) => {
@@ -936,9 +956,9 @@ export const extractDailyRecords14d = (
 
     const hasAuthoritative = day.hasExplicitZeroFeed || (day.hasAuthoritativeFeed && hasNumber(day.actualDailyFeedKg));
     const resolvedFeedKg = hasAuthoritative
-      ? (day.hasExplicitZeroFeed ? 0 : round(day.actualDailyFeedKg!, 2))
+      ? (day.hasExplicitZeroFeed ? 0 : displayNumber(day.actualDailyFeedKg, 2))
       : hasNumber(day.samplingFeedEstimateKg)
-        ? round(day.samplingFeedEstimateKg!, 2)
+        ? displayNumber(day.samplingFeedEstimateKg, 2)
         : null;
 
     const feedSource: OrsonPromptDailyRecord['feedSource'] = hasAuthoritative
@@ -960,23 +980,23 @@ export const extractDailyRecords14d = (
       doc: day.doc,
       feedKg: resolvedFeedKg,
       feedSource,
-      actualDailyFeedKg: day.hasExplicitZeroFeed ? 0 : hasNumber(day.actualDailyFeedKg) ? round(day.actualDailyFeedKg!, 2) : null,
-      samplingFeedEstimateKg: hasNumber(day.samplingFeedEstimateKg) ? round(day.samplingFeedEstimateKg!, 2) : null,
-      mbwG: hasNumber(day.mbwG) && day.mbwG > 0 ? round(day.mbwG, 2) : null,
+      actualDailyFeedKg: day.hasExplicitZeroFeed ? 0 : displayNumber(day.actualDailyFeedKg, 2),
+      samplingFeedEstimateKg: displayNumber(day.samplingFeedEstimateKg, 2),
+      mbwG: hasNumber(day.mbwG) && day.mbwG > 0 ? displayNumber(day.mbwG, 2) : null,
       mortalityCount: hasNumber(day.mortalityCount) ? round(day.mortalityCount, 0) : null,
       mortalityObservedCount: hasNumber(day.mortalityObservedCount) ? round(day.mortalityObservedCount, 0) : null,
       mortalityObservationTypes: day.mortalityObservationTypes,
-      doMorning: hasNumber(day.doMorning) ? round(day.doMorning, 2) : null,
-      doEvening: hasNumber(day.doEvening) ? round(day.doEvening, 2) : null,
+      doMorning: displayNumber(day.doMorning, 2),
+      doEvening: displayNumber(day.doEvening, 2),
       doMinimumMgL: hasNumber(doMin) ? round(doMin, 2) : null,
-      phMorning: hasNumber(day.phMorning) ? round(day.phMorning, 2) : null,
-      phEvening: hasNumber(day.phEvening) ? round(day.phEvening, 2) : null,
+      phMorning: displayNumber(day.phMorning, 2),
+      phEvening: displayNumber(day.phEvening, 2),
       phSwing,
-      salinityPpt: hasNumber(day.salinityPpt) ? round(day.salinityPpt, 1) : null,
-      temperatureC: hasNumber(day.temperatureC) ? round(day.temperatureC, 1) : null,
+      salinityPpt: displayNumber(day.salinityPpt, 1),
+      temperatureC: displayNumber(day.temperatureC, 1),
       ammoniaMgL: hasNumber(day.ammoniaMgL) ? round(day.ammoniaMgL, 3) : null,
       operationalNotes: day.operationalNotes ?? null,
-      transparencyCm: hasNumber(day.transparencyCm) ? round(day.transparencyCm, 1) : null,
+      transparencyCm: displayNumber(day.transparencyCm, 1),
       feedingResponse: day.feedingResponse ?? null,
       weatherEvent: day.weatherEvent ?? null,
       waterExchangePercent: hasNumber(day.waterExchangePercent) ? round(day.waterExchangePercent, 1) : null,

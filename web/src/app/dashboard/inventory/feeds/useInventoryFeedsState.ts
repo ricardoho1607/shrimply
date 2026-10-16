@@ -185,6 +185,7 @@ export function useInventoryFeedsState() {
     notes: '',
     unit: 'kg',
     stockDate: getFarmDateKey(new Date(), company?.timeZone),
+    usageDate: getFarmDateKey(new Date(), company?.timeZone),
     expiry: '',
     reorderLevel: '',
     manufacturer: '',

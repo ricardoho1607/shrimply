@@ -1,7 +1,7 @@
 const { HttpsError } = require("firebase-functions/v2/https");
 const { hasUserPermission } = require("./permissions");
 
-const assertCompanyMemberForCallable = async (db, uid, companyId, permission) => {
+const assertCompanyMemberForCallable = async (db, uid, companyId, permission, options = {}) => {
   if (!uid) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
@@ -15,9 +15,30 @@ const assertCompanyMemberForCallable = async (db, uid, companyId, permission) =>
     throw new HttpsError("invalid-argument", "companyId is required.");
   }
 
+  const transaction = options?.transaction;
+  const cache = options?.cache;
+  const refresh = options?.refresh === true;
+
+  const getCachedDoc = (colName, docId, providedSnap) => {
+    if (transaction) {
+      return transaction.get(db.collection(colName).doc(docId));
+    }
+    if (providedSnap) {
+      return Promise.resolve(providedSnap);
+    }
+    const key = `${colName}:${docId}`;
+    if (!refresh && cache && cache.has(key)) return cache.get(key);
+    const promise = db.collection(colName).doc(docId).get().catch((err) => {
+      if (cache && cache.get(key) === promise) cache.delete(key);
+      throw err;
+    });
+    if (cache) cache.set(key, promise);
+    return promise;
+  };
+
   const [companySnap, userSnap] = await Promise.all([
-    db.collection("companies").doc(companyId).get(),
-    db.collection("users").doc(uid).get(),
+    getCachedDoc("companies", companyId, options?.companySnap),
+    getCachedDoc("users", uid, options?.userSnap),
   ]);
   if (!companySnap.exists) {
     throw new HttpsError("not-found", "Company not found.");

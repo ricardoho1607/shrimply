@@ -28,6 +28,7 @@ import { isPondCycleActive, usePondStore } from './store/pondStore';
 import { useAuth } from '../context/AuthContext';
 import { orsonIdentityKey, OrsonSessionChangedError } from '../orson/session';
 import { cleanOrsonResponse } from '../orson/promptBuilder';
+import { parseOrsonMessageBlocks } from '../orson/messageBlocks';
 import { OrsonIncompleteResponseError } from '../orson/responseCompletion';
 import type { OrsonResponsePreview } from '../orson/responsePreview';
 import { hasFarmPermission } from '../shared/permissions';
@@ -287,9 +288,14 @@ function AIChatSession() {
               <View key={message.id} style={[styles.messageContainer, message.type === 'user' ? styles.userMessage : styles.aiMessage, !!message.operationIds?.length && styles.entryMessage]}>
                 <View style={[styles.messageStack, message.type === 'user' && styles.userMessageStack, !!message.operationIds?.length && styles.entryStack]}>
                   {(message.message || message.retryPrompt) && <View style={[styles.messageBubble, message.type === 'user' && styles.userBubble]}>
-                    <Text style={[styles.messageText, message.type === 'user' ? styles.userText : styles.aiText]}>
-                      {message.type === 'ai' ? cleanOrsonResponse(message.message) : message.message}
-                    </Text>
+                    {message.type === 'ai' ? parseOrsonMessageBlocks(cleanOrsonResponse(message.message)).map((block,index) => block.type === 'text'
+                      ? <Text key={index} style={[styles.messageText,styles.aiText]}>{block.text}</Text>
+                      : <ScrollView key={index} horizontal nestedScrollEnabled accessibilityLabel="Pond readings table. Swipe sideways for more columns." style={{maxWidth:'100%',marginVertical:12}}>
+                        <View>
+                          <View style={{flexDirection:'row',backgroundColor:'#edf4f8'}}>{block.headers.map((cell,column)=><Text key={column} accessibilityRole="header" style={{width:140,padding:10,fontWeight:'700',color:'#17324D'}}>{cell}</Text>)}</View>
+                          {block.rows.map((row,line)=><View key={line} style={{flexDirection:'row',borderBottomWidth:1,borderBottomColor:'#d9e4ec'}}>{row.map((cell,column)=><Text key={column} style={{width:140,padding:10,fontSize:13,lineHeight:20,color:'#17324D'}}>{cell}</Text>)}</View>)}
+                        </View>
+                      </ScrollView>) : <Text style={[styles.messageText,styles.userText]}>{message.message}</Text>}
                     {message.retryPrompt && (
                       <TouchableOpacity disabled={loading} onPress={() => handleSend(message.retryPrompt, message.id)}>
                         <Text style={styles.retryText}>Response interrupted. Retry</Text>

@@ -9,6 +9,8 @@ const finance = require('../../../shared/financeSync.ts');
 const { requireAvailableStock } = require('../../../shared/financeIntegrity.ts');
 const { buildInventoryProductLabel } = require('../../../shared/productLabel.ts');
 const { getFarmDateKey } = require('../../../shared/farmDate.ts');
+const { resolveInventoryUsageDate } = require('../../../shared/inventoryUsageDate.ts');
+const { buildCogsReport } = require('../../../shared/cogsReport.ts');
 const { allocateExpenseAcrossCyclePonds } = require('../../../shared/financeCycleAllocation.ts');
 const { removeUndefinedFields } = require('./firestoreData.ts');
 const { initializeApp, deleteApp } = require('firebase/app');
@@ -59,7 +61,7 @@ function harness({ mode = 'stockIn', lostAck = false, fail = false, permissions 
     if (lostAck && transactions === 1) throw new Error('response lost');
     return result;
   };
-  const env = { ...firestore, ...finance, removeUndefinedFields, requireAvailableStock, buildInventoryProductLabel, getFarmDateKey,
+  const env = { ...firestore, ...finance, removeUndefinedFields, requireAvailableStock, buildInventoryProductLabel, getFarmDateKey, resolveInventoryUsageDate,
     allocateExpenseAcrossCyclePonds, db, save, runTransaction,
     createRecordOnce: async (_db, ref, data) => runTransaction(_db, async tx => { if (!(await tx.get(ref)).exists()) tx.set(ref, removeUndefinedFields(data)); }),
     setDoc: async (ref, data, options) => runTransaction(db, async tx => tx.set(ref, data, options)),
@@ -149,4 +151,53 @@ test('sampling retry preserves concurrent observations and never deducts invento
   assert.equal(records.length, 2); assert.equal(records[0].id, 'server-observation');
   assert.equal(records[1].feed, undefined, 'blank feed stays unknown');
   assert.equal(h.writes.length, 1); assert.ok(h.writes.every(write => write.path.includes('/ponds/')));
+});
+
+for (const kind of ['feed', 'additive']) {
+  test(`inventory ${kind}: backdated usage keeps the pond, cycle and date after a lost-ack retry`, async () => {
+    const h = harness({ mode: 'usage', lostAck: true });
+    h.env.itemType = kind;
+    const target = `companies/company/${kind === 'feed' ? 'feeds' : 'additives'}/feed1`;
+    h.documents.set(target, { totalStock: 100, totalCost: 1000, usageHistory: [] });
+    h.env.activePonds = [{ id: 'p1', pondName: 'P1', cycleId: 'c1', cycleName: 'Cycle 1', pondCycleId: 'pc1' }];
+    Object.assign(h.env.formData, { pondId: 'p1', usageDate: '2026-10-02' });
+    const submit = handler('inventory/feeds/useInventoryFeedsActions.ts', 'handleAction', 'handleDeleteItem', h.env);
+    await submit(event);
+    assert.equal(h.closed, false, 'lost acknowledgement keeps draft available to retry');
+    await submit(event);
+    const saved = h.documents.get(target);
+    assert.equal(h.closed, true);
+    assert.equal(h.writes.length, 1);
+    assert.equal(saved.totalStock, 90);
+    assert.equal(saved.totalCost, 900);
+    assert.equal(saved.usageHistory.length, 1);
+    const usage = saved.usageHistory[0];
+    assert.equal(usage.date, '2026-10-02');
+    assert.equal(usage.pondId, 'p1');
+    assert.equal(usage.cycleId, 'c1');
+    assert.equal(usage.pondCycleId, 'pc1');
+    assert.equal(usage.cycleName, 'Cycle 1');
+    assert.ok(usage.createdAt instanceof firestore.Timestamp);
+    const report = (day) => buildCogsReport({
+      ponds: h.env.activePonds, expenses: [], revenues: [], harvests: [],
+      feedUsage: kind === 'feed' ? saved.usageHistory : [],
+      additiveUsage: kind === 'additive' ? saved.usageHistory : [],
+      cycleScope: 'c1', scopeLabel: 'Cycle 1', startDateKey: day, endDateKey: day, normalizeCategory: x => x,
+    });
+    assert.equal(report('2026-10-02').totalProductionCost, 100, 'cost belongs to the chosen pond/cycle day');
+    assert.equal(report('2026-10-03').totalProductionCost, 0);
+  });
+}
+
+test('inventory usage: empty, impossible and future dates cannot change stock or history', async () => {
+  for (const usageDate of ['', '2026-02-30', '2999-01-01']) {
+    const h = harness({ mode: 'usage' });
+    h.env.formData.usageDate = usageDate;
+    await handler('inventory/feeds/useInventoryFeedsActions.ts', 'handleAction', 'handleDeleteItem', h.env)(event);
+    assert.equal(h.writes.length, 0);
+    assert.equal(h.documents.get('companies/company/feeds/feed1').totalStock, 100);
+    assert.equal(h.alerts.length, 1);
+    assert.equal(h.closed, false);
+    assert.equal(h.env.save.busy, false);
+  }
 });

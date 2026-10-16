@@ -1,3 +1,4 @@
+import test from 'node:test';
 import { calculateOrsonHarvestProjection } from './harvestProjection';
 import { buildOrsonPredictionSnapshotRequest } from './predictionSnapshot';
 
@@ -33,4 +34,17 @@ export const runPredictionSnapshotSelfTest = () => {
   assert(snapshot.targetDate === '2026-02-15', 'stores the measurable target date');
   assert(snapshot.learningContext.baseProjectedMbwG !== null, 'stores the uncalibrated base for replay testing');
   assert(snapshot.projected.biomassKg === projection.projectedBiomassKg, 'stores the prediction shown to the user');
+
+  // Verify deep snapshot isolation against post-dispatch payload mutation
+  const originalBase = snapshot.learningContext.baseAssumedAdgGPerDay;
+  (projection.learningContext as any).baseAssumedAdgGPerDay = 99999;
+  assert(snapshot.learningContext.baseAssumedAdgGPerDay === originalBase, 'learningContext is deeply isolated from post-dispatch mutation');
+  (projection as any).risks.push({ id: 'mutated-risk' });
+  assert(!snapshot.riskIds.includes('mutated-risk'), 'riskIds are isolated from post-dispatch mutation');
 };
+
+test('prediction snapshot self test', () => {
+  runPredictionSnapshotSelfTest();
+});
+
+runPredictionSnapshotSelfTest();

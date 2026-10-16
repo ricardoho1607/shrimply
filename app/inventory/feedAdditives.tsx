@@ -18,6 +18,7 @@ import { createOfflineOperationId } from '../services/offlineWorkspace';
 import { isPondCycleActive, usePondStore } from './../store/pondStore';
 import TreatmentMixesScreen from './treatmentMixes';
 import { getFarmDateKey } from '../../shared/farmDate';
+import { inventoryUsageDateFromPicker } from '../../shared/inventoryUsageDate';
 import { buildInventoryProductLabel } from '../../shared/productLabel';
 import { useAgentOperations } from '../../orson/useAgentOperations';
 import OrsonAgentCards from '../components/OrsonAgentCards';
@@ -34,6 +35,7 @@ type FormData = {
   notes: string;
   unit?: string;
   stockDate: string;
+  usageDate: string;
   expiry?: string;
   reorderLevel?: string;
   manufacturer: string;
@@ -49,7 +51,7 @@ const FEED_CATEGORIES = ['Starter', 'Grower', 'Finisher', 'Other'];
 const ADDITIVE_CATEGORIES = ['Water Conditioner', 'Probiotic', 'Mineral', 'Vitamin', 'Other'];
 
 const getEmptyFormData = (type: ItemType, stockDate: string): FormData => ({
-  itemName: '', brand: '', category: type === 'feed' ? 'Grower' : 'Water Conditioner', quantity: '', unitPrice: '', pondId: '', notes: '', unit: 'kg', stockDate, expiry: '', reorderLevel: '', manufacturer: '', ingredients: '', labelSourceUrl: '',
+  itemName: '', brand: '', category: type === 'feed' ? 'Grower' : 'Water Conditioner', quantity: '', unitPrice: '', pondId: '', notes: '', unit: 'kg', stockDate, usageDate: stockDate, expiry: '', reorderLevel: '', manufacturer: '', ingredients: '', labelSourceUrl: '',
 });
 
 const formatDate = (date: any): string => {
@@ -345,7 +347,7 @@ function FeedAdditivesScreenContent() {
 
     const method = itemType === 'feed' ? store.useFeed : store.useAdditive;
     await handleAction(async () => {
-      await method(selectedItem.id, qty, formData.pondId?.trim() || null, formData.notes?.trim() || '', save.id(`usage:${selectedItem.id}`));
+      await method(selectedItem.id, qty, formData.pondId?.trim() || null, formData.notes?.trim() || '', save.id(`usage:${selectedItem.id}`), formData.usageDate);
       
       const updatedItems = itemType === 'feed' ? store.feeds : store.additives;
       const updatedItem = updatedItems.find(i => i.id === selectedItem.id);
@@ -446,6 +448,7 @@ function FeedAdditivesScreenContent() {
         pondId: '', 
         notes: '', 
         stockDate: getFarmDateKey(new Date(), company?.timeZone),
+        usageDate: getFarmDateKey(new Date(), company?.timeZone),
         expiry: '',
         reorderLevel: String(item.reorderLevel ?? ''),
         manufacturer: productLabel?.manufacturer || '',
@@ -1119,6 +1122,19 @@ function FeedAdditivesScreenContent() {
                       </>
                     )}
 
+                    {modalType === 'usage' && (
+                      <View style={styles.input}>
+                        <AppDatePicker
+                          label="Usage date"
+                          value={formData.usageDate}
+                          maximumDate={new Date(`${getFarmDateKey(new Date(), company?.timeZone)}T23:59:59`)}
+                          onChange={date => setFormData(previous => ({ ...previous, usageDate: inventoryUsageDateFromPicker(date) }))}
+                          disabled={savePending}
+                          cancelLabel={t.actions.cancel}
+                          confirmLabel={t.actions.confirm}
+                        />
+                      </View>
+                    )}
                     {modalType === 'usage' && renderPondUsageSelector()}
 
                     {modalType === 'editReorder' && (

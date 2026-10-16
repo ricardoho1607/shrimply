@@ -1,4 +1,6 @@
 import { getOrsonRequestConstraints, isTreatmentQuestion } from '../functions/shared/orsonInventoryPolicy.js';
+import { readableOrsonText } from '../functions/shared/orsonReadableText.js';
+import { buildFarmOverviewContext } from './farmContext';
 import {
   ORSON_PRODUCT_PROMISE,
   ORSON_RESPONSE_PRINCIPLES,
@@ -35,6 +37,7 @@ import type {
 } from './types';
 
 const EXPLICIT_GENERAL = /\b(secara umum|pertanyaan umum|bukan analisis kolam|in general|general (?:question|guidance)|not (?:a |an )?(?:pond|farm)(?:-specific)? analysis)\b/i;
+const ALL_PONDS_REQUESTED = /\b(?:all|every)\s+(?:(?:my|the)\s+)?ponds?\b|\b(?:semua|seluruh)\s+(?:kolam|tambak)\b/i;
 
 const FARM_SPECIFIC_PATTERNS = [
   /\bcompare\s+(?:all\s+)?ponds\b/i,
@@ -148,9 +151,12 @@ const CONVERSATIONAL_PATTERNS = [
   /\bwho are you\b/i,
 ];
 
+const PURE_CONVERSATION_PATTERN = /^\s*(?:hi|hello|hey|thanks|thank you|good morning|good afternoon|good evening|halo|terima kasih)[!.?\s]*$/i;
+
 const FOLLOW_UP_PATTERNS = [
   /^\s*(what|how)\s+about\b/i,
   /^\s*(and|also|then)\b/i,
+  /^\s*(?:what should i do(?: next)?|any recommendations|next steps)[?.!]*\s*$/i,
   /^\s*(why(\s+is\s+that)?|how\s+so|tell\s+me\s+more|explain\s+more)[?.!]*\s*$/i,
   /\b(that|this|it|those|these|they|them)\b/i,
   /^\s*(?:coba\s+)?(?:cek\s+|check\s+)?(?:kolam\s+|pond\s+)?[a-z0-9_-]+\s*$/i,
@@ -235,7 +241,7 @@ const TOPIC_PATTERNS: { intent: OrsonQuestionIntent; patterns: RegExp[] }[] = [
 ];
 
 const PARAMETER_PATTERNS: { key: string; patterns: RegExp[] }[] = [
-  { key: 'dissolved_oxygen', patterns: [/\bD\.?O\.?\b/, /\bdissolved\s+oxygen\b/i, /\boxygen\b/i] },
+  { key: 'dissolved_oxygen', patterns: [/\bD\.?O\.?\b/, /\bdissolved\s+oxygen\b/i, /\b(?:oxygen|oksigen)\b/i] },
   { key: 'ph', patterns: [/\bph\b/i] },
   { key: 'ammonia', patterns: [/\bammonia\b/i, /\bnh3\b/i, /\bnh4\b/i, /\btan\b/i] },
   { key: 'nitrite', patterns: [/\bnitrite\b/i, /\bno2\b/i] },
@@ -293,32 +299,512 @@ const CONTEXT_OMITTED_NOTE = '[Lower-priority Orson context omitted to preserve 
 
 const contextSectionPriority = (section: string): number => {
   if (section.startsWith('ORSON QUESTION FOCUS:')) return 0;
-  if (section.startsWith('ORSON USER-REPORTED COMPARISONS:')) return 0;
-  if (section.startsWith('ORSON FARM SCOPE:')) return 1;
-  if (section.startsWith('ORSON EXACT RECORDS:') || section.startsWith('ORSON MORTALITY TRACE:')) return 2;
-  if (section.startsWith('ORSON RISK PAYLOAD:')) return 3;
-  if (section.startsWith('ORSON SELECTED KNOWLEDGE:')) return 4;
-  if (section.startsWith('ORSON COMPARATIVE MATRIX:')) return 5;
   if (section.startsWith('ORSON RECENT CONVERSATION:')) return 0;
-  return 7;
+  if (section.startsWith('ORSON USER-REPORTED COMPARISONS:')) return 0;
+  if (section.startsWith('ORSON EXACT RECORDS:') || section.startsWith('ORSON MORTALITY TRACE:')) return 1;
+  if (section.startsWith('ORSON RISK PAYLOAD:')) return 2;
+  if (section.startsWith('ORSON SELECTED KNOWLEDGE:')) return 3;
+  if (section.startsWith('ORSON COMPARATIVE MATRIX:')) return 8;
+  if (section.startsWith('ORSON FARM SCOPE:')) return 9;
+  return 10;
 };
 
-const selectCompleteContextSections = (context: string, maxTokens: number): string => {
-  if (estimateOrsonPromptTokens(context) <= maxTokens) return context;
+const isProtectedEvidenceSection = (section: string): boolean => (
+  section.startsWith('ORSON RISK PAYLOAD:') ||
+  section.startsWith('ORSON EXACT RECORDS:') ||
+  section.startsWith('ORSON MORTALITY TRACE:') ||
+  section.startsWith('ORSON SELECTED KNOWLEDGE:') ||
+  section.startsWith('ORSON QUESTION FOCUS:') ||
+  section.startsWith('ORSON USER-REPORTED COMPARISONS:') ||
+  section.startsWith('ORSON RECENT CONVERSATION:')
+);
+
+export const deepEqual = (a: any, b: any): boolean => {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!deepEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const key of keysA) {
+    if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
+    if (!deepEqual(a[key], b[key])) return false;
+  }
+  return true;
+};
+
+const deduplicateGrowthEvidence = (ge: any) => {
+  if (!ge || typeof ge !== 'object') return;
+  const aliases: [string, string][] = [
+    ['sampleCount', 'sample_count'],
+    ['adgSource', 'adg_source'],
+    ['weightSource', 'weight_source'],
+    ['pondId', 'pond_id'],
+    ['cycleId', 'cycle_id'],
+    ['latestDate', 'latest_date'],
+    ['ageDays', 'age_days'],
+    ['isFresh', 'is_fresh'],
+    ['isStale', 'is_stale'],
+    ['coverageRatio', 'coverage_ratio'],
+  ];
+  for (const [camel, snake] of aliases) {
+    if (camel in ge && snake in ge && deepEqual(ge[camel], ge[snake])) {
+      delete ge[camel];
+    }
+  }
+};
+
+const cleanEvidenceItem = (item: any) => {
+  if (!item || typeof item !== 'object') return;
+  if ('sourceId' in item && 'source_id' in item && deepEqual(item.sourceId, item.source_id)) {
+    delete item.sourceId;
+  }
+  if ('ageDays' in item && 'age_days' in item && deepEqual(item.ageDays, item.age_days)) {
+    delete item.ageDays;
+  }
+  if ('isFresh' in item && 'is_fresh' in item && deepEqual(item.isFresh, item.is_fresh)) {
+    delete item.isFresh;
+  }
+  if ('isStale' in item && 'is_stale' in item && deepEqual(item.isStale, item.is_stale)) {
+    delete item.isStale;
+  }
+  if ('measuredAt' in item && 'measured_at' in item && deepEqual(item.measuredAt, item.measured_at)) {
+    delete item.measuredAt;
+  }
+  if (item.coverage && typeof item.coverage === 'object') {
+    const cov = item.coverage;
+    if ('windowDays' in cov && 'window_days' in cov && deepEqual(cov.windowDays, cov.window_days)) {
+      delete cov.windowDays;
+    }
+    if ('recordedDays' in cov && 'recorded_days' in cov && deepEqual(cov.recordedDays, cov.recorded_days)) {
+      delete cov.recordedDays;
+    }
+    if ('coverageRatio' in cov && 'coverage_ratio' in cov && deepEqual(cov.coverageRatio, cov.coverage_ratio)) {
+      delete cov.coverageRatio;
+    }
+    if ('missingDates' in cov && 'missing_dates' in cov && deepEqual(cov.missingDates, cov.missing_dates)) {
+      delete cov.missingDates;
+    }
+  }
+};
+
+const deduplicateEvidenceSummary = (ev: any) => {
+  if (!ev || typeof ev !== 'object') return;
+  if ('dailyFeed' in ev && 'daily_feed' in ev && deepEqual(ev.dailyFeed, ev.daily_feed)) {
+    delete ev.dailyFeed;
+  }
+  cleanEvidenceItem(ev.water);
+  cleanEvidenceItem(ev.mbw);
+  cleanEvidenceItem(ev.daily_feed);
+  cleanEvidenceItem(ev.dailyFeed);
+  cleanEvidenceItem(ev.mortality);
+  cleanEvidenceItem(ev.lab);
+
+  if (ev.metrics && typeof ev.metrics === 'object') {
+    if ('water_quality' in ev.metrics && ev.water && deepEqual(ev.metrics.water_quality, ev.water)) {
+      delete ev.metrics.water_quality;
+    }
+    if ('mbw' in ev.metrics && ev.mbw && deepEqual(ev.metrics.mbw, ev.mbw)) {
+      delete ev.metrics.mbw;
+    }
+    if ('daily_feed' in ev.metrics && ev.daily_feed && deepEqual(ev.metrics.daily_feed, ev.daily_feed)) {
+      delete ev.metrics.daily_feed;
+    }
+    if ('mortality' in ev.metrics && ev.mortality && deepEqual(ev.metrics.mortality, ev.mortality)) {
+      delete ev.metrics.mortality;
+    }
+    if ('lab' in ev.metrics && ev.lab && deepEqual(ev.metrics.lab, ev.lab)) {
+      delete ev.metrics.lab;
+    }
+
+    for (const key of Object.keys(ev.metrics)) {
+      cleanEvidenceItem(ev.metrics[key]);
+    }
+  }
+};
+
+const cleanDailyRecords = (records: any[]) => {
+  if (!Array.isArray(records)) return;
+  for (const record of records) {
+    if (!record || typeof record !== 'object') continue;
+    if (record.measurement_provenance && typeof record.measurement_provenance === 'object') {
+      const prov = record.measurement_provenance;
+      if ('daily_feed' in prov) {
+        if ('feedKg' in prov && deepEqual(prov.feedKg, prov.daily_feed)) delete prov.feedKg;
+        if ('actualDailyFeedKg' in prov && deepEqual(prov.actualDailyFeedKg, prov.daily_feed)) delete prov.actualDailyFeedKg;
+      }
+      for (const metric of Object.keys(prov)) {
+        const entry = prov[metric];
+        if (entry && typeof entry === 'object') {
+          if ('sourceId' in entry && 'sourceIds' in entry) {
+            if (Array.isArray(entry.sourceIds) && entry.sourceIds.length === 1 && entry.sourceIds[0] === entry.sourceId) {
+              delete entry.sourceId;
+            }
+          }
+          if ('sourceId' in entry && 'source_ids' in entry) {
+            if (Array.isArray(entry.source_ids) && entry.source_ids.length === 1 && entry.source_ids[0] === entry.sourceId) {
+              delete entry.sourceId;
+            }
+          }
+          if ('sourceId' in entry && 'source_id' in entry && deepEqual(entry.sourceId, entry.source_id)) {
+            delete entry.sourceId;
+          }
+          if ('sourceIds' in entry && 'source_ids' in entry && deepEqual(entry.sourceIds, entry.source_ids)) {
+            delete entry.sourceIds;
+          }
+          if ('measuredAt' in entry && 'measured_at' in entry && deepEqual(entry.measuredAt, entry.measured_at)) {
+            delete entry.measuredAt;
+          }
+        }
+      }
+    }
+  }
+};
+
+export const expandReferences = (
+  obj: any,
+  tables?: { refs?: Record<string, any>; reference_dictionary?: Record<string, any> } | null,
+  activeStack?: Set<string>,
+  isRoot = false,
+): any => {
+  if (obj === null || obj === undefined || typeof obj !== 'object') return obj;
+
+  if (Array.isArray(obj)) {
+    return obj.map((item) => expandReferences(item, tables, activeStack, false));
+  }
+
+  let effectiveTables = tables;
+  let hasRefs = false;
+  let hasLegacyDict = false;
+  if (effectiveTables === undefined && typeof obj === 'object') {
+    hasRefs = Object.prototype.hasOwnProperty.call(obj, 'refs') && obj.refs && typeof obj.refs === 'object' && !Array.isArray(obj.refs);
+    hasLegacyDict = Object.prototype.hasOwnProperty.call(obj, 'reference_dictionary') && obj.reference_dictionary && typeof obj.reference_dictionary === 'object' && !Array.isArray(obj.reference_dictionary);
+    effectiveTables = (hasRefs || hasLegacyDict)
+      ? { refs: hasRefs ? obj.refs : undefined, reference_dictionary: hasLegacyDict ? obj.reference_dictionary : undefined }
+      : null;
+    isRoot = true;
+  }
+
+  if (effectiveTables && Object.prototype.hasOwnProperty.call(obj, '$ref') && Object.keys(obj).length === 1 && typeof obj.$ref === 'string') {
+    const refStr = obj.$ref;
+    let table: 'refs' | 'reference_dictionary' | null = null;
+    let refKey = '';
+
+    const refsMatch = refStr.match(/^#\/refs\/(r\d+)$/);
+    const legacyMatch = refStr.match(/^#\/reference_dictionary\/([a-zA-Z0-9_-]+)$/);
+
+    if (refsMatch && refsMatch[0] === refStr) {
+      table = 'refs';
+      refKey = refsMatch[1];
+    } else if (legacyMatch && legacyMatch[0] === refStr) {
+      table = 'reference_dictionary';
+      refKey = legacyMatch[1];
+    }
+
+    if (table && refKey && refKey !== '__proto__' && refKey !== 'constructor' && refKey !== 'prototype' && !Object.prototype.hasOwnProperty.call(Object.prototype, refKey)) {
+      const tableObj = effectiveTables[table];
+      if (tableObj && Object.prototype.hasOwnProperty.call(tableObj, refKey)) {
+        const stackKey = `${table}:${refKey}`;
+        const seen = activeStack ? new Set(activeStack) : new Set<string>();
+        if (seen.has(stackKey)) {
+          return obj;
+        }
+        seen.add(stackKey);
+        return expandReferences(tableObj[refKey], effectiveTables, seen, false);
+      }
+    }
+    return obj;
+  }
+
+  const result: Record<string, any> = {};
+  for (const key of Object.keys(obj)) {
+    if (isRoot && effectiveTables && ((key === 'refs' && hasRefs) || (key === 'reference_dictionary' && hasLegacyDict))) {
+      continue;
+    }
+    const resolved = expandReferences(obj[key], effectiveTables, activeStack, false);
+    Object.defineProperty(result, key, {
+      value: resolved,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  }
+  return result;
+};
+
+const hasPondExistingRefOrTable = (val: any): boolean => {
+  if (!val || typeof val !== 'object') return false;
+  if (Object.prototype.hasOwnProperty.call(val, '$ref') || Object.prototype.hasOwnProperty.call(val, 'refs') || Object.prototype.hasOwnProperty.call(val, 'reference_dictionary')) {
+    return true;
+  }
+  if (Array.isArray(val)) {
+    return val.some(hasPondExistingRefOrTable);
+  }
+  return Object.values(val).some(hasPondExistingRefOrTable);
+};
+
+const internPondReferences = (pond: any) => {
+  if (!pond || typeof pond !== 'object') return;
+  if (hasPondExistingRefOrTable(pond)) return;
+
+  const initialJson = JSON.stringify(pond);
+  if (initialJson.length < 150) return;
+
+  const serializedCounts = new Map<string, { count: number; obj: any }>();
+
+  const scan = (val: any) => {
+    if (!val || typeof val !== 'object') return;
+    if ('$ref' in val) return;
+    const s = JSON.stringify(val);
+    if (s.length >= 20) {
+      const existing = serializedCounts.get(s);
+      if (existing) {
+        existing.count++;
+      } else {
+        serializedCounts.set(s, { count: 1, obj: val });
+      }
+    }
+    if (Array.isArray(val)) {
+      for (const item of val) scan(item);
+    } else {
+      for (const key of Object.keys(val)) {
+        scan(val[key]);
+      }
+    }
+  };
+
+  scan(pond);
+
+  const referenceCost = 24;
+  const profitableCandidates = Array.from(serializedCounts.entries())
+    .filter(([str, data]) => data.count >= 2 && (str.length * (data.count - 1)) > (referenceCost * data.count + 6))
+    .sort((a, b) => (b[0].length * (b[1].count - 1)) - (a[0].length * (a[1].count - 1)));
+
+  if (profitableCandidates.length === 0) return;
+
+  const stringToRefId = new Map<string, string>();
+  let refCounter = 1;
+  for (const [str] of profitableCandidates) {
+    const refId = `r${refCounter++}`;
+    stringToRefId.set(str, refId);
+  }
+
+  const refs: Record<string, any> = {};
+
+  const replace = (val: any, isRoot = false): any => {
+    if (!val || typeof val !== 'object') return val;
+    if ('$ref' in val) return val;
+
+    if (!isRoot) {
+      const s = JSON.stringify(val);
+      const refId = stringToRefId.get(s);
+      if (refId) {
+        if (!refs[refId]) {
+          const parsed = JSON.parse(s);
+          refs[refId] = replace(parsed, true);
+        }
+        return { $ref: `#/refs/${refId}` };
+      }
+    }
+
+    if (Array.isArray(val)) {
+      return val.map((item) => replace(item, false));
+    }
+
+    const res: Record<string, any> = {};
+    for (const key of Object.keys(val)) {
+      if (isRoot && (key === 'refs' || key === 'reference_dictionary')) continue;
+      const child = replace(val[key], false);
+      Object.defineProperty(res, key, {
+        value: child,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+    }
+    return res;
+  };
+
+  const replaced = replace(pond, true);
+
+  const countRefUsages = (): Map<string, number> => {
+    const counts = new Map<string, number>();
+    const countIn = (node: any) => {
+      if (!node || typeof node !== 'object') return;
+      if (typeof node.$ref === 'string') {
+        const match = node.$ref.match(/^#\/refs\/(r\d+)$/);
+        if (match && match[0] === node.$ref) {
+          counts.set(match[1], (counts.get(match[1]) || 0) + 1);
+        }
+        return;
+      }
+      if (Array.isArray(node)) {
+        for (const item of node) countIn(item);
+      } else {
+        for (const [, v] of Object.entries(node)) {
+          countIn(v);
+        }
+      }
+    };
+    countIn(replaced);
+    for (const [, rVal] of Object.entries(refs)) {
+      countIn(rVal);
+    }
+    return counts;
+  };
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const usages = countRefUsages();
+    for (const refId of Object.keys(refs)) {
+      const usage = usages.get(refId) || 0;
+      if (usage === 0) {
+        delete refs[refId];
+        changed = true;
+      } else if (usage === 1) {
+        const refVal = refs[refId];
+        delete refs[refId];
+        const inlineTarget = (node: any): any => {
+          if (!node || typeof node !== 'object') return node;
+          if (node.$ref === `#/refs/${refId}`) {
+            return JSON.parse(JSON.stringify(refVal));
+          }
+          if (Array.isArray(node)) {
+            return node.map(inlineTarget);
+          }
+          const res: Record<string, any> = {};
+          for (const [k, v] of Object.entries(node)) {
+            Object.defineProperty(res, k, {
+              value: inlineTarget(v), writable: true, enumerable: true, configurable: true,
+            });
+          }
+          return res;
+        };
+        for (const key of Object.keys(replaced)) {
+          replaced[key] = inlineTarget(replaced[key]);
+        }
+        for (const rKey of Object.keys(refs)) {
+          refs[rKey] = inlineTarget(refs[rKey]);
+        }
+        changed = true;
+      }
+    }
+  }
+
+  if (Object.keys(refs).length === 0) return;
+
+  const candidateResult: Record<string, any> = { ...replaced, refs };
+  const finalJson = JSON.stringify(candidateResult);
+  if (finalJson.length >= initialJson.length) {
+    return;
+  }
+
+  for (const key of Object.keys(pond)) {
+    if (key in replaced) {
+      pond[key] = replaced[key];
+    }
+  }
+  pond.refs = refs;
+};
+
+export const compactOversizedContextSections = (context: string): string => {
   const sections = context.split(/\n\n(?=ORSON [A-Z][A-Z ]*:)/).filter(Boolean);
-  const noteTokens = estimateOrsonPromptTokens(CONTEXT_OMITTED_NOTE);
-  let remainingTokens = Math.max(0, maxTokens - noteTokens);
-  const selected = sections
+  const compacted = sections.map((section) => {
+    const match = section.match(/^(ORSON [A-Z][A-Z ]*:)\n([\s\S]*)$/);
+    if (!match) return section;
+    const [, header, body] = match;
+    if (header === 'ORSON RISK PAYLOAD:') {
+      try {
+        const payloads = JSON.parse(body);
+        if (Array.isArray(payloads)) {
+          for (const pond of payloads) {
+            deduplicateGrowthEvidence(pond.growth_evidence);
+            deduplicateEvidenceSummary(pond.evidence);
+            cleanDailyRecords(pond.daily_records_14d);
+            if (pond.diagnostic_context?.history?.extended_daily) {
+              cleanDailyRecords(pond.diagnostic_context.history.extended_daily);
+            }
+            internPondReferences(pond);
+          }
+          return `${header}\n${JSON.stringify(payloads)}`;
+        }
+      } catch {
+        return section;
+      }
+    } else if (header === 'ORSON COMPARATIVE MATRIX:') {
+      try {
+        const payloads = JSON.parse(body);
+        if (Array.isArray(payloads)) {
+          for (const pond of payloads) {
+            if (pond && typeof pond === 'object') {
+              deduplicateGrowthEvidence(pond.growth_evidence);
+              deduplicateEvidenceSummary(pond.evidence);
+              internPondReferences(pond);
+            }
+          }
+          return `${header}\n${JSON.stringify(payloads)}`;
+        }
+      } catch {
+        return section;
+      }
+    }
+    return section;
+  });
+  return compacted.join('\n\n');
+};
+
+export const selectCompleteContextSections = (context: string, maxTokens: number): string => {
+  if (estimateOrsonPromptTokens(context) <= maxTokens) return context;
+
+  const compacted = compactOversizedContextSections(context);
+  if (estimateOrsonPromptTokens(compacted) <= maxTokens) return compacted;
+
+  const sections = compacted.split(/\n\n(?=ORSON [A-Z][A-Z ]*:)/).filter(Boolean);
+  const protectedSections = sections.filter((s) => isProtectedEvidenceSection(s));
+  const protectedTokens = estimateOrsonPromptTokens(protectedSections.join('\n\n'));
+
+  if (protectedTokens > maxTokens) {
+    throw new Error('Orson context budget exceeded: protected structured evidence cannot fit within token budget.');
+  }
+
+  const protectedWithNote = [...protectedSections, CONTEXT_OMITTED_NOTE].join('\n\n');
+  if (estimateOrsonPromptTokens(protectedWithNote) > maxTokens) {
+    throw new Error('Orson context budget exceeded: protected structured evidence and omission note cannot fit within token budget.');
+  }
+
+  const optionalSections = sections
     .map((section, index) => ({ section, index, priority: contextSectionPriority(section) }))
-    .sort((first, second) => first.priority - second.priority || first.index - second.index)
-    .filter(({ section }) => {
-      const tokens = estimateOrsonPromptTokens(section) + 1;
-      if (tokens > remainingTokens) return false;
-      remainingTokens -= tokens;
-      return true;
-    })
-    .sort((first, second) => first.index - second.index)
+    .filter(({ section }) => !isProtectedEvidenceSection(section))
+    .sort((a, b) => a.priority - b.priority || a.index - b.index);
+
+  const selectedOptional: { section: string; index: number }[] = [];
+  for (const opt of optionalSections) {
+    const candidate = [
+      ...sections.map((section, index) => ({ section, index })).filter(({ section }) => isProtectedEvidenceSection(section)),
+      ...selectedOptional, opt,
+    ].sort((a, b) => a.index - b.index).map(({ section }) => section);
+    if (estimateOrsonPromptTokens([...candidate, CONTEXT_OMITTED_NOTE].join('\n\n')) <= maxTokens) {
+      selectedOptional.push(opt);
+    }
+  }
+
+  const selected = [
+    ...sections
+      .map((section, index) => ({ section, index }))
+      .filter(({ section }) => isProtectedEvidenceSection(section)),
+    ...selectedOptional,
+  ]
+    .sort((a, b) => a.index - b.index)
     .map(({ section }) => section);
+
   return [...selected, CONTEXT_OMITTED_NOTE].join('\n\n');
 };
 
@@ -423,6 +909,7 @@ const inferStandaloneRoute = (question: string): OrsonConversationRoute => {
   if (isFarmSpecificQuestion(question)) return 'farm_analysis';
   if (
     AQUACULTURE_SCOPE_PATTERNS.some((pattern) => pattern.test(question)) ||
+    detectRequestedParameter(question) !== null ||
     CONVERSATIONAL_PATTERNS.some((pattern) => pattern.test(question))
   ) return 'aquaculture_knowledge';
   return 'out_of_scope';
@@ -432,7 +919,7 @@ export const inferOrsonConversationRoute = (
   question: string,
   history: OrsonConversationMessage[] = [],
 ): OrsonConversationRoute => {
-  if (EXPLICIT_GENERAL.test(question)) return inferStandaloneRoute(question);
+  if (EXPLICIT_GENERAL.test(question) || PURE_CONVERSATION_PATTERN.test(question)) return inferStandaloneRoute(question);
   const normalizedHistory = normalizeConversationHistory(history);
   if (FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(question))) {
     const previousUserMessage = [...normalizedHistory].reverse().find((message) => message.role === 'user');
@@ -446,16 +933,10 @@ export const inferOrsonConversationRoute = (
 
 const isConversationFollowUpQuestion = (
   question: string,
-  history: OrsonConversationMessage[] = [],
 ): boolean => {
-  if (EXPLICIT_GENERAL.test(question)) return false;
+  if (EXPLICIT_GENERAL.test(question) || PURE_CONVERSATION_PATTERN.test(question)) return false;
   if (question.trim().length > 100) return false;
-  if (FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(question))) return true;
-  if (history.length > 0) {
-    const lastMessage = history[history.length - 1];
-    if (lastMessage?.role === 'model') return true;
-  }
-  return false;
+  return FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(question));
 };
 
 const detectRequestedParameter = (question: string): string | null => {
@@ -470,10 +951,42 @@ const detectRequestedDirection = (question: string): OrsonQuestionFocus['request
   return null;
 };
 
-const detectRequestedDates = (question: string): string[] => {
-  const dates = Array.from(question.matchAll(/\b(\d{4}-\d{2}-\d{2})\b/g), (match) => match[1]);
-  return [...new Set(dates)];
+const isCalendarDate = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(value)
+  && Number.isFinite(Date.parse(`${value}T00:00:00Z`))
+  && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+
+const detectRequestedDates = (question: string, referenceDate?: string, history: OrsonConversationMessage[] = []): string[] => {
+  const isoDates = Array.from(question.matchAll(/\b(\d{4}-\d{2}-\d{2})\b/g), match => match[1]);
+  if (isoDates.length > 0) return isoDates.every(isCalendarDate) ? [...new Set(isoDates)] : [];
+  if (!referenceDate || !isCalendarDate(referenceDate)) return [];
+  const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+  const named = Array.from(question.matchAll(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:,?\s+(\d{4}))?\b/gi), match => {
+    const month = String(months.indexOf(match[1].toLowerCase()) + 1).padStart(2, '0');
+    return `${match[3] || referenceDate.slice(0, 4)}-${month}-${match[2].padStart(2, '0')}`;
+  });
+  if (named.length > 0) return [...new Set(named.filter(isCalendarDate))];
+  const shift = (date: string, days: number) => new Date(Date.parse(`${date}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
+  if (/\b(?:day before yesterday|dua hari yang lalu)\b/i.test(question)) return [shift(referenceDate, -2)];
+  if (/\b(?:day before|previous day|hari sebelumnya|sehari sebelumnya)\b/i.test(question)) {
+    for (let index = history.length - 1; index >= 0; index--) {
+      if (history[index].role !== 'user') continue;
+      const anchor = detectRequestedDates(history[index].text, referenceDate, history.slice(0, index));
+      return anchor.length === 1 ? [shift(anchor[0], -1)] : [];
+    }
+    return [];
+  }
+  const dates = [];
+  if (/\b(?:yesterday|kemarin)\b/i.test(question)) dates.push(shift(referenceDate, -1));
+  if (/\b(?:today|hari ini)\b/i.test(question)) dates.push(referenceDate);
+  return dates;
 };
+
+const isSimpleRecordLookup = (question: string): boolean => (
+  (/\b(?:what (?:was|were|is|are)|show|list|give me|tell me|how much .*(?:recorded|logged)|berapa|tampilkan)\b/i.test(question)
+    || /^\s*(?:what|how)\s+about\s+(?:the\s+)?(?:(?:morning|evening)\s+)?(?:ph|(?:dissolved\s+)?oxygen|salinity|temperature|temp|transparency|water\s+clarity|(?:average\s+)?shrimp\s+weight|mbw|abw|feed)(?:\s+readings?)?(?:\s+(?:on\s+\d{4}-\d{2}-\d{2}|today|yesterday))?[?.!\s]*$/i.test(question))
+  && !/\b(?:why|should|safe|recommend|cause|dose|increase|reduce|better|worse|trend|forecast|compare|calculate|explain|mengapa|kenapa|harus|aman|sarankan)\b/i.test(question)
+  && !/\b(?:target|planned|minimum|maximum|mean|median|lowest|highest|between|from|through|until)\b|\baverage\b(?!\s+(?:shrimp\s+)?weight\b)/i.test(question)
+);
 
 const detectRequestedRecordCount = (question: string): number | null => {
   if (!/\b(?:daily\s+)?feed\s+(?:totals?|records?|history)\b|\bdaily\s+totals?\b/i.test(question)) return null;
@@ -489,7 +1002,7 @@ const detectRequestedRecordFields = (question: string): string[] => {
     if (!fields.includes(value)) fields.push(value);
   });
 
-  if (/\bD\.?O\.?\b|\bdissolved\s+oxygen\b|\boxygen\b/i.test(question)) {
+  if (/\bD\.?O\.?\b/.test(question) || /\bdissolved\s+oxygen\b|\b(?:oxygen|oksigen)\b|\b(?:morning|evening)\s+do\b/i.test(question)) {
     add('do_morning_mg_l', 'do_evening_mg_l');
   }
   if (/\bammonia\b|\bnh3\b|\bnh4\b|\btan\b/i.test(question)) add('ammonia_mg_l');
@@ -510,7 +1023,9 @@ const detectRequestedRecordFields = (question: string): string[] => {
   if (/\bmortality\b|\bdead\b|\bdeaths?\b/i.test(question)) add('mortality');
   if (/\bmbw\b|\babw\b|\bweight\b/i.test(question)) add('mbw_g');
 
-  return fields;
+  const morning = /\b(?:morning|pagi)\b/i.test(question);
+  const evening = /\b(?:evening|sore)\b/i.test(question);
+  return fields.filter(field => !((morning && !evening && /evening/.test(field)) || (evening && !morning && /morning/.test(field))));
 };
 
 const detectRequiredAnswerAspects = (question: string): string[] => {
@@ -570,30 +1085,67 @@ export const buildOrsonQuestionFocus = (
     return includesSearchTerm(normalizedQuestion, payload.pondName) ||
       includesSearchTerm(normalizedQuestion, payload.pondId);
   });
-  const usesConversationHistory = conversationHistory.length > 0 && isConversationFollowUpQuestion(question, conversationHistory);
-  const previousFocusedPayload = usesConversationHistory
-    ? [...conversationHistory].reverse().flatMap((message) => {
-        if (message.role !== 'user') return [];
-        const normalizedMessage = normalizeSearchText(message.text);
-        const matches = payloads.filter((payload) => (
-          includesSearchTerm(normalizedMessage, payload.pondName)
-          || includesSearchTerm(normalizedMessage, payload.pondId)
-        ));
-        return matches.length === 1 ? matches : [];
-      })[0] ?? null
-    : null;
+  const usesConversationHistory = conversationHistory.length > 0 && isConversationFollowUpQuestion(question);
+  const previousMentionedPayloads = usesConversationHistory
+    ? (() => {
+        for (const message of [...conversationHistory].reverse()) {
+          if (message.role !== 'user') continue;
+          if (EXPLICIT_GENERAL.test(message.text) || CONVERSATIONAL_PATTERNS.some(pattern => pattern.test(message.text))) return [];
+          const normalizedMessage = normalizeSearchText(message.text);
+          const matches = payloads.filter((payload) => (
+            includesSearchTerm(normalizedMessage, payload.pondName)
+            || includesSearchTerm(normalizedMessage, payload.pondId)
+          ));
+          if (matches.length > 0) return matches;
+          // A new standalone topic ends the older pond reference.
+          if (EXPLICIT_GENERAL.test(message.text) || CONVERSATIONAL_PATTERNS.some(pattern => pattern.test(message.text))
+            || !isConversationFollowUpQuestion(message.text)) return [];
+        }
+        return [];
+      })()
+    : [];
+  const previousFocusedPayload = previousMentionedPayloads.length === 1 ? previousMentionedPayloads[0] : null;
   let intent = inferOrsonQuestionIntent(question);
-  const isComparison = intent === 'comparison' || mentionedPayloads.length >= 2;
-  const focusedPayload = mentionedPayloads.length === 1 ? mentionedPayloads[0] : previousFocusedPayload;
+  const isComparison = intent === 'comparison' || mentionedPayloads.length >= 2
+    || (mentionedPayloads.length === 0 && previousMentionedPayloads.length > 1);
+  let focusedPayload = ALL_PONDS_REQUESTED.test(question) || mentionedPayloads.length > 1
+    ? null : mentionedPayloads.length === 1 ? mentionedPayloads[0] : previousFocusedPayload;
   let requestedParameter = detectRequestedParameter(question);
   const requestedDirection = detectRequestedDirection(question);
-  const requestedDates = detectRequestedDates(question);
+  const commonDate = payloads[0]?.diagnosticContext?.asOfDate;
+  const referenceDate = focusedPayload?.diagnosticContext?.asOfDate
+    ?? (payloads.every(payload => payload.diagnosticContext?.asOfDate === commonDate) ? commonDate : undefined);
+  let requestedDates = detectRequestedDates(question, referenceDate, usesConversationHistory ? conversationHistory : []);
+  const singlePondLookup = !focusedPayload && payloads.length === 1 && requestedDates.length > 0
+    && isSimpleRecordLookup(question) && !EXPLICIT_GENERAL.test(question) && !requestConstraints.suppressPondAnalysis
+    && !/\b(?:pond|kolam|tambak)\b/i.test(question);
+  if (singlePondLookup) focusedPayload = payloads[0];
   let requestedFields = detectRequestedRecordFields(question);
   const requestedRecordCount = detectRequestedRecordCount(question);
 
-  if (!requestedParameter && conversationHistory.length > 0 && !EXPLICIT_GENERAL.test(question)) {
-    for (let i = conversationHistory.length - 1; i >= 0; i--) {
-      const prevMessage = conversationHistory[i];
+  // A short metric switch such as "what about the pH" refers to the last
+  // dated lookup, including a chain that moved to "the day before". Only
+  // inherit user-requested dates for the same pond, never dates in AI prose.
+  if (usesConversationHistory && focusedPayload && requestedDates.length === 0
+    && requestedFields.length > 0 && isSimpleRecordLookup(question)
+    && !/\b(?:\d{4}-\d{2}-\d{2}|today|yesterday|tomorrow|before|previous|last|past|next|days?|weeks?|months?|hari|kemarin|besok|sebelumnya|january|february|march|april|may|june|july|august|september|october|november|december)\b/i.test(question)) {
+    for (let index = conversationHistory.length - 1; index >= 0; index--) {
+      const previous = conversationHistory[index];
+      if (previous.role !== 'user') continue;
+      if (isSimpleRecordLookup(previous.text)) {
+        const previousFocus = buildOrsonQuestionFocus(previous.text, payloads, conversationHistory.slice(0, index));
+        if (previousFocus.analysisMode === 'standard' && previousFocus.requestedDates.length === 1
+          && previousFocus.requestedFields.length > 0 && previousFocus.focusedPondId === focusedPayload.pondId
+          && previousFocus.focusedPondName === focusedPayload.pondName) requestedDates = [...previousFocus.requestedDates];
+      }
+      break;
+    }
+  }
+
+  if (!requestedParameter && usesConversationHistory) {
+    // Prefer the user's topic to incidental metrics in a long model reply.
+    const topicHistory = [...conversationHistory].reverse();
+    for (const prevMessage of [...topicHistory.filter(message => message.role === 'user'), ...topicHistory.filter(message => message.role === 'model')]) {
       if (!prevMessage?.text) continue;
       const prevParam = detectRequestedParameter(prevMessage.text);
       if (prevParam) {
@@ -617,7 +1169,7 @@ export const buildOrsonQuestionFocus = (
   const inferredRoute = inferOrsonConversationRoute(question, conversationHistory);
   const containsUserReportedMeasurements = requestedDates.length === 0 && USER_REPORTED_MEASUREMENT_PATTERN.test(question);
   const route = !EXPLICIT_GENERAL.test(question)
-    && (mentionedPayloads.length > 0 || (containsUserReportedMeasurements && isPondDiagnosticQuestion(question)))
+    && (mentionedPayloads.length > 0 || previousMentionedPayloads.length > 0 || ALL_PONDS_REQUESTED.test(question) || singlePondLookup || (containsUserReportedMeasurements && isPondDiagnosticQuestion(question)))
     && inferredRoute !== 'inventory_product'
     ? 'farm_analysis'
     : inferredRoute;
@@ -643,8 +1195,10 @@ export const buildOrsonQuestionFocus = (
     suppressPondAnalysis: requestConstraints.suppressPondAnalysis,
     isPondSpecific: focusedPayload !== null,
     isComparison,
-    comparedPondNames: mentionedPayloads.map((p) => p.pondName),
-    requiresDetailedHistory: analysisMode !== 'standard' || DETAILED_HISTORY_PATTERNS.some((pattern) => pattern.test(question)),
+    comparedPondNames: (ALL_PONDS_REQUESTED.test(question) ? [] : mentionedPayloads.length > 0
+      ? mentionedPayloads : previousMentionedPayloads.length > 1 ? previousMentionedPayloads : []).map(p => p.pondName),
+    requiresDetailedHistory: analysisMode !== 'standard' || DETAILED_HISTORY_PATTERNS.some((pattern) => pattern.test(question))
+      || (usesConversationHistory && /\b(?:day before|previous day|earlier|sehari sebelumnya|hari sebelumnya)\b/i.test(question)),
     usesConversationHistory,
     shouldSummarize: (intent === 'summary' && !requestedParameter) || isComparison || /\banaly[sz]e\b/i.test(question),
     containsUserReportedMeasurements,
@@ -706,7 +1260,7 @@ export const buildOrsonCacheKey = (
     findings: payload.findings.map((finding) => finding.id),
     outlook: payload.outlook.direction,
   }))));
-  return `orson_general_v5_${hashString(normalizedQuestion)}_${contextHash}`;
+  return `orson_general_v6_${hashString(normalizedQuestion)}_${contextHash}`;
 };
 
 export const buildOrsonPromptPayload = (
@@ -717,6 +1271,7 @@ export const buildOrsonPromptPayload = (
   return {
     pondId: metrics.pondId,
     pondName: metrics.pondName,
+    overallSeverity: report.overallSeverity,
     species: metrics.species,
     pondAreaM2: metrics.pondAreaM2,
     densityPerM2: metrics.densityPerM2,
@@ -779,6 +1334,9 @@ export const buildOrsonPromptPayload = (
       summary: finding.summary,
       evidence: finding.evidence.slice(0, 2),
       recommendation: finding.recommendation,
+      isHistorical: finding.isHistorical,
+      status: finding.status,
+      eventDate: finding.eventDate,
     })),
     diagnosticContext: metrics.diagnosticContext,
   };
@@ -994,15 +1552,41 @@ const selectExactPromptRecords = (
 const buildExactRecordAnswer = (
   payload: OrsonPromptPondPayload | undefined,
   questionFocus: OrsonQuestionFocus,
+  question: string,
+  lookupRecords?: (pondId: string | null, pondName: string) => OrsonPromptDailyRecord[],
 ): string | null => {
-  if (!payload || !questionFocus.isPondSpecific || !questionFocus.requestedRecordCount) return null;
-  if (questionFocus.requestedFields.length !== 1 || questionFocus.requestedFields[0] !== 'feed_kg') return null;
-  const records = selectExactPromptRecords(payload, questionFocus);
-  if (records.length === 0) return `${payload.pondName} has no recorded daily feed totals for that request.`;
-  return [
-    `${payload.pondName} daily feed totals:`,
-    ...records.map((record) => `- ${record.date}: ${typeof record.feedKg === 'number' ? formatRecordedDecimal(record.feedKg) : 'N/A'} kg`),
-  ].join('\n');
+  if (!payload || !questionFocus.isPondSpecific) return null;
+  if (questionFocus.analysisMode === 'standard' && questionFocus.requestedRecordCount && questionFocus.requestedFields.length === 1 && questionFocus.requestedFields[0] === 'feed_kg') {
+    const records = selectExactPromptRecords(payload, questionFocus);
+    if (records.length === 0) return `${payload.pondName} has no recorded daily feed totals for that request.`;
+    return [`${payload.pondName} daily feed totals:`, ...records.map(record => `- ${record.date}: ${typeof record.feedKg === 'number' ? formatRecordedDecimal(record.feedKg) : 'N/A'} kg`)].join('\n');
+  }
+  if (questionFocus.analysisMode !== 'standard' || !isSimpleRecordLookup(question) || questionFocus.requestedDates.length === 0) return null;
+  if (questionFocus.requestedDates.some(date => date > payload.diagnosticContext.asOfDate)) return null;
+  const coverage = payload.diagnosticContext.history.coverage;
+  if (questionFocus.requestedDates.some(date => date < coverage.windowStart || date > coverage.windowEnd)) return null;
+  const labels: Record<string, [string, string]> = {
+    do_morning_mg_l: ['Morning oxygen', 'mg/L'], do_evening_mg_l: ['Evening oxygen', 'mg/L'],
+    ph_morning: ['Morning pH', ''], ph_evening: ['Evening pH', ''], salinity_ppt: ['Salinity', 'ppt'],
+    temperature_c: ['Temperature', '°C'], transparency_cm: ['Water clarity', 'cm'], mbw_g: ['Average shrimp weight', 'g'], feed_kg: ['Recorded feed', 'kg'],
+  };
+  if (questionFocus.requestedFields.length === 0 || questionFocus.requestedFields.some(field => !labels[field])) return null;
+  if (/\b(?:morning|evening|pagi|sore)\b/i.test(question)
+    && questionFocus.requestedFields.some(field => !/morning|evening/.test(field))) return null;
+  if (!lookupRecords) return null;
+  const records = lookupRecords(payload.pondId, payload.pondName);
+  const indonesian = !/\b(?:what|show|list|tell me)\b/i.test(question) && /\b(?:berapa|tampilkan|kemarin|pagi|sore)\b/i.test(question);
+  const translated: Record<string, string> = { do_morning_mg_l: 'Oksigen pagi', do_evening_mg_l: 'Oksigen sore', ph_morning: 'pH pagi', ph_evening: 'pH sore', salinity_ppt: 'Salinitas', temperature_c: 'Suhu', transparency_cm: 'Kecerahan air', mbw_g: 'Berat rata-rata udang', feed_kg: 'Pakan tercatat' };
+  return [indonesian ? `Catatan tersimpan ${payload.pondName}:` : `${payload.pondName} saved readings:`, ...questionFocus.requestedDates.map(date => {
+    const record = records.find(item => item.date === date);
+    const values = record ? getRequestedRecordValues(record, questionFocus.requestedFields) : {};
+    return `- ${date}: ${questionFocus.requestedFields.map(field => {
+      const [englishLabel, unit] = labels[field];
+      const label = indonesian ? translated[field] : englishLabel;
+      const value = field === 'feed_kg' && record?.feedSource !== 'daily_feed' ? null : values[field];
+      return `${label}: ${typeof value === 'number' && Number.isFinite(value) ? `${value}${unit ? ` ${unit}` : ''}` : indonesian ? 'tidak tercatat dalam data yang dimuat' : 'not recorded in the loaded records'}`;
+    }).join('; ')}`;
+  })].join('\n');
 };
 
 const compactComparison = (comparison: OrsonMetricComparison | null) => comparison ? ({
@@ -1194,12 +1778,14 @@ export const buildOrsonPromptContext = (
   totalPondCount = payloads.length,
   mortalityTrace: OrsonMortalityTrace | null = null,
   conversationHistory: OrsonConversationMessage[] = [],
+  userMessage = '',
 ): string => {
   const recentConversation = normalizeConversationHistory(conversationHistory);
   const isRelativeFeedLookup = questionFocus.requestedRecordCount !== null
     && questionFocus.requestedFields.length === 1
     && questionFocus.requestedFields[0] === 'feed_kg';
-  const isExactRecordLookup = questionFocus.isPondSpecific
+  const isExactRecordLookup = questionFocus.analysisMode === 'standard' && questionFocus.isPondSpecific
+    && (isRelativeFeedLookup || isSimpleRecordLookup(userMessage) || questionFocus.suppressAdvice || questionFocus.isComparison)
     && (questionFocus.requestedDates.length > 0 || isRelativeFeedLookup)
     && questionFocus.requestedFields.length > 0;
 
@@ -1549,6 +2135,19 @@ export const buildOrsonPromptContext = (
         needs_farm_data: questionFocus.answerContract.needsFarmData,
         excluded_workflows: questionFocus.answerContract.excludedWorkflows,
       },
+      ...(payloads.length > 0 ? {
+        evidence_limits: payloads.map(payload => ({
+          pond: payload.pondName,
+          ...(questionFocus.analysisMode === 'pond_diagnostic' ? {
+            biomass_comparison: compactComparison(payload.diagnosticContext.comparisons.estimatedBiomass ?? null),
+            interpretation: 'These are recorded estimates, not proof of the cause. Flat estimates do not support growing biomass as a cause; missing estimates mean change is unknown.',
+          } : {}),
+          ...(payload.survivalConfidence === 'low' ? {
+            numeric_feed_recommendation: 'unsupported_by_initial_records',
+            feeding_limit: 'Biomass depends on a low-confidence survival estimate. Do not recommend a new kg amount, range or maximum from logged or model-expected feed. Ask for missing direct feeding evidence and an applicable protocol before setting an amount.',
+          } : {}),
+        })),
+      } : {}),
       ...(questionFocus.analysisMode !== 'standard' ? { analysis_mode: questionFocus.analysisMode } : {}),
     }, null, 2),
     '',
@@ -1628,14 +2227,21 @@ export const buildOrsonPromptPackage = (params: {
   outlooks: Orson72HourOutlook[];
   mortalityTrace?: OrsonMortalityTrace | null;
   conversationHistory?: OrsonConversationMessage[];
+  lookupRecords?: (pondId: string | null, pondName: string) => OrsonPromptDailyRecord[];
 }): OrsonPromptPackage => {
   const userMessage = trimPromptText(params.userMessage, ORSON_USER_MESSAGE_MAX_CHARS) || '';
   const conversationHistory = normalizeConversationHistory(params.conversationHistory);
-  const payloads = params.metrics.map((metrics, index) => buildOrsonPromptPayload(
-    metrics,
-    params.reports[index],
-    params.outlooks[index],
-  ));
+  // Reports are sorted by risk, while metrics keep the original pond order.
+  // Join by identity so one pond cannot inherit another pond's alert or outlook.
+  const pondKey = (pond: {pondId:string|null;pondName:string}) => pond.pondId ? `id:${pond.pondId}` : `name:${pond.pondName}`;
+  const reportsByPond = new Map(params.reports.map(report => [pondKey(report),report]));
+  const outlooksByPond = new Map(params.outlooks.map(outlook => [pondKey(outlook),outlook]));
+  const payloads = params.metrics.map(metrics => {
+    const report = reportsByPond.get(pondKey(metrics));
+    const outlook = outlooksByPond.get(pondKey(metrics));
+    if (!report || !outlook) throw new Error('Orson pond analysis is incomplete. Please retry.');
+    return buildOrsonPromptPayload(metrics,report,outlook);
+  });
   const detectedFocus = buildOrsonQuestionFocus(userMessage, payloads, conversationHistory);
   const relevantConversationHistory = EXPLICIT_GENERAL.test(userMessage) ? [] : conversationHistory;
   const questionFocus = params.mortalityTrace
@@ -1648,6 +2254,19 @@ export const buildOrsonPromptPackage = (params: {
       }
     : detectedFocus;
   const orderedPayloads = orderPayloadsForQuestion(payloads, questionFocus);
+  const scopedPayloads = !questionFocus.isPondSpecific && questionFocus.comparedPondNames?.length
+    ? payloads.filter(payload => questionFocus.comparedPondNames?.includes(payload.pondName))
+    : payloads;
+  const multiPondLookup = !questionFocus.isPondSpecific && questionFocus.route === 'farm_analysis'
+    && (ALL_PONDS_REQUESTED.test(userMessage) || (questionFocus.comparedPondNames?.length ?? 0) > 1);
+  const multiAnswers = multiPondLookup ? scopedPayloads.map(payload => buildExactRecordAnswer(payload, {
+    ...questionFocus, isPondSpecific:true, focusedPondId:payload.pondId, focusedPondName:payload.pondName,
+  }, userMessage, params.lookupRecords)) : [];
+  const exactRecordAnswer = multiAnswers.length > 0 && multiAnswers.every(answer => answer !== null)
+    ? multiAnswers.join('\n\n')
+    : buildExactRecordAnswer(orderedPayloads[0], questionFocus, userMessage, params.lookupRecords);
+  const farmOverview = questionFocus.route === 'farm_analysis' && !questionFocus.isPondSpecific
+    && !questionFocus.containsUserReportedMeasurements && scopedPayloads.length > 1;
   const orderedPondKeys = new Set(orderedPayloads.flatMap((payload) => [
     payload.pondId ? `id:${payload.pondId}` : '',
     `name:${payload.pondName.toLowerCase()}`,
@@ -1664,7 +2283,10 @@ export const buildOrsonPromptPackage = (params: {
 
   return {
     systemInstruction: buildOrsonSystemInstruction(questionFocus.analysisMode),
-    context: [
+    context: exactRecordAnswer && multiPondLookup
+      ? `ORSON QUESTION FOCUS:\n${JSON.stringify({route:questionFocus.route,exact_record_lookup:true,requested_dates:questionFocus.requestedDates})}\n\nORSON EXACT RECORDS:\n${JSON.stringify({answer:exactRecordAnswer})}`
+      : farmOverview ? buildFarmOverviewContext(scopedPayloads, questionFocus, params.metrics.length,
+        questionFocus.usesConversationHistory ? relevantConversationHistory.filter(turn=>turn.role==='user').at(-1)?.text : undefined) : [
       ...(questionFocus.containsUserReportedMeasurements ? [
         `ORSON USER-REPORTED COMPARISONS:\n${JSON.stringify(calculateUserReportedChanges(userMessage))}`,
       ] : []),
@@ -1675,10 +2297,11 @@ export const buildOrsonPromptPackage = (params: {
       params.metrics.length,
       params.mortalityTrace ?? null,
       relevantConversationHistory,
+      userMessage,
       ),
     ].join('\n\n'),
     userMessage,
-    cacheKey: questionFocus.analysisMode !== 'standard' || questionFocus.route === 'inventory_product' || conversationHistory.length > 0
+    cacheKey: questionFocus.analysisMode !== 'standard' || questionFocus.route === 'farm_analysis' || questionFocus.route === 'inventory_product' || conversationHistory.length > 0
       ? null
       : buildOrsonCacheKey(userMessage, orderedPayloads),
     isFarmSpecific: questionFocus.analysisMode !== 'standard'
@@ -1687,12 +2310,12 @@ export const buildOrsonPromptPackage = (params: {
     questionFocus,
     conversationHistory,
     mortalityTrace: params.mortalityTrace ?? null,
-    exactRecordAnswer: buildExactRecordAnswer(orderedPayloads[0], questionFocus),
+    exactRecordAnswer,
   };
 };
 
 export const cleanOrsonResponse = (text: string): string => {
-  return text
+  return readableOrsonText(text)
     .replace(/\*\*/g, '')
     .replace(/^#{1,6}\s+/gm, '')
     .replace(/^(?:Evidence|Bukti|Sumber):[^\n]*\b(?:dataset|pondCycleId|documentId|recordId|samplings id|read_app_records)\b[^\n]*(?:\n[ \t]*[-*][^\n]*)*/gmi, '')

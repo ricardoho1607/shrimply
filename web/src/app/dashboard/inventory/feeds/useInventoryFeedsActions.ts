@@ -11,6 +11,7 @@ import {
 import React from 'react';
 import { removeAdditiveUsage } from "../../../../../../shared/additiveUsageRemoval";
 import { getFarmDateKey } from "../../../../../../shared/farmDate";
+import { resolveInventoryUsageDate } from "../../../../../../shared/inventoryUsageDate";
 import { requireAvailableStock } from "../../../../../../shared/financeIntegrity";
 import { buildInventoryExpense, financeSourceEntry, financeSyncDocumentId } from "../../../../../../shared/financeSync";
 import { mergeOrsonOperation, type OrsonCommand, type OrsonOperation } from "../../../../../../shared/orsonAgentContract";
@@ -113,6 +114,7 @@ export function useInventoryFeedsActions(context: Context) {
         unitPrice: '',
         notes: '',
         stockDate: getFarmDateKey(new Date(), company?.timeZone),
+        usageDate: getFarmDateKey(new Date(), company?.timeZone),
         expiry: '',
         pondId: '',
         manufacturer: productLabel?.manufacturer || '',
@@ -131,6 +133,7 @@ export function useInventoryFeedsActions(context: Context) {
         notes: '',
         unit: 'kg',
         stockDate: getFarmDateKey(new Date(), company?.timeZone),
+        usageDate: getFarmDateKey(new Date(), company?.timeZone),
         expiry: '',
         reorderLevel: '',
         manufacturer: '',
@@ -419,6 +422,7 @@ export function useInventoryFeedsActions(context: Context) {
         });
       }
       else if (modalType === 'usage' && selectedItem) {
+        const usageDate = resolveInventoryUsageDate(formData.usageDate, company?.timeZone);
         const collectionName = itemType === 'feed' ? 'feeds' : 'additives';
         const ref = doc(db, 'companies', companyId, collectionName, selectedItem.id);
         const selectedPond = activePonds.find((pond) => pond.id === formData.pondId);
@@ -443,7 +447,7 @@ export function useInventoryFeedsActions(context: Context) {
             totalCost: Math.max(0, currentCost - (qty * unitPrice)),
             usageHistory: arrayUnion({
               id: usageId,
-              date: getFarmDateKey(new Date(), company?.timeZone),
+              date: usageDate,
               quantity: qty,
               unitPrice,
               totalCost: qty * unitPrice,

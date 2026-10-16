@@ -236,6 +236,17 @@ test('refresh restores only scoped history and retry replaces an incomplete bubb
 
 const savedPreview = { title: 'Saved-record preview', text: 'PRIVATE PREVIEW: Pond A morning DO 3.2 mg/L on 2026-09-02' };
 
+for(const kind of ['web','mobile']) test(`${kind}: an Orson table renders cells without raw table syntax`,async()=>{
+  const ui=setup(kind);ui.signIn('A','company-A');
+  await ui.send('Show a pond comparison table');
+  ui.requests[0].resolve('Saved readings:\n\n| Pond | Oxygen |\n| --- | --- |\n| A1 | 3.1 mg/L (2026-10-13, old) |\n| A2 | Unknown |\n\nRecheck old readings.');
+  await Promise.resolve();ui.render();
+  assert.ok(ui.text().includes('3.1 mg/L (2026-10-13, old)'));
+  assert.ok(ui.text().includes('Recheck old readings.'));
+  assert.ok(!ui.text().includes('| --- |'));
+  assert.ok(ui.elements().some(node=>kind==='web'?node.type==='table':node.props.accessibilityLabel==='Pond readings table. Swipe sideways for more columns.'));
+});
+
 test('saved-record preview appears with activity, then only the answer is saved and sent', async () => {
   const ui = setup(); ui.signIn('A', 'company-A');
   await ui.send('Why is oxygen low?');

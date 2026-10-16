@@ -16,6 +16,7 @@ import { linkOperationToReply, unlinkedDraftOperationIds, upsertReplyWithOperati
 import { agentActivityLabel } from '../../../../../shared/orsonAgentPresentation';
 import { orsonIdentityKey, OrsonSessionChangedError } from '../../../../../orson/session';
 import { cleanOrsonResponse } from '../../../../../orson/promptBuilder';
+import { parseOrsonMessageBlocks } from '../../../../../orson/messageBlocks';
 import { OrsonIncompleteResponseError } from '../../../../../orson/responseCompletion';
 import type { OrsonResponsePreview } from '../../../../../orson/responsePreview';
 import { useGemini } from '@/hooks/useGemini';
@@ -258,7 +259,15 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
                 <div key={msg.id} className={`orson-message-row ${msg.type === 'user' ? 'is-user' : 'is-ai'} ${msg.operationIds?.length ? 'has-operation' : ''}`}>
                   <div className="orson-message-stack">
                     {(msg.message || msg.retryPrompt) && <div className="orson-bubble">
-                      {msg.type === 'ai' ? cleanOrsonResponse(msg.message) : msg.message}
+                      {msg.type === 'ai' ? parseOrsonMessageBlocks(cleanOrsonResponse(msg.message)).map((block,index) => block.type === 'text'
+                        ? <span key={index}>{block.text}</span>
+                        : <div key={index} role="region" aria-label="Pond readings table" tabIndex={0} style={{maxWidth:'100%',overflowX:'auto',margin:'12px 0',whiteSpace:'normal'}}>
+                          <p style={{fontSize:12,color:'#60758a',marginBottom:8}}>Scroll sideways to see all columns.</p>
+                          <table style={{borderCollapse:'collapse',fontSize:13,width:'100%'}}>
+                            <thead><tr>{block.headers.map((cell,column)=><th scope="col" key={column} style={{textAlign:'left',padding:'10px 12px',background:'#edf4f8',borderBottom:'2px solid #c8d8e4',whiteSpace:'nowrap'}}>{cell}</th>)}</tr></thead>
+                            <tbody>{block.rows.map((row,line)=><tr key={line}>{row.map((cell,column)=><td key={column} style={{padding:'10px 12px',borderBottom:'1px solid #d9e4ec',verticalAlign:'top',minWidth:110}}>{cell}</td>)}</tr>)}</tbody>
+                          </table>
+                        </div>) : msg.message}
                       {msg.retryPrompt && <div role="status">{copy('Response interrupted.')} <button type="button" disabled={loading || !pondsReady} onClick={() => handleSend(msg.retryPrompt, msg.id)}>{copy('Retry')}</button></div>}
                     </div>}
                     {msg.type === 'ai' && !!msg.operationIds?.length && <AgentCards agent={agent} operationIds={msg.operationIds} showStatus={false} />}

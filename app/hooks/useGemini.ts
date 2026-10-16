@@ -9,6 +9,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import app, { db } from '@/config/firebase';
 import { buildOrsonAnalysis } from '../../orson/pipeline';
+import { friendlyOrsonRequestError } from '../../orson/requestError';
 import {
   type OrsonAiFunction,
   isOrsonDailyLimitError,
@@ -57,32 +58,14 @@ type SendMessageOptions = {
 
 const CACHE_PREFIX = 'orson_cache_';
 const CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
-const PROGRESSIVE_TEXT_MAX_STEPS = 80;
-const PROGRESSIVE_TEXT_DELAY_MS = 24;
-
 const emitProgressiveText = async (
   text: string,
   onPartialResponse: ((text: string) => void) | undefined,
   assertCurrent: () => void,
 ) => {
   if (!onPartialResponse) return;
-  const tokens = text.match(/\S+\s*/g) ?? [];
-  if (tokens.length === 0) {
-    assertCurrent();
-    onPartialResponse(text);
-    return;
-  }
-
-  const step = Math.max(1, Math.ceil(tokens.length / PROGRESSIVE_TEXT_MAX_STEPS));
-  let visibleText = '';
-  for (let index = 0; index < tokens.length; index += step) {
-    visibleText += tokens.slice(index, index + step).join('');
-    assertCurrent();
-    onPartialResponse(visibleText);
-    if (index + step < tokens.length) {
-      await new Promise<void>((resolve) => setTimeout(resolve, PROGRESSIVE_TEXT_DELAY_MS));
-    }
-  }
+  assertCurrent();
+  onPartialResponse(text);
 };
 
 const getCachedResponse = async (cacheKey: string | null): Promise<string | null> => {
@@ -323,6 +306,7 @@ export const useGemini = () => {
 
       const functions = getFunctions(app);
       if (options.companyId && options.projectionSnapshot) {
+        assertCurrent();
         try {
           const snapshotRequest = buildOrsonPredictionSnapshotRequest(
             options.companyId,
@@ -330,7 +314,9 @@ export const useGemini = () => {
             options.projectionSnapshot.projection,
           );
           const recordPrediction = httpsCallable(functions, 'recordOrsonPrediction');
-          await recordPrediction(snapshotRequest);
+          recordPrediction(snapshotRequest).catch((predictionError) => {
+            console.warn('Orson prediction snapshot could not be recorded.', predictionError);
+          });
         } catch (predictionError) {
           console.warn('Orson prediction snapshot could not be recorded.', predictionError);
         }
@@ -442,7 +428,7 @@ export const useGemini = () => {
 
       const localFallback = explicitAction
         ? 'Orson could not prepare your entry. No save was confirmed. Please retry, or enter the values in the pond or Lab Reports form.'
-        : buildLocalOrsonFallback(analysis);
+        : friendlyOrsonRequestError(err, buildLocalOrsonFallback(analysis), userMessage);
       setError(localFallback);
       return localFallback;
     }

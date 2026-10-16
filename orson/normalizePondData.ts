@@ -615,6 +615,7 @@ const normalizeRecord = (record: RawRecord, docStartDate: string | null, timeZon
     mortalityObservationType,
     mortalityNotes: firstString(record.notes),
     feedKg,
+    samplingFeedEstimateKg: mbwG !== null ? parseFeedKg(record.feed) : null,
     phMorning: firstNumber(record.phMorning),
     phEvening: firstNumber(record.phEvening),
     doMorning: firstNumber(record.doMorning),
@@ -707,7 +708,7 @@ export const normalizePondData = (
       ? pond.records
       : [];
   const rawMortalityRecords = Array.isArray(pond.mortalityRecords)
-    ? pond.mortalityRecords.map((record: RawRecord) => ({
+    ? pond.mortalityRecords.filter((record: RawRecord) => record && typeof record === 'object').map((record: RawRecord) => ({
         ...record,
         mortalityObservationType: record.observationType,
         mortality: record.count,

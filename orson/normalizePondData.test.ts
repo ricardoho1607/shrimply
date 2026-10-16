@@ -92,11 +92,14 @@ export const runNormalizePondDataSelfTest = () => {
   assert(pond.records[0].shrimpBehaviour === 'abnormal', 'keeps shrimp behaviour observation');
   assert(pond.records[1].feedKg === 52, 'uses feedData total daily feed');
   assert(pond.records[1].feedData?.feedingResponse === 'strong', 'keeps direct feeding response separate from feed quantity');
-  assert(pond.records[2].kinds.includes('sampling'), 'detects sampling record');
-  assert(pond.records[2].mbwG === 1.2, 'normalizes MBW');
-  assert(pond.records[3].kinds.includes('mortality'), 'detects daily mortality record');
-  assert(pond.records[3].mortalityCount === 25, 'deducts estimated total mortality');
-  assert(pond.records[4].mortalityCount === 0, 'does not deduct observed recovered mortality');
+  const sampling = pond.records.find(record => record.id === 'sampling-1');
+  const estimatedMortality = pond.records.find(record => record.id === 'mortality-1');
+  const recoveredMortality = pond.records.find(record => record.id === 'mortality-2');
+  assert(sampling?.kinds.includes('sampling'), 'detects sampling record');
+  assert(sampling?.mbwG === 1.2, 'normalizes MBW');
+  assert(estimatedMortality?.kinds.includes('mortality'), 'detects daily mortality record');
+  assert(estimatedMortality?.mortalityCount === 25, 'deducts estimated total mortality');
+  assert(recoveredMortality?.mortalityCount === 0, 'does not deduct observed recovered mortality');
 
   const farmCalendarPond = normalizePondData(
     {
@@ -157,8 +160,8 @@ export const runFeedEvidenceNormalizationSelfTest = () => {
   assert(zeroRecord?.feedData?.isExplicitZero === true, 'flags isExplicitZero as true');
   assert(zeroRecord?.feedData?.totalDailyFeedKg === 0, 'feedData totalDailyFeedKg is 0');
   assert(zeroRecord?.mbwG === null, 'zero mbw normalizes to null (positive-only)');
-  assert(zeroRecord?.isFresh === true, 'evaluates freshness within window');
-  assert(typeof zeroRecord?.ageDays === 'number', 'populates ageDays');
+  assert(zeroRecord?.isFresh === false, 'five-day-old daily feed is stale');
+  assert(zeroRecord?.ageDays === 5, 'preserves the recorded age');
 
   const validRecord = pond.records.find((r) => r.id === 's-valid-mbw');
   assert(validRecord?.mbwG === 2.8, 'positive mbw is preserved');

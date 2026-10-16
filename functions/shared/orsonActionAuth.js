@@ -8,14 +8,35 @@ const validId = (value) =>
 const fail = (message, code = "failed-precondition") => {
   throw new HttpsError(code, message);
 };
-async function authorizeAgent(db, uid, companyId, transaction) {
+async function authorizeAgent(db, uid, companyId, transaction, options = {}) {
   if (!uid) fail("Sign in to use Orson.", "unauthenticated");
   if (!validId(companyId)) fail("Invalid company.", "invalid-argument");
-  const get = (ref) => (transaction ? transaction.get(ref) : ref.get());
+
+  const cache = options?.cache;
+  const refresh = options?.refresh === true;
+
+  const getDoc = (colName, docId, providedSnap) => {
+    // Unconditional transaction bypass: transactions always read fresh via transaction.get
+    if (transaction) {
+      return transaction.get(db.collection(colName).doc(docId));
+    }
+    if (providedSnap) {
+      return Promise.resolve(providedSnap);
+    }
+    const key = `${colName}:${docId}`;
+    if (!refresh && cache && cache.has(key)) return cache.get(key);
+    const promise = db.collection(colName).doc(docId).get().catch((err) => {
+      if (cache && cache.get(key) === promise) cache.delete(key);
+      throw err;
+    });
+    if (cache) cache.set(key, promise);
+    return promise;
+  };
+
   const base = db.collection("companies").doc(companyId);
   const [companySnap, userSnap] = await Promise.all([
-    get(base),
-    get(db.collection("users").doc(uid)),
+    getDoc("companies", companyId, options?.companySnap),
+    getDoc("users", uid, options?.userSnap),
   ]);
   const company = companySnap.data(),
     user = userSnap.data();
@@ -38,10 +59,13 @@ async function authorizeAgent(db, uid, companyId, transaction) {
     company.businessSize === "enterprise" &&
     user?.role === "technician" &&
     company.ownerId !== uid;
+  // Lazily build block query only when enterprise scoped; owner stubs lack subcollections
   const blocks = scoped
-    ? await get(
-        base.collection("blocks").where("assignedTechnicianId", "==", uid),
-      )
+    ? await (transaction
+        ? transaction.get(
+            base.collection("blocks").where("assignedTechnicianId", "==", uid),
+          )
+        : base.collection("blocks").where("assignedTechnicianId", "==", uid).get())
     : null;
   const blockIds = new Set(blocks?.docs.map((doc) => doc.id) || []);
   return {

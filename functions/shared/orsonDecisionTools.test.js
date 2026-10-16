@@ -1290,7 +1290,9 @@ test('evaluate_harvest_scenario: schema is registered in decisionToolSchemas and
   assert.equal(routedResult.scope.pondId, 'pond-a');
 });
 
-test('evaluate_harvest_scenario: owner evaluates harvest scenario with price ladder, explicit scope, assumptions, and margins', async () => {
+test('evaluate_harvest_scenario: owner evaluates harvest scenario with price ladder, explicit scope, assumptions, and margins', async (t) => {
+  // Keep the October 6 mortality observation inside the seven-day window.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-07T12:00:00Z') });
   const fixture = createTestFarmFixture();
   fixture.feeds['farm-1']['feed-depleted'].usageHistory[0].totalCost = 44; // Complete valuation for this profitable case.
   const db = buildMockDb(fixture);
@@ -1346,6 +1348,28 @@ test('evaluate_harvest_scenario: owner evaluates harvest scenario with price lad
   assert.ok(['keep_growing', 'harvest_now'].includes(result.decision));
   assert.ok(result.decisionReason.length > 0);
 });
+
+for (const [date, expectedBasis] of [
+  ['2026-10-12', 'recorded_mortality_trend'], // Six days old: still recent.
+  ['2026-10-13', 'biological_fallback'], // Seven days old: outside the window.
+  ['2026-10-16', 'biological_fallback'],
+]) {
+  test(`evaluate_harvest_scenario: mortality evidence ages correctly on ${date}`, async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: new Date(`${date}T12:00:00Z`) });
+    const result = await evaluateHarvestScenario({ pondId: 'pond-a' }, {
+      db: buildMockDb(createTestFarmFixture()),
+      company: { timeZone: 'UTC' },
+      companyId: 'farm-1',
+      allowed: permission => permission === 'viewFarm',
+      enterpriseScoped: false,
+      timeZone: 'UTC',
+    });
+    assert.equal(result.status, 'ok');
+    assert.equal(result.assumptions.mortalityBasis, expectedBasis);
+    assert.equal(result.missingEvidence.includes('missing_recorded_mortality_observations'), expectedBasis === 'biological_fallback');
+    assert.equal(result.guardrails.noFarmWrites, true);
+  });
+}
 
 test('evaluate_harvest_scenario: technician receives operational growth projection with finance strictly withheld', async () => {
   const db = buildMockDb(createTestFarmFixture());

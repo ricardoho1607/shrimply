@@ -51,6 +51,7 @@ const recordTool = {
       field: { type: 'string', description: 'Optional top-level field, such as samplings, to read from a document.' },
       after: { type: 'string', description: 'Next-page document cursor returned by a list lookup.' },
       offset: { type: 'integer', minimum: 0, description: 'Array offset for a document field.' },
+      refresh: { type: 'boolean', description: 'Force a fresh read from Firestore, bypassing the request cache.' },
     }, required: ['dataset'], additionalProperties: false,
   },
 };
@@ -62,6 +63,7 @@ const timelineTool = {
       pondId: { type: 'string', description: 'Exact pond ID from ORSON context or a ponds list lookup.' },
       days: { type: 'integer', minimum: 7, maximum: 90, description: 'Calendar lookback. Defaults to 30 days.' },
       endDate: { type: 'string', description: 'Optional inclusive farm date in YYYY-MM-DD format.' },
+      refresh: { type: 'boolean', description: 'Force a fresh read from Firestore, bypassing the request cache.' },
     }, required: ['pondId'], additionalProperties: false,
   },
 };
@@ -371,6 +373,7 @@ const createOrsonAppDataReader = ({ db, company, user, uid, companyId }) => {
   const canViewFinance = allowed('viewFinance');
   const enterpriseScoped = company.businessSize === 'enterprise' && user?.role === 'technician' && company.ownerId !== uid;
   const decisionBudget = createDecisionBudget();
+  const readerCache = new Map();
   let scopePromise;
   const scopedData = async (dataset, record) => {
     if (!enterpriseScoped) return record;
@@ -431,11 +434,29 @@ const createOrsonAppDataReader = ({ db, company, user, uid, companyId }) => {
       if (!args || !allowed('viewFarm') || !validId(args.pondId)) throw new Error('Not permitted');
       if (args.days !== undefined && (!Number.isInteger(args.days) || args.days < 7 || args.days > 90)) throw new Error('Invalid days');
       if (args.endDate !== undefined && !validDateKey(args.endDate)) throw new Error('Invalid date');
-      const snap = await db.collection('companies').doc(companyId).collection('ponds').doc(args.pondId).get();
-      if (!snap.exists) return { status: 'not_found' };
-      const scoped = await scopedData('ponds', snap.data());
-      if (!scoped) throw new Error('Not permitted');
-      return buildPondTimeline(snap.id || args.pondId, cleanRecord(scoped, canViewFinance), args, company.timeZone);
+      if (args.refresh !== undefined && typeof args.refresh !== 'boolean') throw new Error('Invalid refresh');
+      const cacheKey = JSON.stringify([
+        timelineTool.name,
+        args.pondId,
+        args.days || 30,
+        args.endDate || null,
+      ]);
+      if (args.refresh !== true && readerCache.has(cacheKey)) return readerCache.get(cacheKey);
+      let promise;
+      promise = (async () => {
+        const snap = await db.collection('companies').doc(companyId).collection('ponds').doc(args.pondId).get();
+        if (!snap.exists) return { status: 'not_found' };
+        const scoped = await scopedData('ponds', snap.data());
+        if (!scoped) throw new Error('Not permitted');
+        return buildPondTimeline(snap.id || args.pondId, cleanRecord(scoped, canViewFinance), args, company.timeZone);
+      })().catch((err) => {
+        if (readerCache.get(cacheKey) === promise) {
+          readerCache.delete(cacheKey);
+        }
+        throw err;
+      });
+      readerCache.set(cacheKey, promise);
+      return promise;
     }
     if (
       name === periodFeedCostTool.name ||
@@ -462,48 +483,70 @@ const createOrsonAppDataReader = ({ db, company, user, uid, companyId }) => {
     if (args.after !== undefined && !validId(args.after)) throw new Error('Invalid cursor');
     if (args.offset !== undefined && (!Number.isInteger(args.offset) || args.offset < 0)) throw new Error('Invalid offset');
     if (args.field !== undefined && (typeof args.field !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_]{0,80}$/.test(args.field))) throw new Error('Invalid field');
-    const ref = args.dataset === 'assets' ? db.collection('assets') : db.collection('companies').doc(companyId).collection(args.dataset);
-    if (args.documentId) {
-      const snap = await ref.doc(args.documentId).get();
-      if (!snap.exists) return { status: 'not_found' };
-      if (args.dataset === 'assets' && snap.data().companyId !== companyId) throw new Error('Not permitted');
-      const scoped = await scopedData(args.dataset, snap.data());
-      if (!scoped) throw new Error('Not permitted');
-      const data = cleanRecord(scoped, canViewFinance);
-      if (args.field && !Object.hasOwn(data, args.field)) return { status: 'field_unavailable', fields: Object.keys(data) };
-      let value = args.field ? data[args.field] : data;
-      let nextOffset = null;
-      if (Array.isArray(value)) {
-        const offset = args.offset || 0;
-        const all = value;
-        value = [];
-        for (let index = offset; index < all.length && value.length < MAX_ARRAY_PAGE_ITEMS; index += 1) {
-          const candidate = [...value, all[index]];
-          if (Buffer.byteLength(JSON.stringify(candidate), 'utf8') > MAX_ARRAY_PAGE_BYTES) {
-            if (!value.length) {
-              return { status: 'array_item_too_large', dataset: args.dataset, id: snap.id, field: args.field || null, offset: index, fields: Object.keys(data), message: 'This array item is too large to return safely. Request a smaller field or inspect the document another way.' };
+    if (args.refresh !== undefined && typeof args.refresh !== 'boolean') throw new Error('Invalid refresh');
+    const cacheKey = JSON.stringify([
+      recordTool.name,
+      args.dataset,
+      args.documentId || null,
+      args.field || null,
+      args.after || null,
+      args.offset || 0,
+    ]);
+    if (args.refresh !== true && readerCache.has(cacheKey)) return readerCache.get(cacheKey);
+
+    let promise;
+    promise = (async () => {
+      const ref = args.dataset === 'assets' ? db.collection('assets') : db.collection('companies').doc(companyId).collection(args.dataset);
+      if (args.documentId) {
+        const snap = await ref.doc(args.documentId).get();
+        if (!snap.exists) return { status: 'not_found' };
+        if (args.dataset === 'assets' && snap.data().companyId !== companyId) throw new Error('Not permitted');
+        const scoped = await scopedData(args.dataset, snap.data());
+        if (!scoped) throw new Error('Not permitted');
+        const data = cleanRecord(scoped, canViewFinance);
+        if (args.field && !Object.hasOwn(data, args.field)) return { status: 'field_unavailable', fields: Object.keys(data) };
+        let value = args.field ? data[args.field] : data;
+        let nextOffset = null;
+        if (Array.isArray(value)) {
+          const offset = args.offset || 0;
+          const all = value;
+          value = [];
+          for (let index = offset; index < all.length && value.length < MAX_ARRAY_PAGE_ITEMS; index += 1) {
+            const candidate = [...value, all[index]];
+            if (Buffer.byteLength(JSON.stringify(candidate), 'utf8') > MAX_ARRAY_PAGE_BYTES) {
+              if (!value.length) {
+                return { status: 'array_item_too_large', dataset: args.dataset, id: snap.id, field: args.field || null, offset: index, fields: Object.keys(data), message: 'This array item is too large to return safely. Request a smaller field or inspect the document another way.' };
+              }
+              break;
             }
-            break;
+            value = candidate;
           }
-          value = candidate;
+          nextOffset = offset + value.length < all.length ? offset + value.length : null;
         }
-        nextOffset = offset + value.length < all.length ? offset + value.length : null;
+        if (Buffer.byteLength(JSON.stringify(value), 'utf8') > MAX_ARRAY_PAGE_BYTES) return { status: 'select_field', fields: Object.keys(data), message: 'Document is large. Request one field at a time; array fields support pagination.' };
+        return { status: 'ok', dataset: args.dataset, id: snap.id, field: args.field || null, data: value, nextOffset, complete: nextOffset === null };
       }
-      if (Buffer.byteLength(JSON.stringify(value), 'utf8') > MAX_ARRAY_PAGE_BYTES) return { status: 'select_field', fields: Object.keys(data), message: 'Document is large. Request one field at a time; array fields support pagination.' };
-      return { status: 'ok', dataset: args.dataset, id: snap.id, field: args.field || null, data: value, nextOffset, complete: nextOffset === null };
-    }
-    let query = args.dataset === 'assets' ? ref.where('companyId', '==', companyId) : ref;
-    query = query.orderBy('__name__');
-    if (args.after) query = query.startAfter(args.after);
-    const snap = await query.limit(11).get();
-    const docs = snap.docs.slice(0, 10);
-    const records = (await Promise.all(docs.map(async doc => {
-      const scoped = await scopedData(args.dataset, doc.data());
-      if (!scoped) return null;
-      const data = cleanRecord(scoped, canViewFinance);
-      return { id: doc.id, fields: Object.keys(data), data: Object.fromEntries(Object.entries(data).filter(([, v]) => v === null || typeof v !== 'object').map(([k, v]) => [k, typeof v === 'string' && v.length > 600 ? { preview: v.slice(0, 600), truncated: true } : v])) };
-    }))).filter(Boolean);
-    return { status: 'ok', dataset: args.dataset, records, documentDetailsOmitted: true, nextCursor: snap.docs.length > 10 ? docs.at(-1).id : null, complete: snap.docs.length <= 10 };
+      let query = args.dataset === 'assets' ? ref.where('companyId', '==', companyId) : ref;
+      query = query.orderBy('__name__');
+      if (args.after) query = query.startAfter(args.after);
+      const snap = await query.limit(11).get();
+      const docs = snap.docs.slice(0, 10);
+      const records = (await Promise.all(docs.map(async doc => {
+        const scoped = await scopedData(args.dataset, doc.data());
+        if (!scoped) return null;
+        const data = cleanRecord(scoped, canViewFinance);
+        return { id: doc.id, fields: Object.keys(data), data: Object.fromEntries(Object.entries(data).filter(([, v]) => v === null || typeof v !== 'object').map(([k, v]) => [k, typeof v === 'string' && v.length > 600 ? { preview: v.slice(0, 600), truncated: true } : v])) };
+      }))).filter(Boolean);
+      return { status: 'ok', dataset: args.dataset, records, documentDetailsOmitted: true, nextCursor: snap.docs.length > 10 ? docs.at(-1).id : null, complete: snap.docs.length <= 10 };
+    })().catch((err) => {
+      if (readerCache.get(cacheKey) === promise) {
+        readerCache.delete(cacheKey);
+      }
+      throw err;
+    });
+
+    readerCache.set(cacheKey, promise);
+    return promise;
   };
   const tools = [{ ...recordTool, parameters: { ...recordTool.parameters, properties: { ...recordTool.parameters.properties, dataset: { type: 'string', enum: Object.keys(DATASETS).filter(key => allowed(DATASETS[key])) } } } }];
   if (allowed('viewFarm')) {

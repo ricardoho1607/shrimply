@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { generateGroundedOrsonResponse, getClaimLimits, findUnsupportedClaims, nitrogenGuidanceIssues } = require('./orsonAnswerGrounding');
+const { generateGroundedOrsonResponse, getClaimLimits, findUnsupportedClaims, nitrogenGuidanceIssues, decodeRiskPayload } = require('./orsonAnswerGrounding');
 
 const promptFor = (comparison = null, question = 'Why did growth slow?', focus = {}) => [
   'ORSON QUESTION FOCUS:', JSON.stringify({ route: 'farm_analysis', ...focus }), '',
@@ -61,9 +61,11 @@ test('individual ADG cannot mathematically explain the recorded FCR change', () 
   assert.deepEqual(findUnsupportedClaims('ADG cannot mathematically explain the recorded FCR change without matching feed and biomass-gain windows.', getClaimLimits(promptFor())), []);
 });
 
-test('single-pass streaming emits draft chunks directly in real time', async () => {
+test('single-pass streaming checks each paragraph before showing it', async () => {
   const chunks = [];
   let calls = 0;
+  const firstParagraph = 'ADG fell from 0.31 to 0.22 g/day.\n\n';
+  const finalText = firstParagraph + 'The cause is not established by these records.';
   const result = await generateGroundedOrsonResponse({
     prompt: promptFor(),
     mode: 'pond_diagnostic',
@@ -71,15 +73,18 @@ test('single-pass streaming emits draft chunks directly in real time', async () 
     onTextDelta: async text => chunks.push(text),
     generate: async options => {
       calls++;
-      await options.onTextDelta('Token 1 ');
-      await options.onTextDelta('Token 2');
-      return reply(safeDraft);
+      await options.onTextDelta('ADG fell from ');
+      assert.deepEqual(chunks, []);
+      await options.onTextDelta('0.31 to 0.22 g/day.\n\n');
+      assert.deepEqual(chunks, [firstParagraph]);
+      await options.onTextDelta('The cause is not established by these records.');
+      return reply(finalText);
     },
   });
   assert.equal(calls, 1);
-  assert.equal(result.text, safeDraft);
+  assert.equal(result.text, finalText);
   assert.equal(result.groundingStatus, 'passed');
-  assert.deepEqual(chunks, ['Token 1 ', 'Token 2']);
+  assert.deepEqual(chunks, [firstParagraph, 'The cause is not established by these records.']);
 });
 
 test('incomplete drafts use a disclosed fallback without a second model call', async () => {
@@ -231,4 +236,345 @@ test('universal single-pass streaming across general knowledge and farm diagnost
     assert.equal(result.groundingStatus, 'passed');
     assert.deepEqual(chunks, ['Streamed response']);
   }
+});
+
+test('context recovery: server decoder decodes refs forced into biomass comparisons, sampling history, mortality, lab, and daily structures', () => {
+  const rawPond1 = {
+    pond: 'Test Pond 1',
+    biomass_kg: 1091.37,
+    diagnostic_context: {
+      comparisons: {
+        estimated_biomass: {
+          previous: { value: 1000, farm_date: '2026-08-24' },
+          current: { value: 1200, farm_date: '2026-09-03' },
+        },
+      },
+      history: {
+        sampling: [
+          { farm_date: '2026-08-24', mbw_g: 11.1, sampling_method: 'cast net' },
+        ],
+      },
+    },
+    mortality_metrics: { latest_count: 15 },
+    recent_lab_reports: [
+      { labReportId: 'lab-1', reportType: 'water_quality' },
+      { nested_info: { farm_date: '2026-08-24', mbw_g: 11.1, sampling_method: 'cast net' } },
+    ],
+    daily_records_14d: [{ date: '2026-09-04', feed_kg: 50, mortality_observed_recovered: 5 }],
+  };
+
+  const rawPond2 = {
+    pond: 'Test Pond 2',
+    biomass_kg: 850.5,
+    diagnostic_context: {
+      comparisons: {
+        estimated_biomass: {
+          previous: { value: 800, farm_date: '2026-08-24' },
+          current: { value: 950, farm_date: '2026-09-03' },
+        },
+      },
+      history: {
+        sampling: [
+          { farm_date: '2026-08-24', mbw_g: 9.5, sampling_method: 'cast net' },
+        ],
+      },
+    },
+    mortality_metrics: { latest_count: 0 },
+    recent_lab_reports: [],
+    daily_records_14d: [{ date: '2026-09-04', feed_kg: 40 }],
+  };
+
+  const rawPrompt = [
+    'ORSON QUESTION FOCUS:\n{"route":"farm_analysis"}',
+    `ORSON RISK PAYLOAD:\n${JSON.stringify([rawPond1, rawPond2])}`,
+    'USER QUESTION:\nWhy did growth slow?',
+  ].join('\n\n');
+
+  // Encoded version with refs forced into biomass comparisons, sampling history, mortality, lab, daily records and nested refs
+  const encodedPond1 = {
+    pond: 'Test Pond 1',
+    biomass_kg: 1091.37,
+    refs: {
+      r1: {
+        previous: { value: 1000, farm_date: '2026-08-24' },
+        current: { value: 1200, farm_date: '2026-09-03' },
+      },
+      r2: { farm_date: '2026-08-24', mbw_g: 11.1, sampling_method: 'cast net' },
+      r3: { latest_count: 15 },
+      r4: { labReportId: 'lab-1', reportType: 'water_quality' },
+      r5: { date: '2026-09-04', feed_kg: 50, mortality_observed_recovered: 5 },
+      r6: { nested_info: { $ref: '#/refs/r2' } },
+    },
+    diagnostic_context: {
+      comparisons: {
+        estimated_biomass: { $ref: '#/refs/r1' },
+      },
+      history: {
+        sampling: [{ $ref: '#/refs/r2' }],
+      },
+    },
+    mortality_metrics: { $ref: '#/refs/r3' },
+    recent_lab_reports: [{ $ref: '#/refs/r4' }, { $ref: '#/refs/r6' }],
+    daily_records_14d: [{ $ref: '#/refs/r5' }],
+  };
+
+  const encodedPond2 = {
+    pond: 'Test Pond 2',
+    biomass_kg: 850.5,
+    refs: {
+      r1: {
+        previous: { value: 800, farm_date: '2026-08-24' },
+        current: { value: 950, farm_date: '2026-09-03' },
+      },
+      r2: { farm_date: '2026-08-24', mbw_g: 9.5, sampling_method: 'cast net' },
+      r3: { date: '2026-09-04', feed_kg: 40 },
+    },
+    diagnostic_context: {
+      comparisons: {
+        estimated_biomass: { $ref: '#/refs/r1' },
+      },
+      history: {
+        sampling: [{ $ref: '#/refs/r2' }],
+      },
+    },
+    mortality_metrics: { latest_count: 0 },
+    recent_lab_reports: [],
+    daily_records_14d: [{ $ref: '#/refs/r3' }],
+  };
+
+  const encodedPrompt = [
+    'ORSON QUESTION FOCUS:\n{"route":"farm_analysis"}',
+    `ORSON RISK PAYLOAD:\n${JSON.stringify([encodedPond1, encodedPond2])}`,
+    'USER QUESTION:\nWhy did growth slow?',
+  ].join('\n\n');
+
+  const rawLimits = getClaimLimits(rawPrompt);
+  const encodedLimits = getClaimLimits(encodedPrompt);
+
+  const decodedPonds = decodeRiskPayload([encodedPond1, encodedPond2]);
+  assert.deepEqual(decodedPonds, [rawPond1, rawPond2], 'WHOLE decoded ponds equal raw');
+
+  assert.deepEqual(encodedLimits.contract, rawLimits.contract, 'encoded vs raw getClaimLimits contracts are deepEqual');
+  assert.equal(encodedLimits.contract.biomass_increase_supported_for_all_included_ponds, true);
+  assert.equal(encodedLimits.contract.sampling_method_or_outlier_evidence_available, true);
+  assert.equal(encodedLimits.contract.direct_health_observations_available, true);
+
+  const draftWithIssues = 'LIKELY CAUSES\n1. Growing biomass increased feed demand.\n2. Sampling error caused the drop.\n3. Disease caused deaths.';
+  const rawIssues = findUnsupportedClaims(draftWithIssues, rawLimits);
+  const encodedIssues = findUnsupportedClaims(draftWithIssues, encodedLimits);
+  assert.deepEqual(encodedIssues, rawIssues, 'issue sets match identically between raw and encoded prompts');
+});
+
+test('context recovery: server decoder enforces bounds and rejects cycle, dangling, external, cross-pond, prototype refs without partial facts', () => {
+  // 1. Cycle detection
+  const cyclePond = {
+    pond: 'Cycle Pond',
+    refs: {
+      r1: { sub: { $ref: '#/refs/r2' } },
+      r2: { sub: { $ref: '#/refs/r1' } },
+    },
+    diagnostic_context: {
+      comparisons: {
+        estimated_biomass: { $ref: '#/refs/r1' },
+      },
+    },
+  };
+  assert.equal(decodeRiskPayload([cyclePond]), null, 'rejects cyclic reference via null');
+
+  // 2. Dangling ref
+  const danglingPond = {
+    pond: 'Dangling Pond',
+    refs: { r1: { value: 10 } },
+    data: { $ref: '#/refs/r999' },
+  };
+  assert.equal(decodeRiskPayload([danglingPond]), null, 'rejects dangling ref via null');
+
+  // 3. External ref
+  const externalPond = {
+    pond: 'External Pond',
+    refs: {},
+    data: { $ref: 'https://evil.com/payload.json' },
+  };
+  assert.equal(decodeRiskPayload([externalPond]), null, 'rejects external ref via null');
+
+  // 4. Prototype pollution ref keys
+  const protoPond = {
+    pond: 'Proto Pond',
+    refs: {},
+    data: { $ref: '#/refs/__proto__' },
+  };
+  assert.equal(decodeRiskPayload([protoPond]), null, 'rejects __proto__ ref via null');
+
+  const constructorPond = {
+    pond: 'Constructor Pond',
+    refs: {},
+    data: { $ref: '#/refs/constructor' },
+  };
+  assert.equal(decodeRiskPayload([constructorPond]), null, 'rejects constructor ref via null');
+
+  const toStringPond = {
+    pond: 'ToString Pond',
+    refs: {},
+    data: { $ref: '#/refs/toString' },
+  };
+  assert.equal(decodeRiskPayload([toStringPond]), null, 'rejects toString prototype ref via null');
+
+  // 5. Cross-pond ref (table mismatch)
+  const crossPond = {
+    pond: 'Cross Pond',
+    refs: { r1: { value: 100 } },
+    data: { $ref: '#/reference_dictionary/r1' },
+  };
+  assert.equal(decodeRiskPayload([crossPond]), null, 'rejects table name mismatch via null');
+
+  // 6. Non-singleton ref object
+  const nonSingletonPond = {
+    pond: 'NonSingleton Pond',
+    refs: { r1: { value: 100 } },
+    data: { $ref: '#/refs/r1', extra: 'untrusted' },
+  };
+  assert.equal(decodeRiskPayload([nonSingletonPond]), null, 'rejects non-singleton ref via null');
+
+  // 6b. Pointer with terminal newline rejected
+  const newlineRefPond = {
+    pond: 'Newline Pond',
+    refs: { r1: { value: 100 } },
+    data: { $ref: '#/refs/r1\n' },
+  };
+  assert.equal(decodeRiskPayload([newlineRefPond]), null, 'rejects ref pointer with trailing newline via null');
+
+  // 6c. Mixed valid + malformed ponds returns null for whole payload
+  const validPondSample = { pond: 'Valid Pond', refs: { r1: { ok: true } }, item: { $ref: '#/refs/r1' } };
+  assert.equal(decodeRiskPayload([validPondSample, nonSingletonPond]), null, 'mixed valid and malformed ponds returns null for whole payload');
+
+  // 7. Depth limit (> 64)
+  let deep = { value: 'leaf' };
+  for (let i = 0; i < 70; i++) {
+    deep = { next: deep };
+  }
+  const deepPond = { pond: 'Deep Pond', data: deep };
+  assert.equal(decodeRiskPayload([deepPond]), null, 'rejects depth > 64 via null');
+
+  // 8. Node count limit (> 100,000)
+  const hugeNodePond = { pond: 'Huge Nodes', items: Array.from({ length: 105000 }, () => 1) };
+  assert.equal(decodeRiskPayload([hugeNodePond]), null, 'rejects node count > 100,000 via null');
+
+  // 9. Byte count limit (> 2 MiB)
+  const hugeBytesPond = { pond: 'Huge Bytes', note: 'b'.repeat(2.5 * 1024 * 1024) };
+  assert.equal(decodeRiskPayload([hugeBytesPond]), null, 'rejects UTF-8 bytes > 2 MiB via null');
+
+  // 10. No partial facts on rejection in getClaimLimits
+  const malformedPrompt = [
+    'ORSON QUESTION FOCUS:\n{"route":"farm_analysis"}',
+    `ORSON RISK PAYLOAD:\n${JSON.stringify([cyclePond])}`,
+    'USER QUESTION:\nWhy did growth slow?',
+  ].join('\n\n');
+  const safeFallbackLimits = getClaimLimits(malformedPrompt);
+  assert.deepEqual(safeFallbackLimits.ponds, [], 'rejected payload yields empty ponds array (no partial facts)');
+  assert.equal(safeFallbackLimits.contract.biomass_increase_supported_for_all_included_ponds, false);
+});
+
+test('context recovery: dual named tables, escaped byte limit, ordinary literal refs, nested refs, and prototype-safe own-data', () => {
+  // 1. Dual named tables (refs and reference_dictionary on same pond)
+  const dualTablePond = {
+    pond: 'Dual Table Pond',
+    refs: {
+      r1: { metric: 'biomass', value: 1200 },
+    },
+    reference_dictionary: {
+      leg1: { metric: 'feed', value: 50 },
+    },
+    biomass_info: { $ref: '#/refs/r1' },
+    feed_info: { $ref: '#/reference_dictionary/leg1' },
+  };
+  const decodedDual = decodeRiskPayload([dualTablePond]);
+  assert.ok(decodedDual !== null, 'dual named tables decode successfully');
+  assert.equal(decodedDual[0].refs, undefined, 'strips root refs table');
+  assert.equal(decodedDual[0].reference_dictionary, undefined, 'strips root reference_dictionary table');
+  assert.deepEqual(decodedDual[0].biomass_info, { metric: 'biomass', value: 1200 }, 'resolves from refs table');
+  assert.deepEqual(decodedDual[0].feed_info, { metric: 'feed', value: 50 }, 'resolves from reference_dictionary table');
+
+  // 2. Escaped byte limit: fully serialized expanded JSON during walk exceeds 2 MiB
+  const heavilyEscapedString = '"\\'.repeat(600000);
+  const escapedPond = { pond: 'Escaped Pond', payload: heavilyEscapedString };
+  assert.equal(decodeRiskPayload([escapedPond]), null, 'rejects when fully serialized bytes exceed 2 MiB');
+
+  // 3. Ordinary literal ref preservation when unencoded (no refs or reference_dictionary table)
+  const ordinaryLiteralPond = {
+    pond: 'Ordinary Pond',
+    data: { $ref: '#/refs/r999' },
+    nested: { $ref: 'https://example.com/schema.json' },
+  };
+  const decodedOrdinary = decodeRiskPayload([ordinaryLiteralPond]);
+  assert.ok(decodedOrdinary !== null, 'ordinary unencoded payload is preserved');
+  assert.deepEqual(decodedOrdinary[0].data, { $ref: '#/refs/r999' }, 'preserves literal $ref without expansion or error');
+  assert.deepEqual(decodedOrdinary[0].nested, { $ref: 'https://example.com/schema.json' }, 'preserves external literal $ref');
+
+  // 4. Nested references
+  const nestedRefPond = {
+    pond: 'Nested Pond',
+    refs: {
+      r1: { leaf: 42, label: 'deep' },
+      r2: { intermediate: { $ref: '#/refs/r1' }, flag: true },
+    },
+    root_item: { $ref: '#/refs/r2' },
+  };
+  const decodedNested = decodeRiskPayload([nestedRefPond]);
+  assert.ok(decodedNested !== null, 'nested refs decode successfully');
+  assert.equal(decodedNested[0].root_item.intermediate.leaf, 42);
+  assert.equal(decodedNested[0].root_item.intermediate.label, 'deep');
+  assert.equal(decodedNested[0].root_item.flag, true);
+
+  // 5. Prototype-safe own-data
+  const protoDataPond = {
+    pond: 'Proto Safe Pond',
+    constructor: 'custom_constructor_value',
+    prototype: 'custom_proto_value',
+  };
+  Object.defineProperty(protoDataPond, '__proto__', {
+    value: 'custom_proto_own_property',
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+  const decodedProtoSafe = decodeRiskPayload([protoDataPond]);
+  assert.ok(decodedProtoSafe !== null, 'decodes proto-safe own data');
+  assert.equal(Object.prototype.hasOwnProperty.call(decodedProtoSafe[0], 'constructor'), true, 'preserves constructor own-property');
+  assert.equal(decodedProtoSafe[0].constructor, 'custom_constructor_value');
+  assert.equal(decodedProtoSafe[0].prototype, 'custom_proto_value');
+  assert.equal(Object.prototype.hasOwnProperty.call(decodedProtoSafe[0], '__proto__'), true, 'preserves __proto__ own-property');
+  assert.equal(decodedProtoSafe[0].__proto__, 'custom_proto_own_property');
+  assert.equal(Object.prototype.custom_proto_own_property, undefined, 'does not pollute Object.prototype');
+
+  // 6. Strip ONLY actual own root encoding tables
+  const retainUnrelatedPond = {
+    pond: 'Retain Table Pond',
+    refs: { r1: { val: 1 } },
+    reference_dictionary: 'not_an_encoding_table_object',
+    nested: {
+      refs: { note: 'nested_refs_object_must_be_preserved' },
+    },
+    item: { $ref: '#/refs/r1' },
+  };
+  const decodedRetain = decodeRiskPayload([retainUnrelatedPond]);
+  assert.ok(decodedRetain !== null);
+  assert.equal(decodedRetain[0].refs, undefined, 'strips root refs table');
+  assert.equal(decodedRetain[0].reference_dictionary, 'not_an_encoding_table_object', 'retains non-encoding reference_dictionary property');
+  assert.deepEqual(decodedRetain[0].nested.refs, { note: 'nested_refs_object_must_be_preserved' }, 'retains nested refs property');
+});
+
+test('context recovery: server decoder has no effect on higher guard policies', async () => {
+  const comparison = { previous: { value: 1000, farm_date: '2026-08-24' }, current: { value: 1200, farm_date: '2026-09-03' } };
+  const prompt = promptFor(comparison);
+  const result = await generateGroundedOrsonResponse({
+    prompt,
+    mode: 'standard',
+    questionRoute: 'farm_analysis',
+    generate: async () => reply(safeDraft),
+  });
+  assert.equal(result.groundingStatus, 'passed');
+
+  const limits = getClaimLimits(prompt);
+  assert.ok(findUnsupportedClaims(badDraft, getClaimLimits(promptFor())).includes('unsupported_biomass_trend'));
+  assert.deepEqual(findUnsupportedClaims(safeDraft, limits), []);
 });

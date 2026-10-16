@@ -356,6 +356,15 @@ export function InventoryEntryDialog({ isModalOpen, closeInventoryModal, modalTy
                     </div>
                   )}
 
+                  {modalType === 'usage' && (
+                    <div>
+                      <label htmlFor="inventory-usage-date" style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 10 }}>{copy('Usage date')}</label>
+                      <input id="inventory-usage-date" required type="date" max={getFarmDateKey(new Date(), company?.timeZone)} value={formData.usageDate}
+                        onChange={event => setFormData({ ...formData, usageDate: event.target.value })} disabled={savePending}
+                        style={{ width: '100%', padding: 18, borderRadius: 16, border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: 16 }} />
+                    </div>
+                  )}
+
                   {modalType !== 'usage' && (
                     <div>
                       <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{t.inventory.unitPrice} ({currencyConfig.symbol})</label>

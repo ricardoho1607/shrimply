@@ -22,7 +22,7 @@ const createFinding = (
     severity: rule.severity,
     confidence: confidenceFromCompleteness(metrics.dataCompleteness.score),
     title: rule.label,
-    summary: `${rule.label}: ${rule.couldLeadTo.join(', ')}.`,
+    summary: `${rule.label}. Possible consequences, not confirmed observations: ${rule.couldLeadTo.join(', ')}.`,
     evidence,
     recommendation: rule.actions.join('; '),
     metricRefs: ['knowledge.crossParameterRules', ...rule.conditions],

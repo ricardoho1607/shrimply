@@ -567,3 +567,499 @@ test('createOrsonAppDataReader registers decision tools and routes period feed a
   assert.equal(comparison.comparisonType, 'pond_to_pond');
   assert.equal(comparison.finance.financeAllowed, false, 'Technician cannot access finance in cycle comparison');
 });
+
+test('request-local read_app_records and read_pond_timeline dedup queries, support refresh, and evict failures', async () => {
+  let docGets = 0;
+  const db = {
+    collection: (colName) => ({
+      doc: (docId) => ({
+        collection: (subCol) => ({
+          doc: (subDocId) => ({
+            get: async () => {
+              docGets++;
+              if (docGets === 3) throw new Error('transient_db_error');
+              return {
+                id: subDocId,
+                exists: true,
+                data: () => ({ pondName: 'Pond 1', samplings: [] }),
+              };
+            },
+          }),
+        }),
+      }),
+    }),
+  };
+
+  const reader = createOrsonAppDataReader({
+    db,
+    company: { ownerId: 'owner-1', teamMembers: ['member-1'], timeZone: 'UTC' },
+    user: { role: 'admin', companyId: 'company-1' },
+    uid: 'owner-1',
+    companyId: 'company-1',
+  });
+
+  // Call 1: read_app_records
+  const res1 = await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-1' });
+  assert.equal(res1.status, 'ok');
+  assert.equal(res1.dataset, 'ponds');
+  assert.equal(res1.id, 'pond-1');
+  assert.equal(res1.complete, true);
+  assert.equal(res1.nextOffset, null);
+  assert.deepEqual(res1.data, { pondName: 'Pond 1', samplings: [] });
+  assert.equal(docGets, 1);
+
+  // Call 2: duplicate query in same reader should be deduplicated
+  const res2 = await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-1' });
+  assert.equal(res2.status, 'ok');
+  assert.equal(res2.id, 'pond-1');
+  assert.equal(docGets, 1, 'Duplicate read_app_records must reuse cached promise');
+
+  // Call 3: explicit refresh forces fresh DB read
+  const res3 = await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-1', refresh: true });
+  assert.equal(res3.status, 'ok');
+  assert.equal(res3.id, 'pond-1');
+  assert.equal(docGets, 2, 'Explicit refresh must bypass cache');
+
+  // Call 4: failure should be evicted and not permanently cached
+  await assert.rejects(
+    reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-1', refresh: true }),
+    /transient_db_error/
+  );
+  assert.equal(docGets, 3);
+
+  // Subsequent call after failure should retry and succeed
+  const res4 = await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-1' });
+  assert.equal(res4.status, 'ok');
+  assert.equal(res4.id, 'pond-1');
+  assert.equal(docGets, 4, 'Failed read was evicted and subsequent read succeeded');
+
+  // Timeline dedup
+  const initialTimelineGets = docGets;
+  const time1 = await reader.execute('read_pond_timeline', { pondId: 'pond-1', days: 14 });
+  assert.equal(time1.status, 'ok');
+  assert.equal(time1.pond.id, 'pond-1');
+  assert.equal(time1.pond.name, 'Pond 1');
+  assert.equal(time1.coverage.requestedDays, 14);
+  assert.equal(time1.coverage.recordedDays, 14);
+  assert.equal(time1.coverage.missingDatesAreUnknown, true);
+  assert.ok(Array.isArray(time1.timeline));
+  assert.equal(time1.timeline.length, 14);
+  assert.equal(docGets, initialTimelineGets + 1);
+
+  const time2 = await reader.execute('read_pond_timeline', { pondId: 'pond-1', days: 14 });
+  assert.equal(time2.status, 'ok');
+  assert.equal(time2.pond.id, 'pond-1');
+  assert.equal(time2.coverage.requestedDays, 14);
+  assert.equal(docGets, initialTimelineGets + 1, 'Duplicate read_pond_timeline must be deduplicated');
+});
+
+test('reader cache isolation: separate reader instances do not share caches', async () => {
+  let docGets = 0;
+  const db = {
+    collection: (colName) => ({
+      doc: (docId) => ({
+        collection: (subCol) => ({
+          doc: (subDocId) => ({
+            get: async () => {
+              docGets++;
+              return {
+                id: subDocId,
+                exists: true,
+                data: () => ({ pondName: `Pond ${subDocId}`, samplings: [] }),
+              };
+            },
+          }),
+        }),
+      }),
+    }),
+  };
+
+  const readerA = createOrsonAppDataReader({
+    db,
+    company: { ownerId: 'owner-1', teamMembers: ['member-1'], timeZone: 'UTC' },
+    user: { role: 'admin', companyId: 'company-1' },
+    uid: 'owner-1',
+    companyId: 'company-1',
+  });
+
+  const readerB = createOrsonAppDataReader({
+    db,
+    company: { ownerId: 'owner-1', teamMembers: ['member-1'], timeZone: 'UTC' },
+    user: { role: 'admin', companyId: 'company-1' },
+    uid: 'owner-1',
+    companyId: 'company-1',
+  });
+
+  // Call on readerA: reads from db
+  const resA1 = await readerA.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-1' });
+  assert.equal(resA1.status, 'ok');
+  assert.equal(docGets, 1);
+
+  // Repeat on readerA: hits readerA cache
+  const resA2 = await readerA.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-1' });
+  assert.equal(resA2.status, 'ok');
+  assert.equal(docGets, 1);
+
+  // Call on readerB: must not use readerA cache, must fetch from db
+  const resB1 = await readerB.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-1' });
+  assert.equal(resB1.status, 'ok');
+  assert.equal(docGets, 2);
+
+  // Timeline isolation
+  const timeA = await readerA.execute('read_pond_timeline', { pondId: 'pond-1', days: 7 });
+  assert.equal(timeA.pond.id, 'pond-1');
+  assert.equal(docGets, 3);
+
+  const timeA2 = await readerA.execute('read_pond_timeline', { pondId: 'pond-1', days: 7 });
+  assert.equal(timeA2.pond.id, 'pond-1');
+  assert.equal(docGets, 3);
+
+  const timeB = await readerB.execute('read_pond_timeline', { pondId: 'pond-1', days: 7 });
+  assert.equal(timeB.pond.id, 'pond-1');
+  assert.equal(docGets, 4);
+});
+
+test('concurrent deduplication: identical concurrent calls execute once', async () => {
+  let docGets = 0;
+  const db = {
+    collection: (colName) => ({
+      doc: (docId) => ({
+        collection: (subCol) => ({
+          doc: (subDocId) => ({
+            get: async () => {
+              await new Promise(resolve => setTimeout(resolve, 10));
+              docGets++;
+              return {
+                id: subDocId,
+                exists: true,
+                data: () => ({ pondName: 'Pond Conc', samplings: [] }),
+              };
+            },
+          }),
+        }),
+      }),
+    }),
+  };
+
+  const reader = createOrsonAppDataReader({
+    db,
+    company: { ownerId: 'owner-1', teamMembers: ['member-1'], timeZone: 'UTC' },
+    user: { role: 'admin', companyId: 'company-1' },
+    uid: 'owner-1',
+    companyId: 'company-1',
+  });
+
+  // Launch 3 concurrent identical calls for read_app_records
+  const [p1, p2, p3] = await Promise.all([
+    reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-conc' }),
+    reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-conc' }),
+    reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-conc' }),
+  ]);
+
+  assert.equal(p1.status, 'ok');
+  assert.equal(p2.status, 'ok');
+  assert.equal(p3.status, 'ok');
+  assert.equal(docGets, 1, 'Concurrent identical read_app_records must share the single in-flight promise');
+
+  // Launch 3 concurrent identical calls for read_pond_timeline
+  const [t1, t2, t3] = await Promise.all([
+    reader.execute('read_pond_timeline', { pondId: 'pond-conc', days: 14 }),
+    reader.execute('read_pond_timeline', { pondId: 'pond-conc', days: 14 }),
+    reader.execute('read_pond_timeline', { pondId: 'pond-conc', days: 14 }),
+  ]);
+
+  assert.equal(t1.pond.id, 'pond-conc');
+  assert.equal(t2.pond.id, 'pond-conc');
+  assert.equal(t3.pond.id, 'pond-conc');
+  assert.equal(docGets, 2, 'Concurrent identical read_pond_timeline must share the single in-flight promise');
+});
+
+test('retry after failure: transient failure is evicted and subsequent identical call succeeds', async () => {
+  let attempts = 0;
+  const db = {
+    collection: (colName) => ({
+      doc: (docId) => ({
+        collection: (subCol) => ({
+          doc: (subDocId) => ({
+            get: async () => {
+              attempts++;
+              if (attempts === 1) throw new Error('network_timeout');
+              return {
+                id: subDocId,
+                exists: true,
+                data: () => ({ pondName: 'Pond Retry', samplings: [] }),
+              };
+            },
+          }),
+        }),
+      }),
+    }),
+  };
+
+  const reader = createOrsonAppDataReader({
+    db,
+    company: { ownerId: 'owner-1', teamMembers: ['member-1'], timeZone: 'UTC' },
+    user: { role: 'admin', companyId: 'company-1' },
+    uid: 'owner-1',
+    companyId: 'company-1',
+  });
+
+  await assert.rejects(
+    reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-retry' }),
+    /network_timeout/
+  );
+  assert.equal(attempts, 1);
+
+  // Subsequent call retries and succeeds
+  const res = await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-retry' });
+  assert.equal(res.status, 'ok');
+  assert.equal(attempts, 2);
+
+  // Subsequent call hits cache
+  const cached = await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-retry' });
+  assert.equal(cached.status, 'ok');
+  assert.equal(attempts, 2);
+});
+
+test('canonical cache keys distinguish result-affecting parameters: dataset, document, field, cursor, offset, days, and endDate', async () => {
+  let docGets = 0;
+  const db = {
+    collection: (colName) => ({
+      doc: (docId) => ({
+        collection: (subCol) => ({
+          doc: (subDocId) => ({
+            get: async () => {
+              docGets++;
+              return {
+                id: subDocId,
+                exists: true,
+                data: () => ({
+                  pondName: `Pond ${subDocId}`,
+                  samplings: [{ mbw: 5.5, date: '2026-09-01' }, { mbw: 6.2, date: '2026-09-02' }],
+                  otherField: 'value',
+                }),
+              };
+            },
+          }),
+          where: () => ({
+            orderBy: () => ({
+              limit: () => ({
+                get: async () => {
+                  docGets++;
+                  return { docs: [{ id: 'p1', data: () => ({ pondName: 'P1' }) }] };
+                },
+              }),
+              startAfter: (cursor) => ({
+                limit: () => ({
+                  get: async () => {
+                    docGets++;
+                    return { docs: [{ id: 'p2', data: () => ({ pondName: 'P2' }) }] };
+                  },
+                }),
+              }),
+            }),
+          }),
+          orderBy: () => ({
+            limit: () => ({
+              get: async () => {
+                docGets++;
+                return { docs: [{ id: 'p1', data: () => ({ pondName: 'P1' }) }] };
+              },
+            }),
+            startAfter: (cursor) => ({
+              limit: () => ({
+                get: async () => {
+                  docGets++;
+                  return { docs: [{ id: 'p2', data: () => ({ pondName: 'P2' }) }] };
+                },
+              }),
+            }),
+          }),
+        }),
+      }),
+    }),
+  };
+
+  const reader = createOrsonAppDataReader({
+    db,
+    company: { ownerId: 'owner-1', teamMembers: ['member-1'], timeZone: 'UTC' },
+    user: { role: 'admin', companyId: 'company-1' },
+    uid: 'owner-1',
+    companyId: 'company-1',
+  });
+
+  // Document reads with different documentId
+  await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'p1' });
+  assert.equal(docGets, 1);
+  await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'p2' });
+  assert.equal(docGets, 2, 'Different documentId must not share cache');
+
+  // Same document, different field
+  await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'p1', field: 'samplings' });
+  assert.equal(docGets, 3, 'Different field must not share cache');
+  await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'p1', field: 'otherField' });
+  assert.equal(docGets, 4, 'Different field must not share cache');
+
+  // Same document & field, with offset
+  await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'p1', field: 'samplings', offset: 0 });
+  assert.equal(docGets, 4, 'offset: 0 matches offset 0 in cache key');
+
+  await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'p1', field: 'samplings', offset: 1 });
+  assert.equal(docGets, 5, 'Different offset must not share cache');
+
+  // List query with cursor (after)
+  await reader.execute('read_app_records', { dataset: 'ponds' });
+  assert.equal(docGets, 6);
+  await reader.execute('read_app_records', { dataset: 'ponds' });
+  assert.equal(docGets, 6, 'Duplicate list query hits cache');
+
+  await reader.execute('read_app_records', { dataset: 'ponds', after: 'p1' });
+  assert.equal(docGets, 7, 'Different after cursor must query DB');
+  await reader.execute('read_app_records', { dataset: 'ponds', after: 'p1' });
+  assert.equal(docGets, 7, 'Duplicate list query with cursor hits cache');
+
+  // Timeline with different days and endDate
+  const t1 = await reader.execute('read_pond_timeline', { pondId: 'p1', days: 14, endDate: '2026-09-10' });
+  assert.equal(t1.coverage.requestedDays, 14);
+  assert.equal(t1.coverage.endDate, '2026-09-10');
+  assert.equal(docGets, 8);
+
+  const t1_cached = await reader.execute('read_pond_timeline', { pondId: 'p1', days: 14, endDate: '2026-09-10' });
+  assert.equal(docGets, 8, 'Same pondId, days, endDate hits cache');
+
+  const t2 = await reader.execute('read_pond_timeline', { pondId: 'p1', days: 30, endDate: '2026-09-10' });
+  assert.equal(t2.coverage.requestedDays, 30);
+  assert.equal(docGets, 9, 'Different days must not share cache');
+
+  const t3 = await reader.execute('read_pond_timeline', { pondId: 'p1', days: 14, endDate: '2026-09-11' });
+  assert.equal(t3.coverage.endDate, '2026-09-11');
+  assert.equal(docGets, 10, 'Different endDate must not share cache');
+});
+
+test('pending failure after refresh replacement: older rejected promise does not evict newer refresh promise', async () => {
+  let callCount = 0;
+  let slowReject;
+  const db = {
+    collection: (colName) => ({
+      doc: (docId) => ({
+        collection: (subCol) => ({
+          doc: (subDocId) => ({
+            get: async () => {
+              callCount++;
+              if (callCount === 1) {
+                // Call 1: hangs until slowReject is invoked
+                return new Promise((_, reject) => {
+                  slowReject = () => reject(new Error('slow_call_failure'));
+                });
+              }
+              // Call 2: succeeds immediately
+              return {
+                id: subDocId,
+                exists: true,
+                data: () => ({ pondName: 'Pond Fresh', samplings: [] }),
+              };
+            },
+          }),
+        }),
+      }),
+    }),
+  };
+
+  const reader = createOrsonAppDataReader({
+    db,
+    company: { ownerId: 'owner-1', teamMembers: ['member-1'], timeZone: 'UTC' },
+    user: { role: 'admin', companyId: 'company-1' },
+    uid: 'owner-1',
+    companyId: 'company-1',
+  });
+
+  // 1. Start Call 1 (no refresh). It will hang.
+  const promise1 = reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-replace' });
+
+  // 2. While Call 1 is in-flight, start Call 2 with refresh: true. It succeeds immediately.
+  const promise2 = reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-replace', refresh: true });
+  const result2 = await promise2;
+  assert.equal(result2.status, 'ok');
+  assert.equal(result2.data.pondName, 'Pond Fresh');
+  assert.equal(callCount, 2);
+
+  // 3. Now trigger the rejection of Call 1
+  slowReject();
+  await assert.rejects(promise1, /slow_call_failure/);
+
+  // 4. Call 3 is executed without refresh.
+  // Because promise1 was replaced by promise2 before rejecting,
+  // promise1 must NOT have evicted promise2 from the cache!
+  // Therefore Call 3 must return the cached promise2 without calling Firestore again!
+  const result3 = await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-replace' });
+  assert.equal(result3.status, 'ok');
+  assert.equal(result3.data.pondName, 'Pond Fresh');
+  assert.equal(callCount, 2, 'Call 3 should hit cache and not invoke DB because newer refresh promise was not evicted');
+});
+
+test('refresh parameter validation rejects non-boolean values', async () => {
+  const reader = fixture('technician');
+  await assert.rejects(
+    reader.execute('read_app_records', { dataset: 'ponds', documentId: 'p1', refresh: 'yes' }),
+    /Invalid refresh/
+  );
+  await assert.rejects(
+    reader.execute('read_app_records', { dataset: 'ponds', documentId: 'p1', refresh: 1 }),
+    /Invalid refresh/
+  );
+  await assert.rejects(
+    reader.execute('read_pond_timeline', { pondId: 'p1', refresh: 'true' }),
+    /Invalid refresh/
+  );
+});
+
+test('decision tools bypass readerCache and execute freshly', async () => {
+  const farmData = {
+    pondName: 'Pond Decision Cache Test',
+    cycleStatus: 'active',
+    pondCycleId: 'cycle-dec-1',
+    initialPopulation: 100000,
+    initialWeight: 0.5,
+    samplings: [
+      { id: 's1', date: '2026-09-01', pondCycleId: 'cycle-dec-1', mbw: 3.0, feedData: { totalDailyFeed: 50 } },
+    ],
+  };
+
+  const paths = [];
+  const makeRef = path => ({
+    collection: name => makeRef(`${path}/${name}`), doc: id => makeRef(`${path}/${id}`),
+    where: (field, op, value) => { paths.push({ field, op, value }); return makeRef(path); },
+    orderBy: () => makeRef(path), startAfter: cursor => { paths.push({ cursor }); return makeRef(path); },
+    limit: () => makeRef(path + '/list'),
+    get: async () => {
+      paths.push(path);
+      const doc = id => ({ id, exists: true, data: () => path === 'companies/company' ? { ownerId: 'owner', teamMembers: ['member'], timeZone: 'UTC' }
+        : path.startsWith('users/') ? { role: 'technician', companyId: 'company' } : farmData });
+      return path.endsWith('/list') ? { docs: [doc('record-0')] } : doc('record');
+    },
+  });
+
+  const reader = createOrsonAppDataReader({
+    db: { collection: name => makeRef(name) },
+    company: { ownerId: 'owner', teamMembers: ['member'], timeZone: 'UTC' },
+    user: { role: 'technician', companyId: 'company' },
+    uid: 'member',
+    companyId: 'company',
+  });
+
+  const res1 = await reader.execute('summarize_period_feed_and_cost', {
+    pondId: 'pond-1',
+    startDate: '2026-09-01',
+    endDate: '2026-09-02',
+  });
+  assert.equal(res1.status, 'partial');
+
+  const pathCount1 = paths.length;
+  const res2 = await reader.execute('summarize_period_feed_and_cost', {
+    pondId: 'pond-1',
+    startDate: '2026-09-01',
+    endDate: '2026-09-02',
+  });
+  assert.equal(res2.status, 'partial');
+  assert.ok(paths.length > pathCount1, 'Decision tool must not be cached; it must make fresh reads');
+});

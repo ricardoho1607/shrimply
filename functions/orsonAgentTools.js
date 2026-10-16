@@ -2,6 +2,7 @@ const { hash } = require("./shared/orsonCommandPlan");
 const { ORSON_ACTIONS, isExplicitFarmCorrection } = require("./shared/orsonAgentContract");
 const { isExplicitFarmAction } = require("./shared/orsonDomain/orsonAgentContract");
 const { createOperationService } = require("./shared/orsonOperations");
+const { authorizeAgent } = require("./shared/orsonActionAuth");
 const {
   createAgentCatalog,
   resolveCommands,
@@ -431,15 +432,82 @@ function routeGenericInventoryRemoval(commands, catalog, userMessage) {
 
 function createAgentTools({
   db,
-  auth,
+  auth: initialAuth,
+  uid: initialUid,
+  companyId: initialCompanyId,
   onActivity,
   onOperation,
   operationIds = [],
   userMessage = "",
   service: injectedService,
+  cache,
 }) {
-  const preparations = new Map();
   const service = injectedService || createOperationService(db);
+  const preparations = new Map();
+
+  let resolvedAuth = (typeof initialAuth === 'object' && initialAuth !== null && typeof initialAuth.allowed === 'function')
+    ? initialAuth
+    : null;
+  let authPromise = null;
+
+  const getAuth = async () => {
+    if (resolvedAuth) return resolvedAuth;
+    if (authPromise) return authPromise;
+    authPromise = (async () => {
+      if (typeof initialAuth === 'function') {
+        resolvedAuth = await initialAuth();
+      } else if (initialAuth && typeof initialAuth.then === 'function') {
+        resolvedAuth = await initialAuth;
+      } else if (db && (initialUid || initialAuth?.uid) && (initialCompanyId || initialAuth?.companyId)) {
+        const u = initialUid || initialAuth?.uid;
+        const c = initialCompanyId || initialAuth?.companyId;
+        resolvedAuth = await authorizeAgent(db, u, c, null, { cache });
+      } else if (initialAuth) {
+        resolvedAuth = initialAuth;
+      } else {
+        throw new Error('Agent authentication is required.');
+      }
+      return resolvedAuth;
+    })();
+    return authPromise;
+  };
+
+  const catalogCache = cache || (resolvedAuth?._catalogCache) || (initialAuth && typeof initialAuth === 'object' && (initialAuth._catalogCache ||= new Map())) || new Map();
+  let catalogPromise = null;
+
+  const getCatalog = async (options = {}) => {
+    const activeAuth = await getAuth();
+    if (activeAuth && !activeAuth._catalogCache) {
+      activeAuth._catalogCache = catalogCache;
+    }
+    const key = `catalog:${activeAuth.companyId || "company"}`;
+    const refresh = options?.refresh === true;
+
+    if (refresh) {
+      catalogPromise = null;
+    }
+    if (!refresh) {
+      if (catalogPromise) return catalogPromise;
+      if (catalogCache.has(key)) return catalogCache.get(key);
+    }
+
+    const promise = Promise.resolve()
+      .then(() => createAgentCatalog(activeAuth))
+      .catch((err) => {
+        if (catalogCache.get(key) === promise) {
+          catalogCache.delete(key);
+        }
+        if (catalogPromise === promise) {
+          catalogPromise = null;
+        }
+        throw err;
+      });
+
+    catalogCache.set(key, promise);
+    catalogPromise = promise;
+    return promise;
+  };
+
   const tools = [
     {
       type: "function",
@@ -459,7 +527,9 @@ function createAgentTools({
         "Read authorized pond and inventory identifiers, recent purchase IDs and values, and company currency for preparing a requested farm entry or correction.",
       parameters: {
         type: "object",
-        properties: {},
+        properties: {
+          refresh: { type: "boolean", description: "Force fresh fetch of catalog targets." },
+        },
         additionalProperties: false,
       },
     },
@@ -480,7 +550,10 @@ function createAgentTools({
       },
     },
   ];
+
   const execute = async (name, args) => {
+    const activeAuth = await getAuth();
+
     if (name === "read_recent_farm_action_drafts") {
       await onActivity("record_lookup");
       const results = await Promise.allSettled(
@@ -489,8 +562,8 @@ function createAgentTools({
           .slice(-10)
           .map((operationId) =>
             service.get({
-              uid: auth.uid,
-              companyId: auth.companyId,
+              uid: activeAuth.uid,
+              companyId: activeAuth.companyId,
               operationId,
             }),
           ),
@@ -499,10 +572,12 @@ function createAgentTools({
         .filter((r) => r.status === "fulfilled")
         .map((r) => r.value);
     }
+
     if (name === "discover_farm_action_targets") {
       await onActivity("entity_lookup");
-      return createAgentCatalog(auth);
+      return getCatalog({ refresh: args?.refresh === true });
     }
+
     if (name !== "prepare_farm_actions") throw new Error("Unknown action tool");
     if (isAdviceInstructionOrHypothetical(userMessage)) {
       return {
@@ -510,7 +585,7 @@ function createAgentTools({
         message: "Embedded advice, instructions, or hypothetical scenarios do not have write authority. Farm actions require an explicit user recording request.",
       };
     }
-    const companyCurrency = String(auth.company.currency || auth.company.currencyCode || "").toUpperCase();
+    const companyCurrency = String(activeAuth.company?.currency || activeAuth.company?.currencyCode || "").toUpperCase();
     const requestCurrency = requestedCurrency(userMessage);
     if (requestCurrency && companyCurrency && requestCurrency !== companyCurrency &&
       Array.isArray(args.commands) && args.commands.some((command) => ["stock_in_inventory", "record_expense", "record_revenue", "record_harvest"].includes(command.type))) {
@@ -526,7 +601,7 @@ function createAgentTools({
         message: "This is an edit request. Use read_app_records to find the exact existing record ID and its current values, then prepare a correction using recordId. If the target is missing or ambiguous, ask the user. Do not create a new record.",
       };
     }
-    const key = hash(args);
+    const key = hash({ args, userMessage });
     if (preparations.has(key)) return preparations.get(key);
     const pending = (async () => {
       const rawCommands = Array.isArray(args.commands)
@@ -553,8 +628,8 @@ function createAgentTools({
       const hasDepth = Array.isArray(rawCommands) && rawCommands.some((c) => c?.type === "upsert_water_quality" &&
         (depthLabel.test(String(userMessage || "")) || Object.keys(DEPTH_FIELDS).some((k) => supplied(c.values?.[k]))));
       if (hasDepth) {
-        catalog = await createAgentCatalog(auth);
-        const depthResult = preflightWaterDepth(rawCommands, userMessage, catalog, auth.company);
+        catalog = await getCatalog();
+        const depthResult = preflightWaterDepth(rawCommands, userMessage, catalog, activeAuth.company);
         if (depthResult) return depthResult;
       }
       const commands = normalizeExtractedCommands(rawCommands);
@@ -569,15 +644,15 @@ function createAgentTools({
         Array.isArray(commands) &&
         commands.some((command) => command.type === "delete_inventory_item");
       await onActivity(isGenericRemoval ? "entity_lookup" : "draft_prepare");
-      catalog ||= await createAgentCatalog(auth);
+      catalog ||= await getCatalog();
       if (isGenericRemoval) {
         const routed = routeGenericInventoryRemoval(commands, catalog, userMessage);
         if (routed.status) return routed;
         await onActivity("draft_prepare");
       }
       const operation = await service.prepare({
-        uid: auth.uid,
-        companyId: auth.companyId,
+        uid: activeAuth.uid,
+        companyId: activeAuth.companyId,
         operationId: args.operationId,
         revision: args.revision,
         commands: resolveCommands(commands, catalog),
@@ -591,7 +666,12 @@ function createAgentTools({
         rows: operation.rows,
         notice: "Nothing has been saved. The user must confirm the card.",
       };
-    })();
+    })().catch((err) => {
+      if (preparations.get(key) === pending) {
+        preparations.delete(key);
+      }
+      throw err;
+    });
     preparations.set(key, pending);
     return pending;
   };
