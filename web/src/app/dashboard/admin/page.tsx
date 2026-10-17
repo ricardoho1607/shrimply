@@ -1,4 +1,6 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
 
 import { useCallback, useEffect, useState } from 'react';
 import { collection, collectionGroup, getDocs } from 'firebase/firestore';
@@ -1370,7 +1372,7 @@ export default function HiddenAdminPage() {
         setDataSource('Firestore fallback');
       } catch (fallbackError: unknown) {
         console.error('Failed to load admin metrics:', fallbackError);
-        setError(fallbackError instanceof Error ? fallbackError.message : 'Failed to load admin metrics. Check Cloud Function IAM and founder Firestore permissions.');
+        setError(getUserErrorMessage(fallbackError, 'Failed to load admin metrics. Check Cloud Function IAM and founder Firestore permissions.'));
       }
     } finally {
       setLoading(false);
@@ -1426,7 +1428,7 @@ export default function HiddenAdminPage() {
       await loadMetrics();
     } catch (deleteError: unknown) {
       console.error('Failed to hard delete company:', deleteError);
-      setError(deleteError instanceof Error ? deleteError.message : 'Failed to hard delete company. Check Cloud Function deployment and founder permissions.');
+      setError(getUserErrorMessage(deleteError, 'Failed to hard delete company. Check Cloud Function deployment and founder permissions.'));
     } finally {
       setDeletingCompanyId(null);
     }

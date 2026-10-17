@@ -1,4 +1,8 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
+import { showAppAlert } from '@/lib/appDialogs';
+
 
 import { useState, useMemo } from 'react';
 import { 
@@ -414,7 +418,7 @@ function ShrimpReportsContent() {
       await downloadMobilePdf({ html, filename: 'Sampling_Report.pdf', orientation: 'landscape', preserveTemplateScale: true });
     } catch (error) {
       console.error('Sampling report export failed:', error);
-      window.alert(error instanceof Error ? error.message : 'Unable to generate the sampling report.');
+      showAppAlert(getUserErrorMessage(error, 'Unable to generate the sampling report.'));
     } finally {
       setExportLoading(false);
     }

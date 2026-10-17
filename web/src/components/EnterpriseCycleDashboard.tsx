@@ -1,4 +1,7 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+import { showAppAlert, confirmAppAction } from '@/lib/appDialogs';
+
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -336,7 +339,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
     if (!editingCycle && cycleStartMode === 'midcycle' && setupPonds.some((pond) => (
       differenceInFarmCalendarDays(baselineDate, pondSetupValues[pond.id]?.stockingDate || '') < 0
     ))) {
-      window.alert(copy.baselineDateInvalid);
+      showAppAlert(copy.baselineDateInvalid);
       return;
     }
 
@@ -447,7 +450,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
       resetCycleForm();
     } catch (cycleError) {
       console.error('Failed to save enterprise production cycle:', cycleError);
-      window.alert(copy.cycleSaveFailed);
+      showAppAlert(copy.cycleSaveFailed);
     } finally {
       setSaving(false);
     }
@@ -458,7 +461,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
     if (!canManageBlocks) return;
     if (!company?.id || !user?.uid || !newBlockName.trim()) return;
     if (sortedBlocks.some((block) => block.name.trim().toLowerCase() === newBlockName.trim().toLowerCase())) {
-      window.alert(copy.duplicateBlock);
+      showAppAlert(copy.duplicateBlock);
       return;
     }
     const technician = technicians.find((candidate) => candidate.uid === newBlockTechnicianId);
@@ -491,7 +494,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
     if (!company?.id || !user?.uid || !selectedBlock || !newPondName.trim() || !Number.isFinite(pondArea) || pondArea <= 0) return;
     const pondKey = newPondName.trim().toLowerCase();
     if (physicalPonds.some((pond) => pond.pondName.trim().toLowerCase() === pondKey) || ponds.some((pond) => pond.pondName.trim().toLowerCase() === pondKey)) {
-      window.alert(copy.duplicatePond);
+      showAppAlert(copy.duplicatePond);
       return;
     }
     setSaving(true);
@@ -570,7 +573,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
       setPondFilter('inactive');
     } catch (assignmentError) {
       console.error('Failed to assign enterprise pond to block:', assignmentError);
-      window.alert(t.enterprise.pondAssignmentFailed);
+      showAppAlert(t.enterprise.pondAssignmentFailed);
     } finally {
       setSaving(false);
     }
@@ -582,10 +585,10 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
     const cyclePonds = getEnterpriseCyclePonds(cycle.id, ponds);
     const activeCyclePonds = cyclePonds.filter((pond) => pond.cycleStatus !== 'ended');
     if (activeCyclePonds.length > 0) {
-      window.alert(copy.endActivePondsFirst.replace('{{pondNames}}', activeCyclePonds.map((pond) => pond.pondName).join(', ')));
+      showAppAlert(copy.endActivePondsFirst.replace('{{pondNames}}', activeCyclePonds.map((pond) => pond.pondName).join(', ')));
       return;
     }
-    if (!window.confirm(copy.closeCycleDescription.replace('{{cycleName}}', cycle.cycleName))) return;
+    if (!(await confirmAppAction(copy.closeCycleDescription.replace('{{cycleName}}', cycle.cycleName)))) return;
     await updateDoc(doc(db, 'companies', company.id, 'cycles', cycle.id), {
       status: 'closed',
       closedAt: getFarmDateKey(new Date(), timeZone),
@@ -642,7 +645,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
         ))}
       </div>
 
-      {error ? <p className={styles.error}>{error.message}</p> : null}
+      {error ? <p className={styles.error}>{getUserErrorMessage(error)}</p> : null}
       {loading ? <div className={styles.loading}>{copy.loading}</div> : null}
       {!loading && sortedBlocks.length === 0 ? (
         <div className={styles.empty}>

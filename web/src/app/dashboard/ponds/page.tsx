@@ -1,4 +1,6 @@
 "use client";
+import { showAppAlert, confirmAppAction } from '@/lib/appDialogs';
+
 
 import { useSaveOperation } from '../../../../../shared/useSaveOperation';
 import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
@@ -308,7 +310,7 @@ export default function PondsPage() {
     const activeCycle = cycles.find(isOpenFarmCycle);
     if (activeCycle) return activeCycle;
     if (isEnterpriseFarm) {
-      alert(t.enterprise.ownerMustStartCycle);
+      showAppAlert(t.enterprise.ownerMustStartCycle);
       return null;
     }
 
@@ -333,7 +335,7 @@ export default function PondsPage() {
     if (!canManageFarmCycle) return;
     const nextName = cycleNameDraft.trim();
     if (!nextName) {
-      alert(copy('Cycle name cannot be empty.'));
+      showAppAlert(copy('Cycle name cannot be empty.'));
       return;
     }
 
@@ -356,7 +358,7 @@ export default function PondsPage() {
       }));
     } catch (error) {
       console.error('Error renaming cycle:', error);
-      alert(t.messages.error || 'Failed to rename cycle.');
+      showAppAlert(t.messages.error || 'Failed to rename cycle.');
     }
   };
 
@@ -370,7 +372,7 @@ export default function PondsPage() {
       setFinalHarvestPromptPonds(missingFinalHarvestPonds);
       return;
     }
-    if (!window.confirm(`End ${activeFarmCycle.cycleName} and move ${activeCyclePonds.length} pond${activeCyclePonds.length === 1 ? '' : 's'} to history?`)) return;
+    if (!(await confirmAppAction(`End ${activeFarmCycle.cycleName} and move ${activeCyclePonds.length} pond${activeCyclePonds.length === 1 ? '' : 's'} to history?`))) return;
 
     try {
       const activePondsToEnd = activeCyclePonds.filter(isActiveCycle);
@@ -420,13 +422,11 @@ export default function PondsPage() {
       }));
 
       setCycleFilter('ended');
-      const openReport = window.confirm(
-        `${t.farmCycle.endFarmCycleSuccess.replace('{{cycleName}}', activeFarmCycle.cycleName)}\n\n${t.farmCycle.viewCycleReport}`,
-      );
+      const openReport = (await confirmAppAction(`${t.farmCycle.endFarmCycleSuccess.replace('{{cycleName}}', activeFarmCycle.cycleName)}\n\n${t.farmCycle.viewCycleReport}`));
       if (openReport) router.push(`/dashboard/reports/cycles?cycleId=${encodeURIComponent(activeFarmCycle.id)}`);
     } catch (error) {
       console.error('Error ending cycle:', error);
-      alert(t.messages.error || 'Failed to end cycle.');
+      showAppAlert(t.messages.error || 'Failed to end cycle.');
     }
   };
 
@@ -442,7 +442,7 @@ export default function PondsPage() {
       const pondArea = Number(formData.pondArea);
       const selectedBlock = availableFarmBlocks.find((block) => block.id === formData.blockId);
       if (isEnterpriseFarm && !selectedBlock) {
-        alert(availableFarmBlocks.length === 0 ? t.enterprise.noAssignedBlocks : t.enterprise.blockRequired);
+        showAppAlert(availableFarmBlocks.length === 0 ? t.enterprise.noAssignedBlocks : t.enterprise.blockRequired);
         return;
       }
       const pondKey = getPhysicalPondKey(pondName);
@@ -450,7 +450,7 @@ export default function PondsPage() {
         ponds.some((pond) => getPhysicalPondKey(pond.pondName) === pondKey);
 
       if (alreadyExists) {
-        alert(`${pondName} already exists. Use Start Cycle to begin production for this pond.`);
+        showAppAlert(`${pondName} already exists. Use Start Cycle to begin production for this pond.`);
         return;
       }
 
@@ -504,7 +504,7 @@ export default function PondsPage() {
         pending.filter((pond) => getPhysicalPondKey(pond.pondName) !== failedPondKey)
       );
       const message = error instanceof Error ? error.message : '';
-      alert(message.includes('plan allows')
+      showAppAlert(message.includes('plan allows')
         ? `${message}\n\nOpen Settings → Billing & Plans to upgrade.`
         : t.messages.error || 'Failed to add pond. Please check your connection.');
     } finally {
@@ -555,7 +555,7 @@ export default function PondsPage() {
       setCycleFilter('ended');
     } catch (error) {
       console.error('Error ending cycle:', error);
-      alert(t.messages.error || 'Failed to end cycle.');
+      showAppAlert(t.messages.error || 'Failed to end cycle.');
     }
   };
 
@@ -583,7 +583,7 @@ export default function PondsPage() {
     if (!requestedPond) {
       startRequestHandledRef.current = true;
       window.history.replaceState(window.history.state, '', '/dashboard/ponds');
-      alert(t.startPondCycle.invalidRequest);
+      showAppAlert(t.startPondCycle.invalidRequest);
       return;
     }
 
@@ -632,12 +632,12 @@ export default function PondsPage() {
     const baselineFeedValue = parseFloat(baselineForm.baselineCumulativeFeed);
 
     if (!baselineForm.baselineMbw || Number.isNaN(baselineMbwValue) || baselineMbwValue <= 0) {
-      alert(t.midcycleOnboarding?.baselineMbwRequired || 'Current MBW is required for an existing cycle.');
+      showAppAlert(t.midcycleOnboarding?.baselineMbwRequired || 'Current MBW is required for an existing cycle.');
       return;
     }
 
     if (!baselineForm.baselineDate || !Number.isFinite(baselineDocValue) || baselineDocValue < 0) {
-      alert(t.midcycleOnboarding?.baselineDocRequired || 'Current DOC is required for an existing cycle.');
+      showAppAlert(t.midcycleOnboarding?.baselineDocRequired || 'Current DOC is required for an existing cycle.');
       return;
     }
 
@@ -684,7 +684,7 @@ export default function PondsPage() {
       setBaselineEditPond(null);
     } catch (error) {
       console.error('Error updating baseline:', error);
-      alert(t.messages.error || 'Failed to update baseline.');
+      showAppAlert(t.messages.error || 'Failed to update baseline.');
     } finally {
       save.release();
     }
@@ -728,11 +728,11 @@ export default function PondsPage() {
     } catch (error) {
       console.error('Error starting new cycle:', error);
       if (error instanceof Error && error.message === PHYSICAL_POND_LINK_ERROR) {
-        alert(error.message);
+        showAppAlert(error.message);
         return;
       }
       const errorCode = error instanceof StartPondCycleError ? error.code : 'failed';
-      alert(errorCode === 'blockMismatch'
+      showAppAlert(errorCode === 'blockMismatch'
         ? t.enterpriseCycle.pondBlockMismatch
         : errorCode === 'cycleMismatch'
           ? t.enterpriseCycle.pondCycleMismatch
@@ -745,12 +745,12 @@ export default function PondsPage() {
 
   const openDeletePhysicalPond = (pond: PhysicalPond) => {
     if (!canEditPonds) {
-      alert(t.home?.onlyTechniciansCanDelete || 'Only technicians, owners, and co-owners can delete ponds.');
+      showAppAlert(t.home?.onlyTechniciansCanDelete || 'Only technicians, owners, and co-owners can delete ponds.');
       return;
     }
 
     if (isPhysicalPondActive(pond)) {
-      alert(t.ponds?.activeDeleteBlocked || 'End the active cycle for this pond before deleting it.');
+      showAppAlert(t.ponds?.activeDeleteBlocked || 'End the active cycle for this pond before deleting it.');
       return;
     }
 
@@ -764,12 +764,12 @@ export default function PondsPage() {
 
   const openDeleteCyclePond = (pond: Pond) => {
     if (!canEditPonds) {
-      alert(t.home?.onlyTechniciansCanDelete || 'Only technicians, owners, and co-owners can delete ponds.');
+      showAppAlert(t.home?.onlyTechniciansCanDelete || 'Only technicians, owners, and co-owners can delete ponds.');
       return;
     }
 
     if (isActiveCycle(pond)) {
-      alert(t.ponds?.activeDeleteBlocked || 'End the active cycle for this pond before deleting it.');
+      showAppAlert(t.ponds?.activeDeleteBlocked || 'End the active cycle for this pond before deleting it.');
       return;
     }
 
@@ -790,12 +790,12 @@ export default function PondsPage() {
         const physicalPond = accessiblePhysicalPonds.find((pond) => pond.id === deleteConfirm.id);
 
         if (!physicalPond) {
-          alert(t.messages?.dataNotFound || 'Pond data not found.');
+          showAppAlert(t.messages?.dataNotFound || 'Pond data not found.');
           return;
         }
 
         if (isPhysicalPondActive(physicalPond)) {
-          alert(t.ponds?.activeDeleteBlocked || 'End the active cycle for this pond before deleting it.');
+          showAppAlert(t.ponds?.activeDeleteBlocked || 'End the active cycle for this pond before deleting it.');
           return;
         }
 
@@ -804,12 +804,12 @@ export default function PondsPage() {
         const pond = accessiblePonds.find((item) => item.id === deleteConfirm.id);
 
         if (!pond) {
-          alert(t.messages?.dataNotFound || 'Pond data not found.');
+          showAppAlert(t.messages?.dataNotFound || 'Pond data not found.');
           return;
         }
 
         if (isActiveCycle(pond)) {
-          alert(t.ponds?.activeDeleteBlocked || 'End the active cycle for this pond before deleting it.');
+          showAppAlert(t.ponds?.activeDeleteBlocked || 'End the active cycle for this pond before deleting it.');
           return;
         }
 
@@ -832,10 +832,10 @@ export default function PondsPage() {
       }
 
       setDeleteConfirm({ isOpen: false, id: null, type: null });
-      alert(t.ponds?.deleteSuccess || 'Pond deleted successfully.');
+      showAppAlert(t.ponds?.deleteSuccess || 'Pond deleted successfully.');
     } catch (error) {
       console.error('Error deleting pond:', error);
-      alert(t.messages.error || 'Failed to delete pond.');
+      showAppAlert(t.messages.error || 'Failed to delete pond.');
     } finally {
       setIsDeleting(false);
     }

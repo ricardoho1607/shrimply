@@ -1,4 +1,6 @@
 "use client";
+import { confirmAppAction } from '@/lib/appDialogs';
+
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
@@ -207,8 +209,8 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
     }
   };
 
-  const handleClearChat = () => {
-    if (window.confirm(copy('Clear conversation history?'))) {
+  const handleClearChat = async () => {
+    if ((await confirmAppAction(copy('Clear conversation history?')))) {
       generation.current += 1;
       setPreview(null);
       setStreamingReplyId(null);

@@ -1,4 +1,6 @@
 "use client";
+import { showAppAlert, confirmAppAction } from '@/lib/appDialogs';
+
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
@@ -355,12 +357,12 @@ export default function HarvestPage() {
   const saveRequiredSampling = async (pond: Pond) => {
     if (!companyId || !user || !canEditHarvest || samplingSavingPondId || harvestSubmitLock.current) return;
     if (!isValidHarvestDate(formData.date, today)) {
-      alert(copy('Choose a valid harvest date that is not in the future.'));
+      showAppAlert(copy('Choose a valid harvest date that is not in the future.'));
       return;
     }
     const mbw = Number(samplingMbwDrafts[pond.id]);
     if (!Number.isFinite(mbw) || mbw <= 0) {
-      alert(t.harvest.samplingMbwRequired);
+      showAppAlert(t.harvest.samplingMbwRequired);
       return;
     }
 
@@ -392,7 +394,7 @@ export default function HarvestPage() {
       setSamplingMbwDrafts((current) => ({ ...current, [pond.id]: '' }));
     } catch (error) {
       console.error('Error adding harvest-date sampling:', error);
-      alert(getHarvestSaveError(error, t.harvestCycle.saveFailed, copy));
+      showAppAlert(getHarvestSaveError(error, t.harvestCycle.saveFailed, copy));
     } finally {
       setSamplingSavingPondId(null);
     }
@@ -436,7 +438,7 @@ export default function HarvestPage() {
         const selectedPond = selectedPonds[index]!;
         const harvestSampling = getHarvestDateSampling(selectedPond, formData.date);
         if (!harvestSampling) {
-          alert(t.harvest.samplingRequiredMessage
+          showAppAlert(t.harvest.samplingRequiredMessage
             .replace('{{pondName}}', selectedPond.pondName)
             .replace('{{date}}', formData.date));
           return;
@@ -444,15 +446,13 @@ export default function HarvestPage() {
         if (
           (harvestSizeDiffersFromSampling(entries[index].size, harvestSampling)
             || harvestSizeDiffersFromSampling(entries[index].subSize, harvestSampling))
-          && !window.confirm(t.harvest.sizeDifferenceMessage.replace('{{pondName}}', selectedPond.pondName))
+          && !(await confirmAppAction(t.harvest.sizeDifferenceMessage.replace('{{pondName}}', selectedPond.pondName)))
         ) return;
         const removal = calculateHarvestRemoval(entries[index]);
         const previousHarvestPond = editingRecord?.ponds.find((pond) => pond.pondId === entries[index].pondId);
         const estimatedBiomass = calculatePondMetricsWithHarvest(selectedPond).currentBiomass
           + (previousHarvestPond ? calculateHarvestRemoval(previousHarvestPond).biomass : 0);
-        if (estimatedBiomass > 0 && removal.biomass > estimatedBiomass * 1.1 && !window.confirm(
-          `${selectedPond.pondName}: recorded harvest (${removal.biomass.toFixed(1)} kg) is higher than estimated pond biomass (${estimatedBiomass.toFixed(1)} kg). This can happen when sampling underestimates stock or MBW. Continue saving?`
-        )) return;
+        if (estimatedBiomass > 0 && removal.biomass > estimatedBiomass * 1.1 && !(await confirmAppAction(`${selectedPond.pondName}: recorded harvest (${removal.biomass.toFixed(1)} kg) is higher than estimated pond biomass (${estimatedBiomass.toFixed(1)} kg). This can happen when sampling underestimates stock or MBW. Continue saving?`))) return;
       }
 
       if (!pendingHarvest.current) {
@@ -606,7 +606,7 @@ export default function HarvestPage() {
       });
 
       if (alreadySaved) {
-        alert(copy('This harvest was already saved. Review it in the harvest list before making further changes.'));
+        showAppAlert(copy('This harvest was already saved. Review it in the harvest list before making further changes.'));
       }
       pendingHarvest.current = null;
       setModalOpen(false);
@@ -625,7 +625,7 @@ export default function HarvestPage() {
       });
     } catch (error) {
       console.error('Error saving harvest record:', error);
-      alert(getHarvestSaveError(error, t.harvestCycle.saveFailed, copy));
+      showAppAlert(getHarvestSaveError(error, t.harvestCycle.saveFailed, copy));
     } finally {
       harvestSubmitLock.current = false;
       setIsSavingHarvest(false);
@@ -635,12 +635,12 @@ export default function HarvestPage() {
   const addPondToBatch = () => {
     if (harvestSubmitLock.current) return;
     if (!formData.pondId || !formData.biomass || !formData.size || !formData.price) {
-      alert(copy('Complete this pond before adding another.'));
+      showAppAlert(copy('Complete this pond before adding another.'));
       return;
     }
     const selectedPond = formPonds.find((pond) => pond.id === formData.pondId);
     if (!selectedPond || !getHarvestDateSampling(selectedPond, formData.date)) {
-      alert(t.harvest.samplingRequired);
+      showAppAlert(t.harvest.samplingRequired);
       return;
     }
     if (harvestBatch.some((entry) => entry.pondId === formData.pondId)) return;
@@ -726,7 +726,7 @@ export default function HarvestPage() {
 
   const handleDeleteRecord = async (recordId: string) => {
     if (harvestSubmitLock.current) return;
-    if (!companyId || !user || !window.confirm('Void this harvest? Pond totals will be reversed and the sale excluded from profit reports. The original records and confirmed payments are retained; record any refund separately in Finance.')) return;
+    if (!companyId || !user || !(await confirmAppAction('Void this harvest? Pond totals will be reversed and the sale excluded from profit reports. The original records and confirmed payments are retained; record any refund separately in Finance.'))) return;
     if (!canEditHarvest) return;
     const localRecord = harvestRecords.find((record) => record.id === recordId);
     if (
@@ -771,7 +771,7 @@ export default function HarvestPage() {
       });
     } catch (error) {
       console.error('Error deleting record:', error);
-      alert(getHarvestSaveError(error, t.harvestCycle.saveFailed, copy));
+      showAppAlert(getHarvestSaveError(error, t.harvestCycle.saveFailed, copy));
     } finally {
       harvestSubmitLock.current = false;
       setIsSavingHarvest(false);

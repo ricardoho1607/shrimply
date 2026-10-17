@@ -1,20 +1,9 @@
+import { getUserErrorMessage } from '../../../shared/userError';
+import { AppAlert as Alert } from '../../../components/alerts/appAlert';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { type ReactNode, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Keyboard,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Keyboard, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, useWindowDimensions, View } from 'react-native';
 import { useAuth } from '../../../context/AuthContext';
 import { useLanguage } from '../../../context/LanguageContext';
 import {
@@ -333,7 +322,7 @@ export default function EnterpriseCycleDashboard({
       }
       resetCycleForm();
     } catch (cycleError) {
-      Alert.alert(t.messages.error, cycleError instanceof Error ? cycleError.message : copy.cycleSaveFailed);
+      Alert.alert(t.messages.error, getUserErrorMessage(cycleError, copy.cycleSaveFailed));
     } finally {
       setSaving(false);
     }
@@ -351,7 +340,7 @@ export default function EnterpriseCycleDashboard({
       setBlockTechnicianId(null);
       setCreateBlockVisible(false);
     } catch (blockError) {
-      Alert.alert(t.messages.error, blockError instanceof Error ? blockError.message : t.enterprise.blockCreateFailed);
+      Alert.alert(t.messages.error, getUserErrorMessage(blockError, t.enterprise.blockCreateFailed));
     } finally {
       setSaving(false);
     }
@@ -370,7 +359,7 @@ export default function EnterpriseCycleDashboard({
       setCreatePondVisible(false);
       setPondFilter('inactive');
     } catch (pondError) {
-      Alert.alert(t.messages.error, pondError instanceof Error ? pondError.message : copy.pondCreateFailed);
+      Alert.alert(t.messages.error, getUserErrorMessage(pondError, copy.pondCreateFailed));
     } finally {
       setSaving(false);
     }
@@ -394,7 +383,7 @@ export default function EnterpriseCycleDashboard({
       });
       setEditingBlock(null);
     } catch (err) {
-      Alert.alert(t.messages.error, err instanceof Error ? err.message : t.enterprise.blockUpdateFailed);
+      Alert.alert(t.messages.error, getUserErrorMessage(err, t.enterprise.blockUpdateFailed));
     } finally {
       setSaving(false);
     }
@@ -427,7 +416,7 @@ export default function EnterpriseCycleDashboard({
               await deleteBlock(editingBlock.id);
               setEditingBlock(null);
             } catch (err) {
-              Alert.alert(t.messages.error, err instanceof Error ? err.message : t.enterprise.blockDeleteFailed);
+              Alert.alert(t.messages.error, getUserErrorMessage(err, t.enterprise.blockDeleteFailed));
             } finally {
               setSaving(false);
             }
@@ -640,7 +629,7 @@ export default function EnterpriseCycleDashboard({
               </>}
               {editingCycle ? <View style={styles.editModalActions}>
                 <TouchableOpacity style={styles.secondaryAction} onPress={() => { resetCycleForm(); router.push({ pathname: '/cycle-report', params: { cycleId: editingCycle.id } }); }}><Text style={styles.secondaryActionText}>{copy.viewCycleReport}</Text></TouchableOpacity>
-                {editingCycle.status !== 'closed' ? <TouchableOpacity style={[styles.closeAction, (editingCycleSummary?.activeCount || 0) > 0 && styles.disabledAction]} disabled={(editingCycleSummary?.activeCount || 0) > 0} onPress={() => Alert.alert(copy.closeCycle, copy.closeCycleConfirm.replace('{{cycleName}}', editingCycle.cycleName), [{ text: t.actions.cancel, style: 'cancel' }, { text: copy.closeCycle, style: 'destructive', onPress: async () => { try { await onCloseCycle(editingCycle); resetCycleForm(); } catch (error) { Alert.alert(t.messages.error, error instanceof Error ? error.message : t.messages.networkError); } } }])}><Text style={styles.closeActionText}>{copy.closeCycle}</Text></TouchableOpacity> : null}
+                {editingCycle.status !== 'closed' ? <TouchableOpacity style={[styles.closeAction, (editingCycleSummary?.activeCount || 0) > 0 && styles.disabledAction]} disabled={(editingCycleSummary?.activeCount || 0) > 0} onPress={() => Alert.alert(copy.closeCycle, copy.closeCycleConfirm.replace('{{cycleName}}', editingCycle.cycleName), [{ text: t.actions.cancel, style: 'cancel' }, { text: copy.closeCycle, style: 'destructive', onPress: async () => { try { await onCloseCycle(editingCycle); resetCycleForm(); } catch (error) { Alert.alert(t.messages.error, getUserErrorMessage(error, t.messages.networkError)); } } }])}><Text style={styles.closeActionText}>{copy.closeCycle}</Text></TouchableOpacity> : null}
               </View> : null}
             </ScrollView>
           </View>

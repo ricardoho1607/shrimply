@@ -1,4 +1,8 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
+import { showAppAlert, confirmAppAction } from '@/lib/appDialogs';
+
 import { auth, db } from '@/lib/firebase';
 import { prepareSaveData as removeUndefinedFields, updateRecordOnline } from '@/lib/saveData';
 import {
@@ -217,7 +221,7 @@ export function useInventoryFeedsActions(context: Context) {
       const result = await agent.confirm(operation, [command.id]);
       acceptVoidResult(accepted, result);
     } catch (err: unknown) {
-      const errMessage = err instanceof Error && err.message ? err.message : '';
+      const errMessage = getUserErrorMessage(err);
       setVoidStatusUncertain(!!accepted);
       setVoidPreparationError(accepted ? (errMessage ? `${uncertainVoidMessage} (${errMessage})` : uncertainVoidMessage) :
         (errMessage || copy('Could not verify the removal draft. Check your connection and try again.')));
@@ -240,7 +244,7 @@ export function useInventoryFeedsActions(context: Context) {
       const result = await agent.recover(accepted.operation);
       acceptVoidResult(accepted, result);
     } catch (err: unknown) {
-      const errMessage = err instanceof Error && err.message ? err.message : '';
+      const errMessage = getUserErrorMessage(err);
       setVoidStatusUncertain(true);
       setVoidPreparationError(errMessage ? `${uncertainVoidMessage} (${errMessage})` : uncertainVoidMessage);
     } finally {
@@ -264,7 +268,7 @@ export function useInventoryFeedsActions(context: Context) {
       const result = await agent.confirm(accepted.operation, [accepted.command.id]);
       acceptVoidResult(accepted, result);
     } catch (err: unknown) {
-      const errMessage = err instanceof Error && err.message ? err.message : '';
+      const errMessage = getUserErrorMessage(err);
       setVoidStatusUncertain(true);
       setVoidPreparationError(errMessage ? `${uncertainVoidMessage} (${errMessage})` : uncertainVoidMessage);
     } finally {
@@ -287,7 +291,7 @@ export function useInventoryFeedsActions(context: Context) {
         (item.feedType || item.category) === formData.category && item.unit === formData.unit
       );
       if (duplicate) {
-        alert(copy('This item already exists. Restock the existing item to keep its history together.'));
+        showAppAlert(copy('This item already exists. Restock the existing item to keep its history together.'));
         handleOpenModal('stockIn', duplicate, itemType);
         return;
       }
@@ -299,11 +303,11 @@ export function useInventoryFeedsActions(context: Context) {
       const price = Number(formData.unitPrice);
       const reorder = Number(formData.reorderLevel);
       if (['add', 'stockIn', 'usage'].includes(modalType) && (!Number.isFinite(qty) || qty <= 0)) {
-        alert(copy('Quantity must be greater than 0.'));
+        showAppAlert(copy('Quantity must be greater than 0.'));
         return;
       }
       if (['add', 'stockIn'].includes(modalType) && (!Number.isFinite(price) || price <= 0)) {
-        alert(copy('Unit price must be greater than 0.'));
+        showAppAlert(copy('Unit price must be greater than 0.'));
         return;
       }
 
@@ -483,7 +487,7 @@ export function useInventoryFeedsActions(context: Context) {
       setModalOpen(false);
     } catch (err) {
       console.error('Inventory action failed:', err);
-      alert(copy('Operation failed. Please try again.'));
+      showAppAlert(copy('Operation failed. Please try again.'));
     } finally {
       save.release();
     }
@@ -491,7 +495,7 @@ export function useInventoryFeedsActions(context: Context) {
 
   const handleRemoveUsage = async (item: InventoryItem, usage: UsageHistory) => {
     if (!companyId || !userUid || auth.currentUser?.uid !== userUid || !canEditInventory || itemType !== 'additive' || save.busy) return;
-    if (!window.confirm(`Remove ${formatQuantity(usage.quantity)} ${item.unit || 'kg'} used on ${formatDate(usage.date)}? This restores the recorded stock and cost and removes this usage expense.`)) return;
+    if (!(await confirmAppAction(`Remove ${formatQuantity(usage.quantity)} ${item.unit || 'kg'} used on ${formatDate(usage.date)}? This restores the recorded stock and cost and removes this usage expense.`))) return;
     if (!save.acquire()) return;
     setRemovingUsageId(usage.id);
     setUsageRemovalError('');
@@ -505,7 +509,7 @@ export function useInventoryFeedsActions(context: Context) {
       });
       save.complete();
     } catch (error) {
-      setUsageRemovalError(error instanceof Error ? error.message : 'Could not remove usage. Please try again.');
+      setUsageRemovalError(getUserErrorMessage(error, 'Could not remove usage. Please try again.'));
     } finally {
       setRemovingUsageId(null);
       save.release();
@@ -513,7 +517,7 @@ export function useInventoryFeedsActions(context: Context) {
   };
 
   const handleDeleteItem = async (item: InventoryItem, type: 'feed' | 'additive') => {
-    if (!companyId || !window.confirm(`${item.archived ? 'Restore' : 'Archive'} ${item.itemName}? Purchase and usage history will be retained. Only empty-stock items can be archived.`)) return;
+    if (!companyId || !(await confirmAppAction(`${item.archived ? 'Restore' : 'Archive'} ${item.itemName}? Purchase and usage history will be retained. Only empty-stock items can be archived.`))) return;
     if (!canEditInventory) return;
     try {
       const collectionName = type === 'feed' ? 'feeds' : 'additives';
@@ -526,7 +530,7 @@ export function useInventoryFeedsActions(context: Context) {
       });
     } catch (err) {
       console.error('Delete failed:', err);
-      alert(err instanceof Error ? err.message : 'Delete failed');
+      showAppAlert(getUserErrorMessage(err, 'Delete failed'));
     }
   };
   return {

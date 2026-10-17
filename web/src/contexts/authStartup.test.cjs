@@ -723,6 +723,7 @@ async function runAuthPageTest(authContextState, nextAuthContextState = null) {
         getRequiredSetupRoute: () => '/setup',
       };
     }
+    if (id === '@/lib/userError') return require('../lib/userError.ts');
     throw new Error(`Unhandled module: ${id}`);
   });
 

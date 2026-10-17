@@ -1,4 +1,6 @@
 'use client';
+import { getUserErrorMessage } from '@/lib/userError';
+
 
 import { Loader2, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -92,7 +94,7 @@ export function BatchDeleteUsersDialog({
         onClose();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Batch deletion failed.');
+      setError(getUserErrorMessage(err, 'Batch deletion failed.'));
       setSubmitting(false);
     }
   };

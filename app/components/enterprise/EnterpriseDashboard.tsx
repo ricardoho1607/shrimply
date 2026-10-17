@@ -1,22 +1,9 @@
+import { getUserErrorMessage } from '../../../shared/userError';
+import { AppAlert as Alert } from '../../../components/alerts/appAlert';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { useLanguage } from '../../../context/LanguageContext';
 import { useAuth } from '../../../context/AuthContext';
 import ProfileCompletionCard from '../onboarding/ProfileCompletionCard';
@@ -185,7 +172,7 @@ export default function EnterpriseDashboard({
     } catch (createError) {
       Alert.alert(
         t.messages.error,
-        createError instanceof Error ? createError.message : t.enterprise.blockCreateFailed,
+        getUserErrorMessage(createError, t.enterprise.blockCreateFailed),
       );
     } finally {
       setSaving(false);

@@ -4,6 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 const ts = require('typescript');
 require('../../../../../../scripts/register-typescript.cjs');
+const { getUserErrorMessage } = require('./../../../../lib/userError.ts');
 const { removeAdditiveUsage } = require('../../../../../../shared/additiveUsageRemoval.ts');
 const { createSaveOperation } = require('../../../../../../shared/saveOperation.ts');
 const source = ts.createSourceFile('useInventoryFeedsActions.ts', fs.readFileSync(path.join(__dirname, 'useInventoryFeedsActions.ts'), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -20,7 +21,7 @@ function harness({ permission = true, confirm = true, fail = false } = {}) {
   const save = createSaveOperation();
   const env = {
     companyId: 'company', userUid: 'user', auth: { currentUser: { uid: 'user' } }, canEditInventory: permission, itemType: 'additive', save,
-    window: { confirm: () => confirm }, formatQuantity: String, formatDate: String, setRemovingUsageId() {}, setUsageRemovalError: value => { error = value; },
+    confirmAppAction: async () => confirm, getUserErrorMessage, formatQuantity: String, formatDate: String, setRemovingUsageId() {}, setUsageRemovalError: value => { error = value; },
     db: {}, doc: (_db, ...parts) => parts.join('/'), serverTimestamp: () => 'server-time', removeAdditiveUsage,
     runTransaction: async (_db, callback) => {
       calls++;

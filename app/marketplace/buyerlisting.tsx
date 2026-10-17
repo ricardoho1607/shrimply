@@ -1,5 +1,6 @@
+import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import React, { useState, useEffect, useMemo } from 'react';
-import { FlatList, View, Text, TouchableOpacity, StyleSheet, StatusBar, RefreshControl, Alert, Platform } from 'react-native';
+import { FlatList, View, Text, TouchableOpacity, StyleSheet, StatusBar, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';

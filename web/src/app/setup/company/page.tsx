@@ -1,4 +1,8 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
+import { showAppAlert } from '@/lib/appDialogs';
+
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Rocket, Phone, MapPin, ArrowLeft, LogOut, CheckCircle2, LoaderCircle } from 'lucide-react';
@@ -129,7 +133,7 @@ export default function CompanySetupPage() {
       return;
     }
     if (!formData.farmType.trim()) {
-      alert(t.onboardingProgress.farmTypeRequired);
+      showAppAlert(t.onboardingProgress.farmTypeRequired);
       return;
     }
     try {
@@ -140,7 +144,7 @@ export default function CompanySetupPage() {
       });
       router.push(ROUTES.dashboard);
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to set up company');
+      showAppAlert(getUserErrorMessage(error, 'Failed to set up company'));
     }
   };
 

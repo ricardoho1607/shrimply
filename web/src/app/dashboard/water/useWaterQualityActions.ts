@@ -1,4 +1,6 @@
 "use client";
+import { showAppAlert } from '@/lib/appDialogs';
+
 import { ADAPTIVE_SOPS_ENABLED } from "@/lib/sopFeature";
 import { parseObservationTimes } from "../../../../../shared/sop/observationTimes";
 import { app, db, storage } from '@/lib/firebase';
@@ -187,7 +189,7 @@ export function useWaterQualityActions(context: Context) {
       waterDrafts.current.clear();
     } catch (error) {
       console.error('Error adding water quality:', error);
-      alert(copy('Failed to update water quality.'));
+      showAppAlert(copy('Failed to update water quality.'));
     } finally {
       save.release();
       setWaterSubmitting(false);
@@ -345,7 +347,7 @@ export function useWaterQualityActions(context: Context) {
     if (!save.reset()) return;
     const pdfActionState = getPdfActionState(reportType);
     if (pdfActionState.disabled) {
-      alert(pdfActionState.message);
+      showAppAlert(pdfActionState.message);
       return;
     }
     resetLabModal();
@@ -395,11 +397,11 @@ export function useWaterQualityActions(context: Context) {
     if (!companyId || !canManageLabReports || !user || !labPdfFile) return;
     const pdfActionState = getPdfActionState(labForm.reportType === 'plankton' ? 'plankton' : 'water_quality');
     if (pdfActionState.disabled) {
-      alert(pdfActionState.message);
+      showAppAlert(pdfActionState.message);
       return;
     }
     if (labPdfFile.type !== 'application/pdf') {
-      alert(copy('Please upload a PDF lab report.'));
+      showAppAlert(copy('Please upload a PDF lab report.'));
       return;
     }
 
@@ -447,15 +449,15 @@ export function useWaterQualityActions(context: Context) {
       setSelectedLabPondIds(rows.map(row => row.pondId));
       setLabRows(rows);
       setLabEntryMode('pdf_upload');
-      alert(copy('PDF extraction finished. Review the table, correct any values, then confirm the report.'));
+      showAppAlert(copy('PDF extraction finished. Review the table, correct any values, then confirm the report.'));
     } catch (error) {
       console.error('Error uploading lab PDF:', error);
       const details = typeof error === 'object' && error && 'details' in error ? error.details as { resetAt?: string } : null;
       if (details?.resetAt) {
         const resetAtMs = new Date(details.resetAt).getTime();
-        alert(Number.isNaN(resetAtMs) ? copy('Failed to upload or extract the lab report.') : copy('This PDF extraction is available in {time}.', { time: formatRemainingTime(resetAtMs - Date.now()) }));
+        showAppAlert(Number.isNaN(resetAtMs) ? copy('Failed to upload or extract the lab report.') : copy('This PDF extraction is available in {time}.', { time: formatRemainingTime(resetAtMs - Date.now()) }));
       } else {
-        alert(copy('Failed to upload or extract the lab report.'));
+        showAppAlert(copy('Failed to upload or extract the lab report.'));
       }
     } finally {
       save.release();
@@ -471,7 +473,7 @@ export function useWaterQualityActions(context: Context) {
     const permittedLabRows = labRows.filter((row) => accessiblePondIds.has(row.pondId));
     if (permittedLabRows.length === 0) return;
     const issues = permittedLabRows.flatMap(row => validateLabRow(labEntryMode === 'manual' ? { ...row, measurementUnits: getManualLabInputUnits(row.measurementUnits) } : row).map(issue => `${row.pondCode}: ${issue}`));
-    if (issues.length) { alert(issues.join('\n')); return; }
+    if (issues.length) { showAppAlert(issues.join('\n')); return; }
     setLabSubmitting(true);
 
     if (!save.acquire()) return;
@@ -509,7 +511,7 @@ export function useWaterQualityActions(context: Context) {
       resetLabModal();
     } catch (error) {
       console.error('Error creating lab report:', error);
-      alert(copy('Failed to create lab report.'));
+      showAppAlert(copy('Failed to create lab report.'));
     } finally {
       save.release();
       setLabSubmitting(false);
@@ -530,7 +532,7 @@ export function useWaterQualityActions(context: Context) {
       });
     } catch (error) {
       console.error('Error downloading lab report:', error);
-      alert(copy('Failed to download the lab report. Please try again.'));
+      showAppAlert(copy('Failed to download the lab report. Please try again.'));
     } finally {
       setDownloadingLabReportId(null);
     }

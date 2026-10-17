@@ -1,19 +1,8 @@
+import { AppAlert as Alert } from '../components/alerts/appAlert';
 // app/company-setup.tsx - Fixed to save location with coordinates
 // app/company-setup.tsx - Fixed to save location with coordinates
 import { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-  Switch,
-  Platform,
-} from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Switch, Platform } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '../context/AuthContext';
 import { useLocalSearchParams, useRouter } from 'expo-router';

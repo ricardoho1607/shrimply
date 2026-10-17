@@ -1,19 +1,8 @@
+import { AppAlert as Alert } from '../components/alerts/appAlert';
 // app/company-setup2.tsx - With location coordinates and i18n support
 // app/company-setup2.tsx - With location coordinates and i18n support
 import { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-  Switch,
-  Platform,
-} from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Switch, Platform } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '../context/AuthContext';
 import { useLocalSearchParams, useRouter } from 'expo-router';

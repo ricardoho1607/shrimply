@@ -1,10 +1,7 @@
+import { AppAlert as Alert } from '../components/alerts/appAlert';
 // app/disease-report.tsx - Complete Fixed Version
 import React, { useCallback, useState, useEffect, useRef } from 'react';
-import {
-  View, Text, TouchableOpacity, StyleSheet, StatusBar,
-  TextInput, Alert, ActivityIndicator, FlatList, Modal, ScrollView,
-  Dimensions, Platform, PermissionsAndroid,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar, TextInput, ActivityIndicator, FlatList, Modal, ScrollView, Dimensions, Platform, PermissionsAndroid } from 'react-native';
 import MapView, { Marker, Circle, PROVIDER_GOOGLE } from '../components/MapWrapper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';

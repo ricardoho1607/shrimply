@@ -1,12 +1,10 @@
+import { getUserErrorMessage } from '../shared/userError';
+import { AppAlert as Alert } from '../components/alerts/appAlert';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
-import { 
-  Modal, ScrollView, StatusBar, StyleSheet, Text,
-  TextInput, TouchableOpacity, View, Alert, Platform,
-  Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView
-} from 'react-native';
+import { Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View, Platform, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { usePondStore, type Pond, type Sampling, type MortalityRecord, getActiveFarmCycle, getPhysicalPondKey, getPondCurrentDoc, getPondCycleStatus, getPondPlSupplier, getPondTotalFeedConsumed, isBaselineSampling, isPondCycleActive } from './store/pondStore';
@@ -756,7 +754,7 @@ export default function PondDetails() {
       Alert.alert(t.messages.success, `${pond.pondName} new cycle started.`);
 
     } catch (error) {
-      Alert.alert(t.messages.error, error instanceof Error ? error.message : t.messages.networkError);
+      Alert.alert(t.messages.error, getUserErrorMessage(error, t.messages.networkError));
     }
   }, [activeFarmCycle, addPond, canManageCycles, canManagePonds, company, isEnterpriseTechnician, newCycleForm, pond, ponds, router, t]);
 

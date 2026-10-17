@@ -1,4 +1,6 @@
 "use client";
+import { showAppAlert } from '@/lib/appDialogs';
+
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Droplets, FileText, Loader2 } from 'lucide-react';
@@ -113,7 +115,7 @@ export default function DailyOperationsReportsPage() {
       await downloadMobilePdf({ html, filename: `Shrimply-Daily-Operations-${reportDate}.pdf`, orientation: 'landscape', preserveTemplateScale: true });
     } catch (error) {
       console.error('Failed to export daily operations PDF:', error);
-      window.alert(copy.exportFailedMessage);
+      showAppAlert(copy.exportFailedMessage);
     } finally {
       setExporting(false);
     }

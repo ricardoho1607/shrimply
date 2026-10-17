@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
 require('../../../../../scripts/register-typescript.cjs');
+const { getUserErrorMessage } = require('./../../../lib/userError.ts');
 const inventory = require('../../../../../shared/feedInventoryUsage.ts');
 const reconciliation = require('../../../../../shared/dailyFeedTransaction.ts');
 const finance = require('../../../../../shared/financeIntegrity.ts');
@@ -38,7 +39,7 @@ function fixture() {
   const noop = () => {};
   const bindings = {
     ...inventory, ...reconciliation, ...finance,
-    console: { error: noop }, alert: message => alerts.push(message),
+    console: { error: noop }, getUserErrorMessage, showAppAlert: message => alerts.push(message),
     db: {}, companyId: 'a', user: { uid: 'staff' }, canEditFeed: true,
     accessiblePonds: [{ id: 'p' }], inventoryFeeds: [{ id: 'f' }], availableStockedFeeds: [{ id: 'f' }],
     formData: { pondId: 'p', date, feedingResponse: 'normal', feedAllocations: [{ inventoryFeedId: 'f', quantityKg: '20' }] },
@@ -117,3 +118,22 @@ test('web does not save feed after the pond cycle ends on another device', async
   assert.match(f.alerts[0] || '', /cycle is unavailable/);
   assert.deepEqual([...f.rows], before);
 });
+
+for (const code of ['permission-denied', 'unavailable', 'functions/internal']) {
+  test(`feed removal ${code} shows a safe app message and keeps the record for retry`, async () => {
+    const f = fixture();
+    const before = structuredClone([...f.rows]);
+    let closed = false;
+    let released = false;
+    f.bindings.setDeletingFeedRecord = () => { closed = true; };
+    f.bindings.save.release = () => { released = true; };
+    f.bindings.runTransaction = async () => { throw Object.assign(new Error(`Firebase: operation failed (${code}).`), { code, name: 'FirebaseError' }); };
+    await f.remove();
+    assert.equal(f.alerts.length, 1);
+    assert.doesNotMatch(f.alerts[0], /Firebase|functions\/internal|permission-denied/);
+    assert.match(f.alerts[0], code === 'permission-denied' ? /permission/ : code === 'unavailable' ? /connection/ : /Failed/);
+    assert.equal(closed, false);
+    assert.equal(released, true);
+    assert.deepEqual([...f.rows], before);
+  });
+}

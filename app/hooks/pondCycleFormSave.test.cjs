@@ -6,6 +6,7 @@ function fixture(save = async () => true) {
  let closed = false, submitting = false;
  const cycle = { id: 'cycle', cycleName: 'Current', status: 'active' };
  const callback = loadCallback('features/pond-management/usePondManagementPondActions.ts', 'handleAddCycle', {
+  getUserErrorMessage: require("../../shared/userError.ts").getUserErrorMessage,
   currentCompanyId: "farm", assertSopStageGate: async () => {},
   submitLockRef: lock, setIsSubmitting: value => { submitting = value; },
   canManagePonds: true, canManageFarmCycle: true, isEnterpriseFarm: false,

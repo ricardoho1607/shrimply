@@ -1,4 +1,6 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
 import {
   SOP_INTERFACE_LANGUAGES,
   sopMeasurementLabel,
@@ -167,7 +169,7 @@ function SopsPageContent() {
     } catch (e) {
       setMessageTone("error");
       setMessage(
-        e instanceof Error ? e.message : "Unable to complete this change.",
+        getUserErrorMessage(e, "Unable to complete this change."),
       );
       return null;
     }
@@ -187,11 +189,7 @@ function SopsPageContent() {
       setMessageTone("status");
     } catch (error) {
       setSaveError(
-        error instanceof Error
-          ? ui(error.message)
-          : ui(
-              "The draft was not saved. Review it and choose Save draft to retry.",
-            ),
+        ui(getUserErrorMessage(error, "The draft was not saved. Review it and choose Save draft to retry.")),
       );
     } finally {
       savingDraftRef.current = false;
@@ -678,9 +676,7 @@ function SopsPageContent() {
                                 });
                               } catch (error) {
                                 setDeleteError(
-                                  error instanceof Error
-                                    ? error.message
-                                    : "Unable to delete this SOP.",
+                                  getUserErrorMessage(error, "Unable to delete this SOP."),
                                 );
                                 throw error;
                               }
@@ -1193,9 +1189,7 @@ function SopsPageContent() {
                     setMessage(ui("Draft saved. Review before approval."));
                   } catch (error) {
                     setImportError(
-                      error instanceof Error
-                        ? error.message
-                        : "Unable to import this document. Try again.",
+                      getUserErrorMessage(error, "Unable to import this document. Try again."),
                     );
                   } finally {
                     generating.current = false;

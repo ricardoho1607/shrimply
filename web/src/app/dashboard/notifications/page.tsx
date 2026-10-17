@@ -1,4 +1,6 @@
 "use client";
+import { confirmAppAction } from '@/lib/appDialogs';
+
 
 import { dedupeOrsonNotifications, getOrsonAlertCaption } from '../../../../../shared/orsonNotification';
 import { useMemo, useState, useTransition } from 'react';
@@ -121,7 +123,7 @@ export default function NotificationsPage() {
   };
 
   const clearAllNotifications = async () => {
-    if (!companyId || !window.confirm(t.notifications.clearAllMessage || 'Are you sure you want to clear all notifications?')) return;
+    if (!companyId || !(await confirmAppAction(t.notifications.clearAllMessage || 'Are you sure you want to clear all notifications?'))) return;
     try {
       const q = query(
         collection(db, 'notifications'),

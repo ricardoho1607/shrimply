@@ -1,4 +1,6 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
 
 import { FormEvent, useState } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -70,7 +72,7 @@ export default function DownloadRequestForm() {
     } catch (requestError) {
       console.error("Tester request failed:", requestError);
       setState("error");
-      setError(requestError instanceof Error ? requestError.message : copy.submitError);
+      setError(getUserErrorMessage(requestError, copy.submitError));
     }
   };
 

@@ -1,3 +1,5 @@
+import { getUserErrorMessage } from '../shared/userError';
+import { AppAlert as Alert } from '../components/alerts/appAlert';
 import { filterPondRecordsForUser } from '../shared/pondAssignments';
 import { reportCalculationOptions, buildPondReportSnapshot } from '../shared/reportSnapshots';
 import { calculatePondMetricsWithHarvest as calculateReportMetrics } from '../shared/pondCalculations';
@@ -7,7 +9,7 @@ import { useEnterpriseBlocks } from './hooks/useEnterpriseBlocks';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform, StatusBar } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -127,7 +129,7 @@ export default function ShrimpReportsScreen() {
     } catch (error) {
       console.error('Error generating report:', error);
       Alert.alert(t.shrimpReports?.error || 'Error', 
-        error instanceof Error ? error.message : (t.shrimpReports?.generateFailed || 'Failed to generate report. Please try again.'));
+        getUserErrorMessage(error, (t.shrimpReports?.generateFailed || 'Failed to generate report. Please try again.')));
     } finally {
       setLoading(false);
     }

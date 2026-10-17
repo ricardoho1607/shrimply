@@ -1,3 +1,4 @@
+import { getUserErrorMessage } from '../../shared/userError';
 import { useEffect, useRef, useState } from "react";
 import { Text, TouchableOpacity, StyleSheet } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
@@ -103,7 +104,7 @@ export default function OrsonAgentInput({
         agent.receive(result.operation);
     } catch (e) {
       if (!abort.current.signal.aborted)
-        setError(e instanceof Error ? e.message : "Document upload failed.");
+        setError(getUserErrorMessage(e, "Document upload failed."));
     } finally {
       await deleteObject(fileRef).catch(() => {});
       setUploading(false);
@@ -133,7 +134,7 @@ export default function OrsonAgentInput({
       }
     } catch (e) {
       setError(
-        e instanceof Error ? e.message : "Unable to open document picker.",
+        getUserErrorMessage(e, "Unable to open document picker."),
       );
     }
   };
@@ -183,7 +184,7 @@ export default function OrsonAgentInput({
         module.addListener("end", () => setListening(false)),
         module.addListener("error", (e) => {
           setListening(false);
-          setError(e.message || "Speech input failed.");
+          setError(getUserErrorMessage(e, "Speech input failed."));
         }),
       ];
       module.start({
@@ -203,7 +204,7 @@ export default function OrsonAgentInput({
       setListening(true);
       setError("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Voice input unavailable.");
+      setError(getUserErrorMessage(e, "Voice input unavailable."));
     }
   };
   // Keep camera and dictation available for future composer actions without showing them today.

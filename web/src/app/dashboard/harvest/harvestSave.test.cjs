@@ -4,6 +4,7 @@ const path = require('node:path');
 const { test, after } = require('node:test');
 const ts = require('typescript');
 require('../../../../../scripts/register-typescript.cjs');
+const { getUserErrorMessage } = require('./../../../lib/userError.ts');
 const calculations = require('../../../../../shared/harvestCalculations.ts');
 const finance = require('../../../../../shared/financeSync.ts');
 const { calculatePondMetricsWithHarvest } = require('../../../../../shared/pondCalculations.ts');
@@ -61,7 +62,7 @@ async function save({ harvestType = 'final', metadata = true, editing = false, d
     formData, harvestBatch: batch, formPonds: [pond, ...extraPonds.map(extra => ({ ...pond, ...extra }))], formCycle: metadata ? { id: cycle.cycleId, ...cycle } : undefined,
     editingRecord: previous, harvestRecords: previous ? [previous] : [], company: { timeZone: 'Asia/Jakarta' }, today: '2026-10-01',
     t: { harvestCycle: { saveFailed: 'save-failed' }, harvest: { samplingMbwRequired: 'MBW must be positive', samplingRequiredMessage: '{{pondName}}:{{date}}', sizeDifferenceMessage: '{{pondName}}' } },
-    window: { confirm: () => confirm }, alert: message => alerts.push(message), copy: value => value,
+    confirmAppAction: async () => confirm, getUserErrorMessage, showAppAlert: message => alerts.push(message), copy: value => value,
     console: { error: (...args) => errors.push(args.at(-1).message) },
     setIsSavingHarvest: value => { saving = value; },
     setModalOpen: value => { closed = !value; }, setEditingRecord: () => {}, setHarvestBatch: () => {}, setFormData: () => { cleared = true; },

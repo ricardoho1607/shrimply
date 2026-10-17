@@ -1,4 +1,6 @@
 'use client';
+import { getUserErrorMessage } from '@/lib/userError';
+
 
 import { onIdTokenChanged, signOut } from 'firebase/auth';
 import { ArrowLeft, Clock, Menu, RefreshCcw, Trash2, UserCheck, X } from 'lucide-react';
@@ -352,7 +354,7 @@ export default function AdminCommandCenter() {
       setAccount(data);
     } catch (error) {
       if (requestId !== accountRequestRef.current) return;
-      setAccountError(error instanceof Error ? error.message : 'Unable to load account details.');
+      setAccountError(getUserErrorMessage(error, 'Unable to load account details.'));
     } finally {
       if (requestId === accountRequestRef.current) setAccountLoading(false);
     }
@@ -540,7 +542,7 @@ export default function AdminCommandCenter() {
       setPasswordResetResults((current) => ({ ...current, [userId]: { message: `Password reset email sent to ${email}.`, success: true } }));
     } catch (error) {
       setPasswordResetResults((current) => ({ ...current, [userId]: {
-        message: error instanceof Error ? error.message : `Could not send a password reset email to ${email}.`,
+        message: getUserErrorMessage(error, `Could not send a password reset email to ${email}.`),
         success: false,
       } }));
     } finally {

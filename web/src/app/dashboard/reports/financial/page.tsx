@@ -1,4 +1,6 @@
 "use client";
+import { showAppAlert } from '@/lib/appDialogs';
+
 
 import { scopeExpenseRecords } from '../../../../../../shared/financeExpenseAllocation';
 import { getFinanceAllocationCopy } from '../../../../../../shared/financeAllocationCopy';
@@ -234,7 +236,7 @@ export default function FinancialReportsPage() {
 
   const handleExport = async () => {
     if (!canExportReports) return;
-    if (invalidMoneyCount || (['profit-loss', 'cogs'].includes(selectedReport) && pl.missingAmounts) || (selectedReport === 'cash-flow' && cash.invalidCount) || (selectedReport === 'transaction-history' && !Number.isFinite(openingBalance))) { alert('Some amounts or costs are invalid or missing. Reconcile the source entries before exporting.'); return; }
+    if (invalidMoneyCount || (['profit-loss', 'cogs'].includes(selectedReport) && pl.missingAmounts) || (selectedReport === 'cash-flow' && cash.invalidCount) || (selectedReport === 'transaction-history' && !Number.isFinite(openingBalance))) { showAppAlert('Some amounts or costs are invalid or missing. Reconcile the source entries before exporting.'); return; }
     setExportLoading(true);
     try {
       const brandAssets = await loadMobilePdfBrandAssets('portrait');

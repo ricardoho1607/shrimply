@@ -1,3 +1,4 @@
+import { getUserErrorMessage } from '../../shared/userError';
 import { useEffect, useState } from "react";
 import {
   View,
@@ -322,7 +323,7 @@ function Card({ op, agent, onDismiss }: { op: OrsonOperation; agent: AgentContro
       {op.receipts.map((r, i) => (
         <View key={i}>
           <Text style={[styles.text, r.status === "failed" && styles.error]}>
-            {r.status === "saved" ? "Saved" : "Not saved"} — {r.message}
+            {r.status === "saved" ? "Saved" : "Not saved"} — {getUserErrorMessage(r.message)}
           </Text>
           {r.links?.map((link, j) => (
             <Button
@@ -360,7 +361,7 @@ function Card({ op, agent, onDismiss }: { op: OrsonOperation; agent: AgentContro
                   )
                 }
               />}
-              {row.error && <Text style={styles.error}>{row.error}</Text>}
+              {row.error && <Text style={styles.error}>{getUserErrorMessage(row.error)}</Text>}
               <Text style={styles.text}>Date: {c.date || "Not set"}</Text>
               {c.type === "void_inventory_purchase" && (
                 <View style={{
@@ -682,7 +683,7 @@ export default function OrsonAgentCards({ agent, operationIds, showStatus = true
       )}
       {showStatus && !!agent.error && (
         <Text accessibilityRole="alert" style={styles.error}>
-          {agent.error}
+          {getUserErrorMessage(agent.error)}
         </Text>
       )}
     </View>

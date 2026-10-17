@@ -20,6 +20,7 @@ function loadWebAgentCards() {
   }).outputText;
   const mod = { exports: {} };
   const customRequire = (id) => {
+    if (id === "@/lib/userError" || id.endsWith("/userError")) return require("../shared/userError.ts");
     if (id === "react") return { useEffect: () => {}, useState: (init) => [typeof init === "function" ? init() : init, () => {}] };
     if (id.endsWith(".css")) return {};
     if (id === "@/contexts/LanguageContext") return { useLanguage: () => ({ currentLanguage: "en" }) };
@@ -44,6 +45,7 @@ function loadMobileAgentCards() {
   }).outputText;
   const mod = { exports: {} };
   const customRequire = (id) => {
+    if (id === "@/lib/userError" || id.endsWith("/userError")) return require("../shared/userError.ts");
     if (id === "react") return { useEffect: () => {}, useState: (init) => [typeof init === "function" ? init() : init, () => {}] };
     if (id === "react-native") return { View: "View", Text: "Text", TextInput: "TextInput", TouchableOpacity: "TouchableOpacity", StyleSheet: { create: (s) => s } };
     if (id === "expo-router") return { useRouter: () => ({ push: () => {} }) };
@@ -71,6 +73,7 @@ function createAgentOperations(transport, initialStorage = {}) {
   let recoveryVal = {};
   let operationsVal = [];
   const customRequire = (id) => {
+    if (id === "@/lib/userError" || id.endsWith("/userError")) return require("../shared/userError.ts");
     if (id === "react") {
       let stateIndex = 0;
       return {

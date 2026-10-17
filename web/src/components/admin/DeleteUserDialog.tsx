@@ -1,4 +1,6 @@
 'use client';
+import { getUserErrorMessage } from '@/lib/userError';
+
 
 import { Loader2, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -55,7 +57,7 @@ export function DeleteUserDialog({ account, open, onClose, onConfirm }: DeleteUs
         companyId: account.farms[0]?.id,
       });
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'The user could not be deleted.');
+      setError(getUserErrorMessage(submitError, 'The user could not be deleted.'));
       setSubmitting(false);
     }
   };

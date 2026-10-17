@@ -1,4 +1,6 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import AccessibleDialog from "./AccessibleDialog";
@@ -97,7 +99,7 @@ export default function SopAdoptionDialog({
       );
     } catch (e) {
       setError(
-        e instanceof Error ? e.message : ui("Unable to review adoption."),
+        getUserErrorMessage(e, ui("Unable to review adoption.")),
       );
     } finally {
       setWorking(false);
@@ -121,7 +123,7 @@ export default function SopAdoptionDialog({
     } catch (e) {
       setPreview(null);
       setError(
-        e instanceof Error ? e.message : ui("Unable to activate adoption."),
+        getUserErrorMessage(e, ui("Unable to activate adoption.")),
       );
     } finally {
       setWorking(false);

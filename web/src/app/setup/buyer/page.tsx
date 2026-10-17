@@ -1,4 +1,8 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
+import { showAppAlert } from '@/lib/appDialogs';
+
 
 import React, { useState } from 'react';
 import { Phone, ArrowLeft, LogOut } from 'lucide-react';
@@ -73,7 +77,7 @@ export default function BuyerSetupPage() {
       
       router.push(ROUTES.dashboard);
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to complete setup');
+      showAppAlert(getUserErrorMessage(error, 'Failed to complete setup'));
     } finally {
       setLoading(false);
     }

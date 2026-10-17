@@ -1,3 +1,4 @@
+import AppAlertHost from '../components/alerts/AppAlertHost';
 import { useSopPush } from './hooks/useSopPush';
 // app/_layout.tsx
 import { Stack, useGlobalSearchParams, useRootNavigationState, useRouter, useSegments } from 'expo-router';
@@ -255,6 +256,7 @@ function RootLayout() {
             <FirebaseSyncProvider>
               <SidebarProvider>
                 <RootLayoutNav />
+                <AppAlertHost />
               </SidebarProvider>
             </FirebaseSyncProvider>
           </AuthProvider>

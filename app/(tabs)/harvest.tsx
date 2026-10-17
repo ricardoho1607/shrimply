@@ -1,8 +1,10 @@
+import { getUserErrorMessage } from '../../shared/userError';
+import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { filterPondRecordsForUser } from '../../shared/pondAssignments';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useRef, useState } from "react";
-import { FlatList, Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, Platform, KeyboardAvoidingView } from "react-native";
+import { FlatList, Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View, Platform, KeyboardAvoidingView } from 'react-native';
 import { usePondStore, HarvestRecord, isFarmCycleOpen, isPondCycleActive } from "../store/pondStore";
 import { useLanguage } from '../../context/LanguageContext';
 import { useCurrency } from '../../context/CurrencyContext';
@@ -388,7 +390,7 @@ export default function HarvestScreen() {
       setEditingHarvest(null);
       setIsModalVisible(false);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to save harvest record.';
+      const message = getUserErrorMessage(error, 'Failed to save harvest record.');
       Alert.alert(t.messages.error, message);
     } finally {
       submitLockRef.current = false;

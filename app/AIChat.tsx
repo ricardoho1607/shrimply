@@ -1,3 +1,4 @@
+import { AppAlert as Alert } from '../components/alerts/appAlert';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -8,18 +9,7 @@ import { agentActivityLabel } from '../shared/orsonAgentPresentation';
 import OrsonAgentCards from './components/OrsonAgentCards';
 import OrsonAgentInput from './components/OrsonAgentInput';
 import React, { useCallback, useState, useRef, useEffect, useMemo } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  StatusBar,
-  ScrollView
-} from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, StatusBar, ScrollView } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';

@@ -1,11 +1,9 @@
+import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { filterPondRecordsForUser } from '../../shared/pondAssignments';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useRef, useState } from "react";
-import { 
-  Alert, FlatList, Modal, ScrollView, StatusBar, StyleSheet, Platform,
-  Text, TextInput, TouchableOpacity, View 
-} from "react-native";
+import { FlatList, Modal, ScrollView, StatusBar, StyleSheet, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { usePondStore, isPondCycleActive, type FeedingResponse } from "../store/pondStore";

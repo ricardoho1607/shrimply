@@ -35,6 +35,9 @@ function screenHarness(platform) {
     if (cache.has(file)) return cache.get(file).exports;
     const module = { exports: {} }; cache.set(file, module);
     const requireLocal = name => {
+      if (name === '@/lib/appDialogs') return { showAppAlert() {} };
+      if (name === '@/lib/userError') return require('../shared/userError.ts');
+      if (name.endsWith('/alerts/appAlert')) return { AppAlert: { alert() {} } };
       if (name === 'react') return react;
       if (name === 'react-native') return { StyleSheet: { create: x => x }, View: 'View', Text: 'Text' };
       if (name === 'react-native-safe-area-context') return { useSafeAreaInsets: () => ({ top: 0 }) };

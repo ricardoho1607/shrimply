@@ -1,15 +1,11 @@
+import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { ADAPTIVE_SOPS_ENABLED } from "../services/sopFeature";
 import {sopCopy} from '../../shared/sop/copy';
 // app/components/SidebarComponents.tsx
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator, Alert, Animated, Image, Modal,
-  Platform,
-  SafeAreaView,
-  ScrollView, StyleSheet, Text, TouchableOpacity, View
-} from 'react-native';
+import { ActivityIndicator, Animated, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';

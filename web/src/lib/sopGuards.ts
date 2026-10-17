@@ -1,3 +1,5 @@
+
+import { confirmAppAction } from '@/lib/appDialogs';
 import { ADAPTIVE_SOPS_ENABLED } from "./sopFeature";
 import { doc, getDoc } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -19,9 +21,7 @@ export async function previewSopPondChange(
   if (data.conflicts.length) throw new Error(data.conflicts.join("\n"));
   return (
     !data.affected.length ||
-    window.confirm(
-      `This pond will inherit these SOPs:\n${data.affected.map((a) => a.title).join("\n")}\nConfirm this scope before saving.`,
-    )
+    (await confirmAppAction(`This pond will inherit these SOPs:\n${data.affected.map((a) => a.title).join("\n")}\nConfirm this scope before saving.`))
   );
 }
 export async function assertSopStageGate(

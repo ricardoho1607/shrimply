@@ -1,18 +1,7 @@
+import { AppAlert as Alert } from '../components/alerts/appAlert';
 import { filterPondRecordsForUser } from '../shared/pondAssignments';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  FlatList,
-  Modal,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { FlatList, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';

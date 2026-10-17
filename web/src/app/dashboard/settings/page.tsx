@@ -1,4 +1,8 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
+import { showAppAlert, confirmAppAction } from '@/lib/appDialogs';
+
 
 import { useSaveOperation } from '../../../../../shared/useSaveOperation';
 import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
@@ -200,7 +204,7 @@ export default function SettingsPage() {
       setJoinRequests((requests) => requests.filter((request) => request.id !== requestId));
     } catch (error: unknown) {
       console.error('Error processing join request:', error);
-      alert(error instanceof Error ? error.message : 'Failed to process join request.');
+      showAppAlert(getUserErrorMessage(error, 'Failed to process join request.'));
     } finally {
       setProcessingRequestId(null);
     }
@@ -209,7 +213,7 @@ export default function SettingsPage() {
   const handleProfilePhoto = async (file?: File) => {
     if (!user || !file) return;
     if (!file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) {
-      alert(copy('Choose an image smaller than 5 MB.'));
+      showAppAlert(copy('Choose an image smaller than 5 MB.'));
       return;
     }
     if (!save.acquire()) return;
@@ -222,7 +226,7 @@ export default function SettingsPage() {
       await updateRecordOnline(db, doc(db, 'users', user.uid), removeUndefinedFields({ profileImage }));
     } catch (error) {
       console.error('Error uploading profile photo:', error);
-      alert(copy('Failed to upload profile photo.'));
+      showAppAlert(copy('Failed to upload profile photo.'));
     } finally {
       save.release();
       setUploadingPhoto(false);
@@ -230,61 +234,61 @@ export default function SettingsPage() {
   };
 
   const handleRemoveMember = async (memberId: string, memberName?: string) => {
-    if (!window.confirm(`Remove ${memberName || 'this member'} from the company?`)) return;
+    if (!(await confirmAppAction(`Remove ${memberName || 'this member'} from the company?`))) return;
     setRemovingMemberId(memberId);
     try {
       await removeMember(memberId);
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to remove team member.');
+      showAppAlert(getUserErrorMessage(error, 'Failed to remove team member.'));
     } finally {
       setRemovingMemberId(null);
     }
   };
 
   const handleRequestCompanyDeletion = async () => {
-    if (!window.confirm(copy('Deleting this company requires approval from all owners and co-owners. Once all approve, the company and all its data will be permanently deleted.\n\nDo you want to initiate a company deletion request?'))) return;
+    if (!(await confirmAppAction(copy('Deleting this company requires approval from all owners and co-owners. Once all approve, the company and all its data will be permanently deleted.\n\nDo you want to initiate a company deletion request?')))) return;
     setDeletionLoading(true);
     try {
       const res = await requestCompanyDeletion();
       if (res.status === 'deleted') {
-        alert(copy('Company has been permanently deleted.'));
+        showAppAlert(copy('Company has been permanently deleted.'));
         window.location.href = '/roleselection';
       } else {
-        alert(copy('Company deletion requested. All owners and co-owners must approve before the company is deleted.'));
+        showAppAlert(copy('Company deletion requested. All owners and co-owners must approve before the company is deleted.'));
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to request company deletion.');
+      showAppAlert(getUserErrorMessage(error, 'Failed to request company deletion.'));
     } finally {
       setDeletionLoading(false);
     }
   };
 
   const handleApproveCompanyDeletion = async () => {
-    if (!window.confirm(copy('Are you sure you want to approve deleting this company? This action is irreversible once all owners and co-owners approve.'))) return;
+    if (!(await confirmAppAction(copy('Are you sure you want to approve deleting this company? This action is irreversible once all owners and co-owners approve.')))) return;
     setDeletionLoading(true);
     try {
       const res = await approveCompanyDeletion();
       if (res.status === 'deleted') {
-        alert(copy('All owners approved and the company has been permanently deleted.'));
+        showAppAlert(copy('All owners approved and the company has been permanently deleted.'));
         window.location.href = '/roleselection';
       } else {
-        alert(`Approval recorded (${res.approvedCount || 0}/${res.totalRequired || 0} approved).`);
+        showAppAlert(`Approval recorded (${res.approvedCount || 0}/${res.totalRequired || 0} approved).`);
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to approve company deletion.');
+      showAppAlert(getUserErrorMessage(error, 'Failed to approve company deletion.'));
     } finally {
       setDeletionLoading(false);
     }
   };
 
   const handleCancelCompanyDeletion = async () => {
-    if (!window.confirm(copy('Are you sure you want to cancel the pending company deletion request?'))) return;
+    if (!(await confirmAppAction(copy('Are you sure you want to cancel the pending company deletion request?')))) return;
     setDeletionLoading(true);
     try {
       await cancelCompanyDeletion();
-      alert(copy('Company deletion request has been cancelled.'));
+      showAppAlert(copy('Company deletion request has been cancelled.'));
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to cancel deletion request.');
+      showAppAlert(getUserErrorMessage(error, 'Failed to cancel deletion request.'));
     } finally {
       setDeletionLoading(false);
     }
@@ -356,7 +360,7 @@ export default function SettingsPage() {
       setTimeout(() => setSuccess(false), 3000);
     } catch (error) {
       console.error('Error saving settings:', error);
-      alert(`${copy('Failed to save settings:')} ${error instanceof Error ? error.message : copy('Unknown error')}`);
+      showAppAlert(`${copy('Failed to save settings:')} ${getUserErrorMessage(error, copy('Unknown error'))}`);
     } finally {
       save.release();
       setSaving(false);

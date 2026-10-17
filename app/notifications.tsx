@@ -1,11 +1,9 @@
+import { AppAlert as Alert } from '../components/alerts/appAlert';
 import { dedupeOrsonNotifications, getOrsonAlertCaption } from '../shared/orsonNotification';
 // app/notifications.tsx - Updated with Clear All Button
 // app/notifications.tsx - Updated with Clear All Button
 import { useCallback, useState, useEffect, useMemo, useRef } from 'react';
-import {
-  View, Text, TouchableOpacity, StyleSheet, StatusBar,
-  ActivityIndicator, FlatList, RefreshControl, Alert
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar, ActivityIndicator, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';

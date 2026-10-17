@@ -1,7 +1,8 @@
+import { AppAlert as Alert } from '../components/alerts/appAlert';
 // app/userprofile.tsx - User Profile with Firebase Storage Upload
 // app/userprofile.tsx - User Profile with Firebase Storage Upload
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Alert, ActivityIndicator, StatusBar, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, ActivityIndicator, StatusBar, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';

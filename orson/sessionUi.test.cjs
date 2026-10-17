@@ -51,6 +51,7 @@ const setup = (kind = 'web') => {
   } }).outputText;
   const mockedRequire = name => {
     if (name === 'react') return react;
+    if (name.endsWith('/alerts/appAlert')) return { AppAlert: { alert: (_, __, actions) => actions?.find(action => action.text === 'Clear')?.onPress() } };
     if (name === 'react-native') return new Proxy({
       StyleSheet: { create: value => value }, Platform: { OS: 'ios' },
       Alert: { alert: (_, __, actions) => actions.find(action => action.text === 'Clear')?.onPress() },
@@ -73,6 +74,7 @@ const setup = (kind = 'web') => {
     if (name === '@/contexts/AuthContext') return { useAuth: () => authState };
     if (name === '@/contexts/LanguageContext') return { useLanguage: () => ({ currentLanguage: 'en' }) };
     if (name === '@/hooks/useDashboardCopy') return { useDashboardCopy: () => value => value };
+    if (name === '@/lib/appDialogs') return { confirmAppAction: async () => true, showAppAlert() {} };
     if (name === '@/lib/firebase') return { auth, db: {} };
     if (name === 'firebase/auth') return { onAuthStateChanged: (_, callback) => { callback(auth.currentUser); return () => {}; } };
     if (name === 'firebase/firestore') return {
@@ -205,7 +207,7 @@ test('farm cards stay beside their reply and a reset removes saved cards from th
   const nodes = ui.elements();
   assert.ok(nodes.indexOf(cards()[0]) < nodes.findIndex(node => node.type === 'div' && node.props.className?.includes('is-user') && ui.text(node).includes('current stock')));
   const reset = nodes.find(node => node.type === 'button' && ui.text(node).includes('Reset'));
-  reset.props.onClick();
+  await reset.props.onClick();
   ui.render();
   assert.deepEqual(cards()[0].props.operationIds, []);
 });

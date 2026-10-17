@@ -1,4 +1,6 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
 
 import React, { useEffect, useState } from 'react';
 import { LogIn, ArrowLeft, Lock, Mail, ShieldCheck } from 'lucide-react';
@@ -19,7 +21,7 @@ const getLoginErrorMessage = (error: unknown, fallback: string) => {
     return 'Unable to reach the secure sign-in service. Check your connection and try again.';
   }
 
-  return error instanceof Error ? error.message : fallback;
+  return getUserErrorMessage(error, fallback);
 };
 
 export default function AuthPage() {
@@ -112,7 +114,7 @@ export default function AuthPage() {
       await resetPassword(email.trim());
       setSuccess('Password reset email sent. Check your inbox to continue.');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Could not send password reset email.');
+      setError(getUserErrorMessage(err, 'Could not send password reset email.'));
     } finally {
       setResetLoading(false);
     }
@@ -125,7 +127,7 @@ export default function AuthPage() {
       await signInWithGoogle(inviteToken);
       setLoginRequested(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Google sign-in failed.');
+      setError(getUserErrorMessage(err, 'Google sign-in failed.'));
     } finally {
       setGoogleLoading(false);
     }

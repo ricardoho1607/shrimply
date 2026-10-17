@@ -1,7 +1,7 @@
+import { getUserErrorMessage } from '../../shared/userError';
+import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { useCallback } from 'react';
-import {
-  Alert
-} from 'react-native';
+
 import { isBaselineSampling, type Pond, type Sampling } from "../../app/store/pondStore";
 import { getFarmDateKey } from "../../shared/farmDate";
 import type { usePondManagementState } from './usePondManagementState';
@@ -200,7 +200,7 @@ export function usePondManagementBaselineActions(context: Context) {
       Alert.alert(t.messages.success, t.midcycleOnboarding.baselineUpdated);
 
     } catch (error) {
-      Alert.alert(t.messages.error, error instanceof Error ? error.message : t.messages.networkError);
+      Alert.alert(t.messages.error, getUserErrorMessage(error, t.messages.networkError));
     } finally {
       submitLockRef.current = false;
       setIsSubmitting(false);

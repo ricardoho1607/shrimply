@@ -1,4 +1,8 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
+import { showAppAlert } from '@/lib/appDialogs';
+
 
 import React from 'react';
 import { ArrowLeft } from 'lucide-react';
@@ -53,7 +57,7 @@ export default function SetupChoicePage() {
       router.replace(ROUTES.roleSelection);
     } catch (error: unknown) {
       console.error('Failed to change role:', error);
-      alert(error instanceof Error ? error.message : 'Failed to change role');
+      showAppAlert(getUserErrorMessage(error, 'Failed to change role'));
       setChangingRole(false);
     }
   };

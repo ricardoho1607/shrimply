@@ -1,4 +1,8 @@
 'use client';
+import { getUserErrorMessage } from '@/lib/userError';
+
+import { confirmAppAction } from '@/lib/appDialogs';
+
 
 import {
   CreditCard,
@@ -91,13 +95,13 @@ export function AccountDetail({
 
   const saveFarmMode = async () => {
     if (!linkedFarm || farmMode === linkedFarm.businessSize) return;
-    const confirmed = window.confirm(`Change ${linkedFarm.name} from ${linkedFarm.businessSize} to ${farmMode}?`);
+    const confirmed = (await confirmAppAction(`Change ${linkedFarm.name} from ${linkedFarm.businessSize} to ${farmMode}?`));
     if (!confirmed) return;
     setFarmModeError(null);
     try {
       await onUpdateFarmMode(linkedFarm.id, farmMode);
     } catch (updateError) {
-      setFarmModeError(updateError instanceof Error ? updateError.message : 'Farm mode could not be changed.');
+      setFarmModeError(getUserErrorMessage(updateError, 'Farm mode could not be changed.'));
     }
   };
 
@@ -114,30 +118,30 @@ export function AccountDetail({
 
   const savePermissions = async () => {
     if (!account || account.isCompanyOwner || !permissionsChanged) return;
-    if (!window.confirm(`Save permission changes for ${account.name}?`)) return;
+    if (!(await confirmAppAction(`Save permission changes for ${account.name}?`))) return;
     setPermissionError(null);
     try {
       await onUpdatePermissions(permissionOverrides);
     } catch (updateError) {
-      setPermissionError(updateError instanceof Error ? updateError.message : 'Permissions could not be changed.');
+      setPermissionError(getUserErrorMessage(updateError, 'Permissions could not be changed.'));
     }
   };
 
   const saveRole = async () => {
     if (!account || account.isCompanyOwner || !linkedFarm || roleDraft === account.role) return;
-    if (!window.confirm(`Change ${account.name}'s role from ${account.role} to ${FARM_ROLE_LABELS[roleDraft]}? Existing custom permissions will be preserved.`)) return;
+    if (!(await confirmAppAction(`Change ${account.name}'s role from ${account.role} to ${FARM_ROLE_LABELS[roleDraft]}? Existing custom permissions will be preserved.`))) return;
     setRoleError(null);
     try {
       await onUpdateRole(roleDraft);
     } catch (updateError) {
-      setRoleError(updateError instanceof Error ? updateError.message : 'Role could not be changed.');
+      setRoleError(getUserErrorMessage(updateError, 'Role could not be changed.'));
     }
   };
 
   const sendPasswordReset = async () => {
     const email = account?.email.trim();
     if (!account || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || passwordResetPending) return;
-    if (!window.confirm(`Send a password reset email to ${email}?`)) return;
+    if (!(await confirmAppAction(`Send a password reset email to ${email}?`))) return;
     await onSendPasswordReset(account.id, email);
   };
 

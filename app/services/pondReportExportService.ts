@@ -1,8 +1,9 @@
+import { AppAlert as Alert } from '../../components/alerts/appAlert';
 // app/services/pondReportExportService.ts
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Alert, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import {
   formatPdfDate,
   formatPdfNumber,

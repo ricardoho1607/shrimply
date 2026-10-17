@@ -1,18 +1,7 @@
+import { AppAlert as Alert } from '../components/alerts/appAlert';
 // app/companysearch.tsx - Clean & Optimized with Logo Support
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  Alert,
-  ActivityIndicator,
-  StatusBar,
-  Image,
-  Platform,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator, StatusBar, Image, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   collection, 

@@ -1,4 +1,8 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
+import { showAppAlert, confirmAppAction } from '@/lib/appDialogs';
+
 
 import { useSaveOperation } from '../../../../../../shared/useSaveOperation';
 import { createRecordOnce } from '@/lib/saveData';
@@ -193,12 +197,12 @@ function AssetInventoryContent() {
   const handleOpenModal = (type: typeof modalType, asset?: Asset) => {
     if (!save.reset()) return;
     if (!canManageAssets && ['add', 'transfer', 'return'].includes(type)) {
-      alert(copy(assetManagementPermissionMessage));
+      showAppAlert(copy(assetManagementPermissionMessage));
       return;
     }
 
     if (!canLogMaintenance && type === 'maintenance') {
-      alert(copy(assetMaintenancePermissionMessage));
+      showAppAlert(copy(assetMaintenancePermissionMessage));
       return;
     }
 
@@ -252,7 +256,7 @@ function AssetInventoryContent() {
     const assetId = rawValue.trim().replace(/^ASSET:/i, '');
     const asset = assets.find((item) => item.id === assetId);
     if (!asset) {
-      alert(copy('This QR code does not match an asset in your company.'));
+      showAppAlert(copy('This QR code does not match an asset in your company.'));
       return;
     }
     handleOpenModal('history', asset);
@@ -272,7 +276,7 @@ function AssetInventoryContent() {
       if (!results[0]?.rawValue) throw new Error('No QR code was found in that image.');
       openScannedAsset(results[0].rawValue);
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Could not scan this QR image.');
+      showAppAlert(getUserErrorMessage(error, 'Could not scan this QR image.'));
     }
   };
 
@@ -281,11 +285,11 @@ function AssetInventoryContent() {
     if (save.busy) return;
     if (!companyId) return;
     if (!canManageAssets && ['add', 'transfer', 'return'].includes(modalType)) {
-      alert(copy(assetManagementPermissionMessage));
+      showAppAlert(copy(assetManagementPermissionMessage));
       return;
     }
     if (!canLogMaintenance && modalType === 'maintenance') {
-      alert(copy(assetMaintenancePermissionMessage));
+      showAppAlert(copy(assetMaintenancePermissionMessage));
       return;
     }
 
@@ -393,7 +397,7 @@ function AssetInventoryContent() {
       setModalOpen(false);
     } catch (err) {
       console.error('Asset action failed:', err);
-      alert(copy('Operation failed. Please try again.'));
+      showAppAlert(copy('Operation failed. Please try again.'));
     } finally {
       save.release();
     }
@@ -401,10 +405,10 @@ function AssetInventoryContent() {
 
   const handleDeleteAsset = async (id: string) => {
     if (!canManageAssets) {
-      alert(copy(assetDeletePermissionMessage));
+      showAppAlert(copy(assetDeletePermissionMessage));
       return;
     }
-    if (!window.confirm(copy('Are you sure you want to delete this asset?'))) return;
+    if (!(await confirmAppAction(copy('Are you sure you want to delete this asset?')))) return;
     try {
       await deleteDoc(doc(db, 'assets', id));
     } catch (err) {

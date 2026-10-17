@@ -1,4 +1,5 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
 import { useEffect, useState } from "react";
 import type { AgentController } from "../../../../orson/useAgentOperations";
 import type {
@@ -264,7 +265,7 @@ function OperationCard({
           role="status"
         >
           <strong>{receipt.status === "saved" ? "Saved" : "Not saved"}</strong>{" "}
-          — {receipt.message}
+          — {getUserErrorMessage(receipt.message)}
           {receipt.links?.map((link, j) => (
             <a key={j} href={link.web}>
               {link.label}
@@ -295,7 +296,7 @@ function OperationCard({
                 />{" "}
                 Include this entry
               </label>}
-              {row.error && <p className={styles.error}>{row.error}</p>}
+              {row.error && <p className={styles.error}>{getUserErrorMessage(row.error)}</p>}
               <p>Date: {c.date || "Not set"}</p>
               {c.type === "void_inventory_purchase" && (
                 <div style={{
@@ -650,7 +651,7 @@ export default function AgentCards({ agent, operationIds, showStatus = true }: {
       )}
       {showStatus && agent.error && (
         <p role="alert" className={styles.error}>
-          {agent.error}
+          {getUserErrorMessage(agent.error)}
         </p>
       )}
     </div>

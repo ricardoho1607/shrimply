@@ -1,18 +1,8 @@
+import { AppAlert as Alert } from '../components/alerts/appAlert';
 // app/roleselection.tsx - Updated with translations
 // app/roleselection.tsx - Updated with translations
 import { useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-  Image,
-  Platform,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Image, Platform } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '../context/AuthContext';
 import { useRouter } from 'expo-router';

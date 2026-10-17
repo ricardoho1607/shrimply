@@ -1,6 +1,7 @@
+import { AppAlert as Alert } from '../components/alerts/appAlert';
 // app/settings.tsx - Optimized with consistent Android styles
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Switch, ActivityIndicator, StatusBar, Platform, AppState } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, ActivityIndicator, StatusBar, Platform, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';

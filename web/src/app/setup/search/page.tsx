@@ -1,4 +1,6 @@
 "use client";
+import { showAppAlert } from '@/lib/appDialogs';
+
 
 import React, { useRef, useState } from 'react';
 import { Search, Info, ArrowLeft } from 'lucide-react';
@@ -57,7 +59,7 @@ export default function CompanySearchPage() {
   const handleJoinRequest = async (company: { id: string; companyName: string }) => {
     if (!user) return;
     if (!['co-owner', 'manager', 'technician', 'admin', 'mechanic'].includes(user.role || '')) {
-      alert('Only staff roles can request to join an existing farm. Buyers and owners should create their own company profile.');
+      showAppAlert('Only staff roles can request to join an existing farm. Buyers and owners should create their own company profile.');
       return;
     }
 
@@ -68,9 +70,9 @@ export default function CompanySearchPage() {
         requestedRole: user.role as StaffRole,
       }), 12000, 'Sending your request is taking too long. Please try again.');
       setSentRequestCompanyId(company.id);
-      alert(`Request sent to ${company.companyName}. Stay on this setup screen until the company owner approves you.`);
+      showAppAlert(`Request sent to ${company.companyName}. Stay on this setup screen until the company owner approves you.`);
     } catch (error: unknown) {
-      alert(getErrorMessage(error, 'Failed to send request'));
+      showAppAlert(getErrorMessage(error, 'Failed to send request'));
     } finally {
       setRequesting(null);
     }

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
 require('../../../scripts/register-typescript.cjs');
+const { getUserErrorMessage } = require('./userError.ts');
 const { createSaveOperation } = require('../../../shared/saveOperation.ts');
 const finance = require('../../../shared/financeSync.ts');
 const { requireAvailableStock } = require('../../../shared/financeIntegrity.ts');
@@ -71,7 +72,7 @@ function harness({ mode = 'stockIn', lostAck = false, fail = false, permissions 
     modalType: mode, selectedItem, selectedAsset, itemType: 'feed', formData, existingItems: [], activePonds: [], cycles: [], ponds: [], activeCycles: [], allocationMethod: null, allocationDecimals: 2, editingTransaction: null,
     canEditInventory: permissions, canManageAssets: permissions, canLogMaintenance: permissions, canManageFinance: permissions,
     assetManagementPermissionMessage: 'permission', assetMaintenancePermissionMessage: 'permission', isMaintenanceOnly: false, isOpenFarmCycle: () => true,
-    uploadPhotos: async () => [], copy: value => value, alert: value => alerts.push(value), console: { error() {} },
+    uploadPhotos: async () => [], copy: value => value, getUserErrorMessage, showAppAlert: value => alerts.push(value), console: { error() {} },
     setModalOpen: value => { closed = !value; }, setIsModalOpen: value => { closed = !value; }, resetForm: () => { cleared = true; }, setIsSubmitting() {},
     handleOpenModal() {}, normalizeItemText: value => value.toLowerCase(), formType: 'expense', isCompanyWideExpense: true,
     t: { financeCycle: { saveFailed: 'failed', selectCycleMessage: 'select' } },

@@ -1,4 +1,8 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
+import { showAppAlert } from '@/lib/appDialogs';
+
 import { useSaveOperation } from '../../../../../../shared/useSaveOperation';
 
 import { useMemo, useState } from 'react';
@@ -33,7 +37,7 @@ const positiveNumber = (value: string) => {
   const parsed = Number(value.replace(',', '.'));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };
-const message = (error: unknown) => error instanceof Error ? error.message : 'Operation failed';
+const message = (error: unknown) => getUserErrorMessage(error, 'Operation failed');
 
 export default function TreatmentMixesPage() {
   const copy = useDashboardCopy();
@@ -96,8 +100,8 @@ export default function TreatmentMixesPage() {
       const quantity = positiveNumber(quantities[item.id] || '');
       return quantity ? [{ additiveId: item.id, additiveName: item.itemName, quantity, unit: item.unit || 'kg' }] : [];
     });
-    if (!name.trim() || !finalYield || !components.length) return alert(copy('Enter a name, final volume, and at least one ingredient.'));
-    if (inventory.some((item) => item.id !== save.id(`mix:${companyId}`) && item.itemName.trim().toLowerCase() === name.trim().toLowerCase())) return alert(copy('That inventory name already exists.'));
+    if (!name.trim() || !finalYield || !components.length) return showAppAlert(copy('Enter a name, final volume, and at least one ingredient.'));
+    if (inventory.some((item) => item.id !== save.id(`mix:${companyId}`) && item.itemName.trim().toLowerCase() === name.trim().toLowerCase())) return showAppAlert(copy('That inventory name already exists.'));
     if (!save.acquire()) return;
     setSaving(true);
     try {
@@ -106,7 +110,7 @@ export default function TreatmentMixesPage() {
       save.release();
       reset();
     } catch (error) {
-      alert(message(error));
+      showAppAlert(message(error));
       setSaving(false);
     }
     finally { save.release(); setSaving(false); }
@@ -134,16 +138,16 @@ export default function TreatmentMixesPage() {
       save.release();
       reset();
     } catch (error) {
-      alert(message(error));
+      showAppAlert(message(error));
       setSaving(false);
     }
     finally { save.release(); setSaving(false); }
   };
 
   const recordUse = async () => {
-    if (!companyId || !useMix || !selectedPond) return alert(copy('Select a pond.'));
+    if (!companyId || !useMix || !selectedPond) return showAppAlert(copy('Select a pond.'));
     const parsedPpm = positiveNumber(ppm);
-    if (!parsedPpm) return alert(copy('PPM must be greater than zero.'));
+    if (!parsedPpm) return showAppAlert(copy('PPM must be greater than zero.'));
     if (!save.acquire()) return;
     setSaving(true);
     try {
@@ -159,7 +163,7 @@ export default function TreatmentMixesPage() {
       save.release();
       reset();
     } catch (error) {
-      alert(message(error));
+      showAppAlert(message(error));
       setSaving(false);
     }
     finally { save.release(); setSaving(false); }

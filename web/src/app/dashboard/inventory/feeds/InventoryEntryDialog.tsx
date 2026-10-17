@@ -1,4 +1,5 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
 import {
   Loader2,
   Trash2,
@@ -129,7 +130,7 @@ export function InventoryEntryDialog({ isModalOpen, closeInventoryModal, modalTy
                       </p>
                       {pendingVoidOperation.rows[0].error && <p role="alert">{pendingVoidOperation.rows[0].error}</p>}
                       {pendingVoidOperation.receipts.map((receipt, index) => (
-                        <p key={index} className={styles.historyNote}>{copy(receipt.status)}: {receipt.message}</p>
+                        <p key={index} className={styles.historyNote}>{copy(receipt.status)}: {getUserErrorMessage(receipt.message)}</p>
                       ))}
                       <button type="button" onClick={() => void (canRetryVoid ? retryVoidStockIn() : recoverVoidStockIn())}
                         disabled={savePending || (agent.busy || voidActionBusy || (canRetryVoid && (!canEditInventory || !canUseOrson)))}>

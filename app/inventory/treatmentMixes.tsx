@@ -1,18 +1,10 @@
+import { getUserErrorMessage } from '../../shared/userError';
+import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { useSaveOperation } from '../../shared/useSaveOperation';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency } from '../../context/CurrencyContext';
@@ -32,7 +24,7 @@ const parsePositiveNumber = (value: string) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };
 
-const errorMessage = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
+const errorMessage = (error: unknown, fallback: string) => getUserErrorMessage(error, fallback);
 const interpolate = (template: string, values: Record<string, string | number>) =>
   Object.entries(values).reduce((result, [key, value]) => result.replace(`{{${key}}}`, String(value)), template);
 

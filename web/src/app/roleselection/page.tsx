@@ -1,4 +1,8 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
+import { showAppAlert } from '@/lib/appDialogs';
+
 
 import { useState } from 'react';
 import { HelpCircle, LogOut } from 'lucide-react';
@@ -83,7 +87,7 @@ export default function RoleSelectionPage() {
       router.push(getRequiredSetupRoute(role.id));
     } catch (error: unknown) {
       console.error('Role selection failed:', error);
-      alert(error instanceof Error ? error.message : 'Failed to set up role');
+      showAppAlert(getUserErrorMessage(error, 'Failed to set up role'));
       setSelectedRole(null);
       setLoading(false);
     }

@@ -1,8 +1,7 @@
+import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { assertSopStageGate } from "../../app/services/sopGuards";
 import { useCallback } from 'react';
-import {
-  Alert
-} from 'react-native';
+
 import { getPhysicalPondKey, isPondCycleActive, type FarmCycle, type PhysicalPond } from "../../app/store/pondStore";
 import {
   type FarmBlock

@@ -1,4 +1,8 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
+import { confirmAppAction } from '@/lib/appDialogs';
+
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
@@ -57,7 +61,7 @@ export default function SitesMcpSettingsPage() {
         const payload = await response.json() as ApiResponse;
         if (active) setLinked(payload.data?.linked === true);
       } catch (cause) {
-        if (active) setError(cause instanceof Error ? cause.message : 'Could not load the current link status.');
+        if (active) setError(getUserErrorMessage(cause, 'Could not load the current link status.'));
       } finally {
         if (active) setChecking(false);
       }
@@ -89,14 +93,14 @@ export default function SitesMcpSettingsPage() {
       setLinked(true);
       setNotice('Shrimply Admin is linked to this Shrimply account.');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not link this account.');
+      setError(getUserErrorMessage(cause, 'Could not link this account.'));
     } finally {
       setBusy(false);
     }
   };
 
   const handleUnlink = async () => {
-    if (!window.confirm('Unlink Shrimply Admin from this Shrimply account? Its farm data tools will stop working until you link again.')) return;
+    if (!(await confirmAppAction('Unlink Shrimply Admin from this Shrimply account? Its farm data tools will stop working until you link again.'))) return;
     setBusy(true);
     setNotice('');
     setError('');
@@ -112,7 +116,7 @@ export default function SitesMcpSettingsPage() {
       setLinked(false);
       setNotice('Shrimply Admin is unlinked.');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not unlink this account.');
+      setError(getUserErrorMessage(cause, 'Could not unlink this account.'));
     } finally {
       setBusy(false);
     }

@@ -1,4 +1,8 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
+import { showAppAlert } from '@/lib/appDialogs';
+
 
 import { reconcileDailyFeedStockAdjustment } from '../../../../../shared/dailyFeedTransaction';
 import { useSaveOperation } from '../../../../../shared/useSaveOperation';
@@ -304,7 +308,7 @@ function FeedRecordsContent() {
     if (!canEditFeed) return;
     if (!accessiblePonds.some((pond) => pond.id === formData.pondId)) return;
     if (!formData.feedingResponse) {
-      alert(copy('Choose a feeding response before saving.'));
+      showAppAlert(copy('Choose a feeding response before saving.'));
       return;
     }
     const allocationInputs = formData.feedAllocations.map((allocation) => ({
@@ -312,23 +316,23 @@ function FeedRecordsContent() {
       quantityKg: Number(allocation.quantityKg),
     }));
     if (allocationInputs.length === 0) {
-      alert(availableStockedFeeds.length === 0 ? t.feed.noFeedsAvailable : t.feed.selectFeedFirst);
+      showAppAlert(availableStockedFeeds.length === 0 ? t.feed.noFeedsAvailable : t.feed.selectFeedFirst);
       return;
     }
     if (allocationInputs.some((allocation) => !inventoryFeeds.some((feed) => feed.id === allocation.inventoryFeedId))) {
-      alert(t.feed.inventoryNotFound);
+      showAppAlert(t.feed.inventoryNotFound);
       return;
     }
     if (allocationInputs.some((allocation) => (
       !allocation.inventoryFeedId || !Number.isFinite(allocation.quantityKg) || allocation.quantityKg <= 0
     ))) {
-      alert(t.feed.invalidAllocation);
+      showAppAlert(t.feed.invalidAllocation);
       return;
     }
     const requestedAllocations = normalizeFeedAllocations({ feedAllocations: allocationInputs });
     const feedAmount = sumFeedAllocations(requestedAllocations);
     if (!Number.isFinite(feedAmount) || feedAmount <= 0) {
-      alert(t.feed.invalidAmount);
+      showAppAlert(t.feed.invalidAmount);
       return;
     }
 
@@ -446,7 +450,7 @@ function FeedRecordsContent() {
         });
     } catch (error) {
       console.error('Error adding feed record:', error);
-      alert(error instanceof Error ? error.message : 'Failed to update feed record.');
+      showAppAlert(getUserErrorMessage(error, 'Failed to update feed record.'));
     } finally {
       save.release();
     }
@@ -663,12 +667,12 @@ function FeedRecordsContent() {
 
       setDeletingFeedRecord(null);
       setRevealedFeedRecordId(null);
-      alert(missingInventory
+      showAppAlert(missingInventory
         ? t.feedHistory.deleteSuccessWithoutInventory
         : t.feedHistory.deleteSuccess);
     } catch (error) {
       console.error('Error deleting feed record:', error);
-      alert(error instanceof Error ? error.message : t.feedHistory.deleteFailed);
+      showAppAlert(getUserErrorMessage(error, t.feedHistory.deleteFailed));
     } finally {
       save.release();
       setIsDeletingFeedRecord(false);

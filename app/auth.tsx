@@ -1,3 +1,5 @@
+import { getUserErrorMessage } from '../shared/userError';
+import { AppAlert as Alert } from '../components/alerts/appAlert';
 // app/auth.tsx - Fixed for Android navigation bar spacing
 import { LibreBaskerville_400Regular, LibreBaskerville_700Bold, useFonts } from '@expo-google-fonts/libre-baskerville';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -6,22 +8,7 @@ import { sendPasswordResetEmail } from 'firebase/auth';
 import { useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Easing,
-  Image,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Animated, Easing, Image, Keyboard, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../config/firebase';
@@ -158,7 +145,7 @@ export default function AuthScreen() {
       const fallbackMessage = isLogin
         ? 'We could not sign you in. Please check your details and try again.'
         : 'We could not create your account. Please check your details and try again.';
-      Alert.alert('Error', inviteToken && error instanceof Error ? error.message : fallbackMessage);
+      Alert.alert('Error', getUserErrorMessage(error, fallbackMessage));
     }
   }, [isFormValid, isLogin, signIn, signUp, email, password, inviteToken, keepMeSignedIn]);
 

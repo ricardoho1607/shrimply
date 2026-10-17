@@ -1,19 +1,10 @@
+import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { useCurrentTime } from '../hooks/useCurrentTime';
 // app/marketplace/create-buyer-listing.tsx - Android Optimized
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import {
-  Alert, Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput, TouchableOpacity,
-  View,
-  Dimensions,
-  ActivityIndicator,
-} from 'react-native';
+import { Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View, Dimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';

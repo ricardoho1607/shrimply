@@ -1,4 +1,6 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { collection, onSnapshot, query, where, orderBy, limit } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
@@ -94,7 +96,7 @@ export function useSopWorkspace(): SopClient {
           setError("");
         }
       } catch (e) {
-        if (identity.current === captured) setError(e instanceof Error ? e.message : "Unable to load workflows.");
+        if (identity.current === captured) setError(getUserErrorMessage(e, "Unable to load workflows."));
       } finally {
         if (identity.current === captured) setLoading(false);
       }
@@ -170,7 +172,7 @@ export function useSopWorkspace(): SopClient {
       } catch (e) {
         if (!cancelled)
           setError(
-            e instanceof Error ? e.message : "Offline submissions await retry.",
+            getUserErrorMessage(e, "Offline submissions await retry."),
           );
       } finally {
         flushing = false;
@@ -242,7 +244,7 @@ export function useSopWorkspace(): SopClient {
               setWorkspace((w) => ({ ...w, tasks: mergeSopTaskUpdates(w.tasks, result.items, result.removedIds) }));
           }
           if (!stopped) await refresh(false);
-        } catch (e) { if (!stopped) setError(e instanceof Error ? e.message : "Unable to update tasks."); }
+        } catch (e) { if (!stopped) setError(getUserErrorMessage(e, "Unable to update tasks.")); }
       })(), 750);
     };
     const subscriptions = queries.map((q, queryIndex) => {
@@ -266,7 +268,7 @@ export function useSopWorkspace(): SopClient {
         for (const change of snapshot.docChanges()) if (change.type === "removed") removed.add(change.doc.id);
         if (!initial || removed.size) changed();
         initial = false;
-      }, (e) => setError(e.message));
+      }, (e) => setError(getUserErrorMessage(e)));
     });
     return () => { stopped = true; clearTimeout(timer); subscriptions.forEach((stop) => stop()); watchedTasks.current = new Set(); };
   }, [
@@ -350,7 +352,7 @@ export function useSopWorkspace(): SopClient {
           ].includes((e as { code?: string }).code || ""))
       )
         return { pending: true };
-      setError(e instanceof Error ? e.message : "Unable to save.");
+      setError(getUserErrorMessage(e, "Unable to save."));
       throw e;
     } finally {
       setBusy(false);

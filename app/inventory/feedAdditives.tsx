@@ -1,3 +1,5 @@
+import { getUserErrorMessage } from '../../shared/userError';
+import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { useSaveOperation } from '../../shared/useSaveOperation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
@@ -5,7 +7,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import app, { auth } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -373,7 +375,7 @@ function FeedAdditivesScreenContent() {
             await store.removeAdditiveUsage(additiveId, usage.id);
             save.complete();
           } catch (error) {
-            setVoidError(error instanceof Error ? error.message : 'Could not remove usage. Please try again.');
+            setVoidError(getUserErrorMessage(error, 'Could not remove usage. Please try again.'));
           } finally {
             setRemovingUsageId(null);
             save.release();
@@ -425,7 +427,7 @@ function FeedAdditivesScreenContent() {
         setVoidError(fallback);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Could not prepare removal draft.';
+      const msg = getUserErrorMessage(err, 'Could not prepare removal draft.');
       setVoidError(msg);
       Alert.alert(t.inventory.error, msg);
     } finally {

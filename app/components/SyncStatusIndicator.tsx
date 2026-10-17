@@ -1,5 +1,6 @@
+import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { useState, useEffect } from 'react';
-import { Alert, Animated, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { Animated, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useDataBackup } from '../hooks/useDataBackup';
 

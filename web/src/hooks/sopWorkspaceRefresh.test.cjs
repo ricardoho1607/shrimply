@@ -32,6 +32,7 @@ function harness() {
     document: { visibilityState: 'visible', addEventListener: (name, fn) => events.set(name, fn), removeEventListener: name => events.delete(name) },
     window: { setInterval: fn => { events.set('poll', fn); return 1; }, clearInterval: () => events.delete('poll'), addEventListener: (name, fn) => events.set(name, fn), removeEventListener: name => events.delete(name) },
     require: name => {
+      if (name === '@/lib/userError') return localRequire('../lib/userError.ts');
       if (name === 'react') return react;
       if (name === 'firebase/firestore') return firestore;
       if (name === 'firebase/functions') return { getFunctions: () => ({}) };

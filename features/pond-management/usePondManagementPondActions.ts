@@ -1,9 +1,9 @@
+import { getUserErrorMessage } from '../../shared/userError';
+import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { assertSopStageGate, previewSopPondChange } from "../../app/services/sopGuards";
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useCallback } from 'react';
-import {
-  Alert
-} from 'react-native';
+
 import { buildDefaultFarmCycle, getPhysicalPondKey, isPondCycleActive, type FarmCycle, type PhysicalPond, type Pond, type PondCycleEndReason } from "../../app/store/pondStore";
 import firebaseApp from "../../config/firebase";
 import { getFarmDateKey } from "../../shared/farmDate";
@@ -365,7 +365,7 @@ export function usePondManagementPondActions(context: Context) {
       Alert.alert(t.messages.success, t.farmCycle.cycleStartedSuccess.replace('{{pondName}}', sourcePond.pondName));
 
     } catch (error) {
-      Alert.alert(t.messages.error, error instanceof Error ? error.message : t.messages.networkError);
+      Alert.alert(t.messages.error, getUserErrorMessage(error, t.messages.networkError));
     } finally {
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -440,7 +440,7 @@ export function usePondManagementPondActions(context: Context) {
       closeModal();
       Alert.alert(t.messages.success, t.home.samplingAddedSuccess);
     } catch (error) {
-      Alert.alert(t.messages.error, error instanceof Error ? error.message : 'Could not save sampling locally.');
+      Alert.alert(t.messages.error, getUserErrorMessage(error, 'Could not save sampling locally.'));
     } finally {
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -546,7 +546,7 @@ export function usePondManagementPondActions(context: Context) {
       closeModal();
       Alert.alert(t.messages.success, t.home.mortalitySavedSuccess);
     } catch (error) {
-      Alert.alert(t.messages.error, error instanceof Error ? error.message : 'Could not save mortality locally.');
+      Alert.alert(t.messages.error, getUserErrorMessage(error, 'Could not save mortality locally.'));
     } finally {
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -600,7 +600,7 @@ export function usePondManagementPondActions(context: Context) {
         Alert.alert(t.messages.success, t.farmCycle.pondEndedSuccess.replace('{{pondName}}', pond.pondName));
 
       } catch (error) {
-        Alert.alert(t.messages.error, error instanceof Error ? error.message : t.messages.networkError);
+        Alert.alert(t.messages.error, getUserErrorMessage(error, t.messages.networkError));
       }
     };
     const chooseNonHarvestReason = () => {
@@ -658,7 +658,7 @@ export function usePondManagementPondActions(context: Context) {
               await deletePond(pond.id);
               Alert.alert(t.messages.success, t.home.pondDeletedSuccess);
             } catch (error) {
-              Alert.alert(t.messages.error, error instanceof Error ? error.message : t.messages.networkError);
+              Alert.alert(t.messages.error, getUserErrorMessage(error, t.messages.networkError));
             }
           },
         },
@@ -729,7 +729,7 @@ export function usePondManagementPondActions(context: Context) {
       Alert.alert(t.messages.success, t.farmCycle.cycleNameUpdated);
 
     } catch (error) {
-      Alert.alert(t.messages.error, error instanceof Error ? error.message : t.messages.networkError);
+      Alert.alert(t.messages.error, getUserErrorMessage(error, t.messages.networkError));
     }
   }, [activeFarmCycle, canManageFarmCycle, cycleNameDraft, t, updateFarmCycle]);
   return {

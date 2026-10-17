@@ -1,4 +1,7 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+import { showAppAlert, confirmAppAction } from '@/lib/appDialogs';
+
 
 import { previewSopPondChange } from '@/lib/sopGuards';
 import React, { useMemo, useState } from 'react';
@@ -271,7 +274,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
   const openPondCycleForm = (pond: EnterpriseDashboardRecord) => {
     if (!activeFarmCycle) {
       setCycleManagerExpanded(true);
-      alert(t.enterprise.ownerMustStartCycle);
+      showAppAlert(t.enterprise.ownerMustStartCycle);
       return;
     }
     setStartCyclePond(pond);
@@ -297,7 +300,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
     } catch (startError) {
       console.error('Failed to start enterprise pond cycle:', startError);
       const errorCode = startError instanceof StartPondCycleError ? startError.code : 'failed';
-      alert(errorCode === 'blockMismatch'
+      showAppAlert(errorCode === 'blockMismatch'
         ? t.enterpriseCycle.pondBlockMismatch
         : errorCode === 'cycleMismatch'
           ? t.enterpriseCycle.pondCycleMismatch
@@ -324,7 +327,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
       });
     } catch (cycleError) {
       console.error('Failed to start enterprise farm cycle:', cycleError);
-      alert(t.farmCycle.cycleStartFailed);
+      showAppAlert(t.farmCycle.cycleStartFailed);
     } finally {
       setCycleSaving(false);
     }
@@ -353,7 +356,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
       });
     } catch (cycleError) {
       console.error('Failed to rename enterprise farm cycle:', cycleError);
-      alert(t.farmCycle.cycleUpdateFailed);
+      showAppAlert(t.farmCycle.cycleUpdateFailed);
     } finally {
       setCycleSaving(false);
     }
@@ -365,15 +368,15 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
       !hasFinalHarvestForPondCycle(harvestRecords, pond)
     ));
     if (missingFinalHarvestPonds.length > 0) {
-      alert(t.farmCycle.finalHarvestRequiredMessage.replace(
+      showAppAlert(t.farmCycle.finalHarvestRequiredMessage.replace(
         '{{pondNames}}',
         missingFinalHarvestPonds.map((pond) => pond.pondName).join(', '),
       ));
       return;
     }
-    if (!window.confirm(t.farmCycle.endFarmCycleMessage
+    if (!(await confirmAppAction(t.farmCycle.endFarmCycleMessage
       .replace('{{cycleName}}', activeFarmCycle.cycleName)
-      .replace('{{pondCount}}', String(currentCyclePonds.length)))) return;
+      .replace('{{pondCount}}', String(currentCyclePonds.length))))) return;
 
     setCycleSaving(true);
     try {
@@ -422,13 +425,11 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
         updatedBy: user.uid,
       });
       setCycleFilter('ended');
-      const openReport = window.confirm(
-        `${t.farmCycle.endFarmCycleSuccess.replace('{{cycleName}}', activeFarmCycle.cycleName)}\n\n${t.farmCycle.viewCycleReport}`,
-      );
+      const openReport = (await confirmAppAction(`${t.farmCycle.endFarmCycleSuccess.replace('{{cycleName}}', activeFarmCycle.cycleName)}\n\n${t.farmCycle.viewCycleReport}`));
       if (openReport) router.push(`/dashboard/reports/cycles?cycleId=${encodeURIComponent(activeFarmCycle.id)}`);
     } catch (cycleError) {
       console.error('Failed to close enterprise farm cycle:', cycleError);
-      alert(t.farmCycle.endCycleFailed);
+      showAppAlert(t.farmCycle.endCycleFailed);
     } finally {
       setCycleSaving(false);
     }
@@ -439,7 +440,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
     const name = blockName.trim();
     if (!company?.id || !user?.uid || !name || saving) return;
     if (blocks.some((block) => block.name.trim().toLowerCase() === name.toLowerCase())) {
-      alert(t.enterprise.blockNameRequired);
+      showAppAlert(t.enterprise.blockNameRequired);
       return;
     }
     const technician = technicians.find((candidate) => candidate.uid === technicianId);
@@ -461,7 +462,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
       setCreateOpen(false);
     } catch (createError) {
       console.error('Failed to create enterprise block:', createError);
-      alert(t.enterprise.blockCreateFailed);
+      showAppAlert(t.enterprise.blockCreateFailed);
     } finally {
       setSaving(false);
     }
@@ -478,7 +479,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
     if (!company?.id || !user?.uid || !editingBlock || !editingBlockName.trim() || saving) return;
     const normalizedName = editingBlockName.trim();
     if (blocks.some((b) => b.id !== editingBlock.id && b.name.trim().toLowerCase() === normalizedName.toLowerCase())) {
-      alert(t.enterprise.blockNameRequired || 'A block with this name already exists.');
+      showAppAlert(t.enterprise.blockNameRequired || 'A block with this name already exists.');
       return;
     }
     const tech = technicians.find((t) => t.uid === editingBlockTechnicianId);
@@ -495,7 +496,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
       setEditingBlock(null);
     } catch (err) {
       console.error('Failed to update block:', err);
-      alert(t.enterprise.blockUpdateFailed || 'Failed to update block.');
+      showAppAlert(t.enterprise.blockUpdateFailed || 'Failed to update block.');
     } finally {
       setSaving(false);
     }
@@ -506,10 +507,10 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
     const blockHasPonds = ponds.some((p) => p.blockId === editingBlock.id)
       || physicalPonds.some((p) => p.blockId === editingBlock.id);
     if (blockHasPonds) {
-      alert(t.enterprise.cannotDeleteBlockWithPonds || 'Cannot delete block because it contains ponds.');
+      showAppAlert(t.enterprise.cannotDeleteBlockWithPonds || 'Cannot delete block because it contains ponds.');
       return;
     }
-    if (!window.confirm((t.enterprise.deleteBlockConfirmMessage || 'Are you sure you want to delete "{{blockName}}"?').replace('{{blockName}}', editingBlock.name))) {
+    if (!(await confirmAppAction((t.enterprise.deleteBlockConfirmMessage || 'Are you sure you want to delete "{{blockName}}"?').replace('{{blockName}}', editingBlock.name)))) {
       return;
     }
     setSaving(true);
@@ -518,7 +519,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
       setEditingBlock(null);
     } catch (err) {
       console.error('Failed to delete block:', err);
-      alert(t.enterprise.blockDeleteFailed || 'Failed to delete block.');
+      showAppAlert(t.enterprise.blockDeleteFailed || 'Failed to delete block.');
     } finally {
       setSaving(false);
     }
@@ -576,7 +577,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
       setExpanded((current) => ({ ...current, [block.id]: true }));
     } catch (assignmentError) {
       console.error('Failed to assign enterprise pond to block:', assignmentError);
-      alert(t.enterprise.pondAssignmentFailed);
+      showAppAlert(t.enterprise.pondAssignmentFailed);
     } finally {
       setSaving(false);
     }
@@ -747,7 +748,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
         ))}
       </div>
 
-      {error ? <p className={styles.error}>{error.message}</p> : null}
+      {error ? <p className={styles.error}>{getUserErrorMessage(error)}</p> : null}
       {loading ? <div className={styles.loading}>{t.enterprise.loadingBlocks}</div> : null}
       {!loading && sortedBlocks.length === 0 ? (
         <div className={styles.empty}>

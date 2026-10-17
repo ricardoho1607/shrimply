@@ -16,6 +16,8 @@ function component(name, mocks = {}) {
   source.paths = Module._nodeModulePaths(__dirname);
   const requireOriginal = source.require.bind(source);
   source.require = specifier => {
+    if (specifier === '@/lib/appDialogs') return require('../lib/appDialogs.ts');
+    if (specifier === '@/lib/userError') return require('../lib/userError.ts');
     if (Object.hasOwn(mocks, specifier)) return mocks[specifier];
     if (specifier.endsWith('.css')) return new Proxy({}, { get: (_, key) => String(key) });
     if (specifier === '@/config/site') return { GOOGLE_PLAY_URL: 'https://play.google.com/store/apps/details?id=com.shrimply.tech.investashrimp' };

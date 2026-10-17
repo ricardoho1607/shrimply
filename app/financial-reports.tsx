@@ -1,3 +1,4 @@
+import { AppAlert as Alert } from '../components/alerts/appAlert';
 import { scopeExpenseRecords } from '../shared/financeExpenseAllocation';
 import { getFinanceAllocationCopy, productionExpenseLabel } from '../shared/financeAllocationCopy';
 import { transactionOpeningPosition } from '../shared/reportingIntegrity';
@@ -6,7 +7,7 @@ import { monetaryValue } from '../shared/financeIntegrity';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TouchableWithoutFeedback, Modal, Alert, ActivityIndicator, TextInput, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TouchableWithoutFeedback, Modal, ActivityIndicator, TextInput, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';

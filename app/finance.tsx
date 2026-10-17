@@ -1,13 +1,12 @@
+import { getUserErrorMessage } from '../shared/userError';
+import { AppAlert as Alert } from '../components/alerts/appAlert';
 import { useSaveOperation } from '../shared/useSaveOperation';
 import { isSourceLinkedFinance, monetaryValue } from '../shared/financeIntegrity';
 // app/finance.tsx - Optimized with consistent Android styles
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useState, useEffect, useMemo } from 'react';
-import {
-  FlatList, View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator,
-  Modal, Dimensions, Platform, StatusBar,
-} from 'react-native';
+import { FlatList, View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Modal, Dimensions, Platform, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useAuth } from '../context/AuthContext';
@@ -487,7 +486,7 @@ export default function FinancePage() {
       else await revenueService.recordPayment(company.id, paymentTarget.item as Revenue, payment);
       save.complete();
       setPaymentTarget(null); void loadData().catch(error => console.error('Saved, but refresh failed:', error));
-    } catch (error) { Alert.alert('Payment not saved', error instanceof Error ? error.message : 'Try again'); }
+    } catch (error) { Alert.alert('Payment not saved', getUserErrorMessage(error, 'Try again')); }
     finally { save.release(); setSavingPayment(false); }
   };
 

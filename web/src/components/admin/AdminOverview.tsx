@@ -1,4 +1,6 @@
 'use client';
+import { getUserErrorMessage } from '@/lib/userError';
+
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ArrowRight, ArrowUpDown, Building2, CalendarDays, Check, Loader2, RefreshCcw, Trash2, Users } from 'lucide-react';
@@ -134,7 +136,7 @@ export function AdminOverview({
         successCount++;
       } catch (err) {
         failureCount++;
-        errors.push(`${item.name}: ${err instanceof Error ? err.message : 'Failed'}`);
+        errors.push(`${item.name}: ${getUserErrorMessage(err, 'Failed')}`);
       }
     }
 

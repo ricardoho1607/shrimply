@@ -1,4 +1,8 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
+import { showAppAlert } from '@/lib/appDialogs';
+
 
 import { useCallback, useEffect, useState } from 'react';
 import { Check, CreditCard, Loader2, Sparkles } from 'lucide-react';
@@ -66,7 +70,7 @@ export default function CompanyBillingPanel({ companyId }: { companyId: string }
       const result = await callable({ companyId });
       setSummary(result.data);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Could not load billing details.');
+      setError(getUserErrorMessage(loadError, 'Could not load billing details.'));
     } finally {
       setLoading(false);
     }
@@ -106,10 +110,10 @@ export default function CompanyBillingPanel({ companyId }: { companyId: string }
       const result = await callable({ companyId, planId: plan.id });
       await loadSummary();
       if (result.data.status === 'scheduled' && result.data.effectiveAt) {
-        window.alert(`Plan change scheduled for ${new Date(result.data.effectiveAt).toLocaleDateString()}.`);
+        showAppAlert(`Plan change scheduled for ${new Date(result.data.effectiveAt).toLocaleDateString()}.`);
       }
     } catch (changeError) {
-      setError(changeError instanceof Error ? changeError.message : 'Could not update the company plan.');
+      setError(getUserErrorMessage(changeError, 'Could not update the company plan.'));
     } finally {
       setWorkingPlanId(null);
     }

@@ -1,4 +1,6 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
 import { useEffect, useRef, useState } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { ref, uploadBytes, deleteObject } from "firebase/storage";
@@ -102,7 +104,7 @@ export default function AgentInputTools({
         agent.receive(result.operation);
     } catch (e) {
       if (!abort.current.signal.aborted)
-        setError(e instanceof Error ? e.message : "Document upload failed.");
+        setError(getUserErrorMessage(e, "Document upload failed."));
     } finally {
       await deleteObject(fileRef).catch(() => {});
       setUploading(false);

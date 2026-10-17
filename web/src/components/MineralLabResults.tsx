@@ -1,4 +1,6 @@
 "use client";
+import { showAppAlert } from '@/lib/appDialogs';
+
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
@@ -139,7 +141,7 @@ const MineralLabResults = forwardRef<MineralLabResultsHandle, MineralLabResultsP
       await downloadMobilePdf({ html: generateManualLabReportHTML(selected, assets), filename: `Shrimply-Mineral-Lab-${reportDate}-${selected.id.replace(/[^a-zA-Z0-9_-]/g, '')}.pdf`, orientation: 'landscape' });
     } catch (error) {
       console.error('Failed to export mineral report:', error);
-      window.alert(copy.exportFailedMessage);
+      showAppAlert(copy.exportFailedMessage);
     } finally { setExporting(false); }
   };
 

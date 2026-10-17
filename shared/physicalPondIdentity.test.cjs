@@ -59,7 +59,7 @@ test('web new cycles and restarts link and activate the same counted physical po
         set: (ref, data) => writes.push({ ref, data }), update: (ref, data) => writes.push({ ref, data }),
       }),
     };
-    const { startPondCycle } = loader({ 'firebase/firestore': sdk, '@/lib/firebase': { db: {} } })(path.resolve(__dirname, '../web/src/lib/startPondCycle.ts'));
+    const { startPondCycle } = loader({ 'firebase/firestore': sdk, '@/lib/firebase': { db: {} }, '@/lib/appDialogs': { confirmAppAction: async () => true } })(path.resolve(__dirname, '../web/src/lib/startPondCycle.ts'));
     const options = { companyId: 'company', userId: 'owner', pondType, pond: { ...physical, id: pondType === 'physical' ? 'physical' : 'old-cycle', physicalPondId: pondType === 'physical' ? undefined : 'physical' },
       activeCycle: { id: 'farm-cycle', cycleName: 'Farm' }, today: '2026-09-09', activePonds: [],
       form: { density: '10', docStart: '2026-09-01', plValue: '10', plSupplier: 'Supplier', cycleStartMode: 'midcycle', baselineMbw: '2', baselineEstimatedPopulation: '', baselineSurvivalRate: '', baselineCumulativeFeed: '' } };

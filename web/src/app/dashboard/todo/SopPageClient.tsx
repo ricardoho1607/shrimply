@@ -1,4 +1,6 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
 import { sopTaskMatchesView } from "../../../../../shared/sop/presentation";
 import { sopMeasurementLabel } from "../../../../../shared/sop/editor";
 import { sopText, sopTaskTitle } from "../../../../../shared/sop/uiCopy";
@@ -104,7 +106,7 @@ function TodoPageContent() {
       return await fn();
     } catch (e) {
       setMessageTone("error");
-      setMessage(e instanceof Error ? e.message : "Unable to save.");
+      setMessage(getUserErrorMessage(e, "Unable to save."));
       return null;
     }
   };

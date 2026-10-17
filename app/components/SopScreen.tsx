@@ -1,3 +1,5 @@
+import { getUserErrorMessage } from '../../shared/userError';
+import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { sopTaskMatchesView } from "../../shared/sop/presentation";
 import {
   adoptionPonds,
@@ -31,17 +33,7 @@ import {
 } from "../../shared/sop/draft";
 import { enableSopPush } from "../hooks/useSopPush";
 import React, { useState, useEffect, useRef } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  Switch,
-} from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Switch } from 'react-native';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
@@ -371,7 +363,7 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
       return await fn();
     } catch (e) {
       setMessage(
-        e instanceof Error ? e.message : "Unable to complete the change.",
+        getUserErrorMessage(e, "Unable to complete the change."),
       );
       return null;
     }
@@ -390,11 +382,7 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
       setMessage(ui("Draft saved. Review before approval."));
     } catch (error) {
       setSaveError(
-        error instanceof Error
-          ? ui(error.message)
-          : ui(
-              "The draft was not saved. Review it and choose Save draft to retry.",
-            ),
+        ui(getUserErrorMessage(error, "The draft was not saved. Review it and choose Save draft to retry.")),
       );
     } finally {
       savingDraftRef.current = false;
@@ -437,9 +425,7 @@ function SopScreenContent({ mode }: { mode: "sops" | "todo" }) {
       setMessage(ui("Draft saved. Review before approval."));
     } catch (error) {
       setImportError(
-        error instanceof Error
-          ? error.message
-          : "Unable to import this document. Try again.",
+        getUserErrorMessage(error, "Unable to import this document. Try again."),
       );
     } finally {
       generating.current = false;
@@ -2287,9 +2273,7 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                       );
                     } catch (e) {
                       setAdoptionError(
-                        e instanceof Error
-                          ? e.message
-                          : "Unable to review adoption.",
+                        getUserErrorMessage(e, "Unable to review adoption."),
                       );
                     }
                   })()
@@ -2363,9 +2347,7 @@ ${ui("You can restore it from Deleted SOPs. Published copies are withdrawn; exis
                         } catch (e) {
                           setPreview(null);
                           setAdoptionError(
-                            e instanceof Error
-                              ? e.message
-                              : "Unable to activate adoption.",
+                            getUserErrorMessage(e, "Unable to activate adoption."),
                           );
                         }
                       })()

@@ -1,4 +1,6 @@
 "use client";
+import { confirmAppAction, showAppAlert } from '@/lib/appDialogs';
+
 import { auth, db } from '@/lib/firebase';
 import { prepareSaveData as removeUndefinedFields, updateRecordOnline } from '@/lib/saveData';
 import { startPondCycle, StartPondCycleError } from '@/lib/startPondCycle';
@@ -92,7 +94,7 @@ export function usePondDetailActions(context: Context) {
   } = context;
   const handleDeleteSampling = async (samplingId: string) => {
     if (!companyId || !pond || !canRecordPondData || !isActiveCycle(pond)) return;
-    if (!window.confirm(copy.deleteSamplingConfirm)) return;
+    if (!(await confirmAppAction(copy.deleteSamplingConfirm))) return;
     try {
       const reference = doc(db, 'companies', companyId, 'ponds', pond.id);
       await runTransaction(db, async tx => {
@@ -105,13 +107,13 @@ export function usePondDetailActions(context: Context) {
       });
     } catch (error) {
       console.error('Error deleting sampling record:', error);
-      alert(copy.deleteSamplingFailed);
+      showAppAlert(copy.deleteSamplingFailed);
     }
   };
 
   const handleDeleteMortality = async (recordId: string) => {
     if (!companyId || !pond || !canRecordPondData || !isActiveCycle(pond)) return;
-    if (!window.confirm(copy.deleteMortalityConfirm)) return;
+    if (!(await confirmAppAction(copy.deleteMortalityConfirm))) return;
     try {
       const reference = doc(db, 'companies', companyId, 'ponds', pond.id);
       await runTransaction(db, async tx => {
@@ -124,7 +126,7 @@ export function usePondDetailActions(context: Context) {
       });
     } catch (error) {
       console.error('Error deleting mortality record:', error);
-      alert(copy.deleteMortalityFailed);
+      showAppAlert(copy.deleteMortalityFailed);
     }
   };
 
@@ -138,7 +140,7 @@ export function usePondDetailActions(context: Context) {
     const feed = samplingForm.feed.trim() ? Number(samplingForm.feed) : undefined;
     if (!samplingForm.date || samplingForm.date > today || samplingForm.date < String(pond.docStart || '').slice(0, 10)
       || !Number.isFinite(mbw) || mbw <= 0 || (feed !== undefined && (!Number.isFinite(feed) || feed < 0))) {
-      alert('Enter a valid sampling date, positive MBW, and non-negative feed amount.');
+      showAppAlert('Enter a valid sampling date, positive MBW, and non-negative feed amount.');
       return;
     }
     setIsSubmitting(true);
@@ -178,7 +180,7 @@ export function usePondDetailActions(context: Context) {
       });
     } catch (error) {
       console.error("Error saving sampling:", error);
-      alert(t.messages.error || "Failed to save sampling. Your entries are still here; check your connection and retry.");
+      showAppAlert(t.messages.error || "Failed to save sampling. Your entries are still here; check your connection and retry.");
     } finally {
       save.release();
       setIsSubmitting(false);
@@ -199,16 +201,16 @@ export function usePondDetailActions(context: Context) {
         ? siphonedCount + mortalCount
         : Math.round(Number(mortalityForm.count));
     if (mortalityForm.observationType !== 'none_observed' && (isNaN(count) || count <= 0)) {
-      alert(copy.mortalityCountInvalid);
+      showAppAlert(copy.mortalityCountInvalid);
       return;
     }
     if (mortalityForm.date > today) {
-      alert(copy.mortalityFuture);
+      showAppAlert(copy.mortalityFuture);
       return;
     }
     const cycleStartKey = String(pond.cycleStartedAt || pond.docStart || '').slice(0, 10);
     if (cycleStartKey && mortalityForm.date < cycleStartKey) {
-      alert(copy.mortalityBeforeCycle);
+      showAppAlert(copy.mortalityBeforeCycle);
       return;
     }
 
@@ -292,7 +294,7 @@ export function usePondDetailActions(context: Context) {
       });
     } catch (error) {
       console.error('Error saving mortality:', error);
-      alert(copy.mortalitySaveFailed);
+      showAppAlert(copy.mortalitySaveFailed);
     } finally {
       save.release();
       setIsSubmitting(false);
@@ -312,9 +314,7 @@ export function usePondDetailActions(context: Context) {
           ...harvestDoc.data(),
         } as HarvestRecord));
         if (!hasFinalHarvestForPondCycle(harvestRecords, pond)) {
-          const shouldGoToHarvest = window.confirm(
-            `${t.farmCycle.finalHarvestRequiredMessage.replace('{{pondNames}}', pond.pondName)}\n\n${t.farmCycle.goToHarvest}?`
-          );
+          const shouldGoToHarvest = (await confirmAppAction(`${t.farmCycle.finalHarvestRequiredMessage.replace('{{pondNames}}', pond.pondName)}\n\n${t.farmCycle.goToHarvest}?`));
           if (shouldGoToHarvest) router.push('/dashboard/harvest');
           return;
         }
@@ -357,7 +357,7 @@ export function usePondDetailActions(context: Context) {
       setEndCycleOpen(false);
     } catch (error) {
       console.error('Error ending cycle:', error);
-      alert(copy.endCycleFailed);
+      showAppAlert(copy.endCycleFailed);
     } finally {
       save.release();
     }
@@ -365,7 +365,7 @@ export function usePondDetailActions(context: Context) {
 
   const handleDeletePond = async () => {
     if (!companyId || !pond || !canManagePond || isDeletingPond) return;
-    const confirmed = window.confirm(copy.deletePondConfirm.replace('{{pond}}', pond.pondName));
+    const confirmed = (await confirmAppAction(copy.deletePondConfirm.replace('{{pond}}', pond.pondName)));
     if (!confirmed) return;
 
     setIsDeletingPond(true);
@@ -374,7 +374,7 @@ export function usePondDetailActions(context: Context) {
       router.push('/dashboard/ponds');
     } catch (error) {
       console.error('Error deleting pond:', error);
-      alert(copy.deletePondFailed);
+      showAppAlert(copy.deletePondFailed);
     } finally {
       setIsDeletingPond(false);
     }
@@ -386,7 +386,7 @@ export function usePondDetailActions(context: Context) {
     if (!companyId || !pond) return;
     if (!canManagePond || !canManageCycles) return;
     if (isEnterpriseTechnician && !cycles.some(isOpenFarmCycle)) {
-      alert(t.enterprise.ownerMustStartCycle);
+      showAppAlert(t.enterprise.ownerMustStartCycle);
       return;
     }
     if (!save.acquire()) return;
@@ -407,7 +407,7 @@ export function usePondDetailActions(context: Context) {
       router.push(`/dashboard/ponds/detail?id=${result.pondId}`);
     } catch (error) {
       console.error('Error starting cycle:', error);
-      alert(error instanceof StartPondCycleError ? error.code === 'blockMismatch' ? t.enterpriseCycle.pondBlockMismatch : error.code === 'cycleMismatch' ? t.enterpriseCycle.pondCycleMismatch : t.startPondCycle.errors[error.code] : error instanceof Error && error.message === PHYSICAL_POND_LINK_ERROR ? error.message : copy.startCycleFailed);
+      showAppAlert(error instanceof StartPondCycleError ? error.code === 'blockMismatch' ? t.enterpriseCycle.pondBlockMismatch : error.code === 'cycleMismatch' ? t.enterpriseCycle.pondCycleMismatch : t.startPondCycle.errors[error.code] : error instanceof Error && error.message === PHYSICAL_POND_LINK_ERROR ? error.message : copy.startCycleFailed);
     } finally {
       save.release();
     }
@@ -442,11 +442,11 @@ export function usePondDetailActions(context: Context) {
     const baselineFeedValue = parseFloat(baselineForm.baselineCumulativeFeed);
 
     if (!baselineForm.baselineMbw || Number.isNaN(baselineMbwValue) || baselineMbwValue <= 0) {
-      alert(copy.currentMbwRequired);
+      showAppAlert(copy.currentMbwRequired);
       return;
     }
     if (!baselineForm.baselineDate || !Number.isFinite(baselineDocValue) || baselineDocValue < 0) {
-      alert(copy.currentDocRequired);
+      showAppAlert(copy.currentDocRequired);
       return;
     }
 
@@ -490,7 +490,7 @@ export function usePondDetailActions(context: Context) {
       setBaselineModalOpen(false);
     } catch (error) {
       console.error('Error updating baseline:', error);
-      alert(copy.baselineUpdateFailed);
+      showAppAlert(copy.baselineUpdateFailed);
     }
   };
   return {

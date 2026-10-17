@@ -1,4 +1,7 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+import { showAppAlert } from '@/lib/appDialogs';
+
 
 import { useSaveOperation } from '../../../../../shared/useSaveOperation';
 import { createRecordOnce } from '@/lib/saveData';
@@ -158,13 +161,8 @@ export default function MarketplacePage() {
       setDeleteConfirm({ isOpen: false, id: null });
       
     } catch (error: unknown) {
-      const firebaseError = error as { code?: string; message?: string };
       console.error("Error deleting listing:", error);
-      if (firebaseError.code === 'permission-denied') {
-        alert(copy('Permission Denied: You do not have authority to delete this listing. Please check your Firestore rules.'));
-      } else {
-        alert("Failed to delete listing: " + (firebaseError.message || "Unknown error"));
-      }
+      showAppAlert(getUserErrorMessage(error, copy('Failed to delete listing. Please try again.')));
     } finally {
       setIsSubmitting(false);
     }
@@ -208,7 +206,7 @@ export default function MarketplacePage() {
     e.preventDefault();
     if (save.busy) return;
     if (!user || !canManageMarketplace) {
-      alert(copy('You must be logged in to post.'));
+      showAppAlert(copy('You must be logged in to post.'));
       return;
     }
     
@@ -223,13 +221,13 @@ export default function MarketplacePage() {
 
       const validationError = validateMarketplaceListing({ ...newListing, priceList: sanitizedPriceList });
       if (validationError) {
-        alert(validationError);
+        showAppAlert(validationError);
         return;
       }
 
       const topDays = Number(newListing.topDays);
       if (newListing.paymentMethod === 'top' && (!Number.isFinite(topDays) || topDays <= 0)) {
-        alert(copy('Please enter valid TOP days.'));
+        showAppAlert(copy('Please enter valid TOP days.'));
         return;
       }
 
@@ -276,7 +274,7 @@ export default function MarketplacePage() {
       setNewListing(emptyListingForm);
     } catch (error) {
       console.error("Error saving listing:", error);
-      alert(copy('Failed to save listing. Make sure all price fields are valid numbers.'));
+      showAppAlert(copy('Failed to save listing. Make sure all price fields are valid numbers.'));
     } finally {
       save.release();
       setIsSubmitting(false);

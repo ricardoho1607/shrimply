@@ -1,6 +1,7 @@
+import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { ADAPTIVE_SOPS_ENABLED } from "./sopFeature";
 import { doc, getDoc } from "firebase/firestore";
-import { Alert } from "react-native";
+
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { db } from "@/config/firebase";
 export async function previewSopPondChange(

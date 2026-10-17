@@ -1,3 +1,4 @@
+import { getUserErrorMessage } from '../shared/userError';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   View, 
@@ -257,7 +258,7 @@ export default function HarvestProjectionScreen() {
     } catch (error) {
       console.warn('Failed to save harvest market prices:', error);
       setPriceSaveStatus('error');
-      setPriceSaveError(error instanceof Error ? error.message : 'Unable to save market prices.');
+      setPriceSaveError(getUserErrorMessage(error, 'Unable to save market prices.'));
     }
   };
 

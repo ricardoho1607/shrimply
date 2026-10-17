@@ -1,8 +1,10 @@
+import { getUserErrorMessage } from '../shared/userError';
+import { AppAlert as Alert } from '../components/alerts/appAlert';
 import { useCurrentTime } from './hooks/useCurrentTime';
 // app/companydetails.tsx - Android Optimized with Safe Area
 // app/companydetails.tsx - Android Optimized with Safe Area
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, Alert, ActivityIndicator, RefreshControl, StatusBar, Platform, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, ActivityIndicator, RefreshControl, StatusBar, Platform, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -302,7 +304,7 @@ export default function CompanyDetailsScreen() {
               }
             } catch (error: any) {
               console.error('Failed to request deletion:', error);
-              Alert.alert(t.messages.error, error?.message || 'Failed to request company deletion.');
+              Alert.alert(t.messages.error, getUserErrorMessage(error, 'Failed to request company deletion.'));
             } finally {
               setLoading(false);
             }
@@ -336,7 +338,7 @@ export default function CompanyDetailsScreen() {
               }
             } catch (error: any) {
               console.error('Failed to approve deletion:', error);
-              Alert.alert(t.messages.error, error?.message || 'Failed to approve company deletion.');
+              Alert.alert(t.messages.error, getUserErrorMessage(error, 'Failed to approve company deletion.'));
             } finally {
               setLoading(false);
             }
@@ -364,7 +366,7 @@ export default function CompanyDetailsScreen() {
               }
             } catch (error: any) {
               console.error('Failed to cancel deletion:', error);
-              Alert.alert(t.messages.error, error?.message || 'Failed to cancel deletion request.');
+              Alert.alert(t.messages.error, getUserErrorMessage(error, 'Failed to cancel deletion request.'));
             } finally {
               setLoading(false);
             }

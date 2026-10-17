@@ -36,7 +36,7 @@ test('both web SOP routes return not-found on the main build and render on the e
 test('disabled SOP checks add no Firebase reads or calls to ordinary pond operations', async () => {
   for (const [file, dbImport] of [['web/src/lib/sopGuards.ts', '@/lib/firebase'], ['app/services/sopGuards.ts', '@/config/firebase']]) {
     let reads = 0, calls = 0;
-    const guards = load(file, {}, { './sopFeature': { ADAPTIVE_SOPS_ENABLED: false }, 'firebase/firestore': { doc: () => ({}), getDoc: async () => { reads++; return { exists: () => true, data: () => ({ adaptiveSopsEnabled: true }) }; } }, 'firebase/functions': { getFunctions: () => ({}), httpsCallable: () => async () => { calls++; throw new Error('unexpected call'); } }, [dbImport]: { db: {} }, 'react-native': { Alert: {} } });
+    const guards = load(file, {}, { './sopFeature': { ADAPTIVE_SOPS_ENABLED: false }, 'firebase/firestore': { doc: () => ({}), getDoc: async () => { reads++; return { exists: () => true, data: () => ({ adaptiveSopsEnabled: true }) }; } }, 'firebase/functions': { getFunctions: () => ({}), httpsCallable: () => async () => { calls++; throw new Error('unexpected call'); } }, [dbImport]: { db: {} }, 'react-native': { Alert: {} }, '@/lib/appDialogs': {}, '../../components/alerts/appAlert': { AppAlert: {} } });
     assert.equal(await guards.previewSopPondChange('farm', { id: 'pond', pondName: 'Pond' }), true);
     await guards.assertSopStageGate('farm', 'pond', 'stocking');
     assert.equal(reads, 0); assert.equal(calls, 0);

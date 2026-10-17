@@ -1,4 +1,6 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
 import { useState } from "react";
 import type { SopClient } from "../../../shared/sop/client";
 import type { SopTask } from "../../../shared/sop/contracts";
@@ -47,7 +49,7 @@ export default function SopManagerDecision({
         );
       onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to save the decision.");
+      setError(getUserErrorMessage(e, "Unable to save the decision."));
     }
   };
   return (

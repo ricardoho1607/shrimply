@@ -1,9 +1,11 @@
+import { getUserErrorMessage } from '../../shared/userError';
+import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { filterPondRecordsForUser } from '../../shared/pondAssignments';
 import { SopObservationTimes } from '../components/SopObservationTimes';
 import { parseObservationTimes } from '../../shared/sop/observationTimes';
 import { labMeasurementLabel, validateLabRow } from '../../functions/shared/labMeasurementContract';
 import React, { useState, useMemo, useCallback, useRef } from "react";
-import { FlatList, StyleSheet, Text, View, TouchableOpacity, Modal, TextInput, ScrollView, StatusBar, Alert, Platform, KeyboardAvoidingView, ActivityIndicator, Linking, InteractionManager } from "react-native";
+import { FlatList, StyleSheet, Text, View, TouchableOpacity, Modal, TextInput, ScrollView, StatusBar, Platform, KeyboardAvoidingView, ActivityIndicator, Linking, InteractionManager } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -388,7 +390,7 @@ export default function WaterQualityScreen() {
     }
 
     let observedAtByField: Record<string,string>;
-    try { observedAtByField = parseObservationTimes(sopTimes); } catch (error) { Alert.alert('Observation time', error instanceof Error ? error.message : 'Invalid observation time'); submitLockRef.current = false; setIsSubmitting(false); return; }
+    try { observedAtByField = parseObservationTimes(sopTimes); } catch (error) { Alert.alert('Observation time', getUserErrorMessage(error, 'Invalid observation time')); submitLockRef.current = false; setIsSubmitting(false); return; }
     addWaterQuality(pond.id, {
       observedAtByField,
       phMorning: values.phMorning.trim(), phEvening: values.phEvening.trim(),

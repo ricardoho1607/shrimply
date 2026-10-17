@@ -1,4 +1,8 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
+import { showAppAlert, confirmAppAction } from '@/lib/appDialogs';
+
 
 import { isSourceLinkedFinance, appendSettlement, monetaryValue } from '../../../../../shared/financeIntegrity';
 import { useSaveOperation } from '../../../../../shared/useSaveOperation';
@@ -240,16 +244,16 @@ export default function FinancePage() {
     if (save.busy) return;
     if (!user || !company || !canManageFinance) return;
     const amountInput = Number(formData.amount);
-    if (!Number.isFinite(amountInput) || amountInput <= 0) { alert(copy('Enter an amount greater than 0.')); return; }
+    if (!Number.isFinite(amountInput) || amountInput <= 0) { showAppAlert(copy('Enter an amount greater than 0.')); return; }
     setIsSubmitting(true);
 
     const collectionName = formType === 'expense' ? 'expenses' : 'revenues';
-    if (allocationMethod && (cyclesLoading || pondsLoading || cyclesError || pondsError)) { alert(copy('Pond data could not be loaded. Try again before saving.')); setIsSubmitting(false); return; }
-    if (allocationMethod && allocationPreview.error) { alert(allocationCopy[allocationPreview.error]); setIsSubmitting(false); return; }
+    if (allocationMethod && (cyclesLoading || pondsLoading || cyclesError || pondsError)) { showAppAlert(copy('Pond data could not be loaded. Try again before saving.')); setIsSubmitting(false); return; }
+    if (allocationMethod && allocationPreview.error) { showAppAlert(allocationCopy[allocationPreview.error]); setIsSubmitting(false); return; }
     const selectedCycle = isCompanyWideExpense || allocationMethod ? undefined : formCycles.find((cycle) => cycle.id === formData.cycleId);
     const amount = Math.round(Number(formData.amount) * 10 ** allocationDecimals) / 10 ** allocationDecimals;
     if (!isCompanyWideExpense && !allocationMethod && !selectedCycle) {
-      alert(t.financeCycle.selectCycleMessage);
+      showAppAlert(t.financeCycle.selectCycleMessage);
       setIsSubmitting(false);
       return;
     }
@@ -293,7 +297,7 @@ export default function FinancePage() {
       resetForm();
     } catch (err) {
       console.error(err);
-      alert(err instanceof Error ? err.message : t.financeCycle.saveFailed);
+      showAppAlert(getUserErrorMessage(err, t.financeCycle.saveFailed));
     } finally {
       save.release();
       setIsSubmitting(false);
@@ -342,7 +346,7 @@ export default function FinancePage() {
         tx.update(ref, removeUndefinedFields({ settlements: appendSettlement(snapshot.data(), payment), updatedAt: serverTimestamp() }));
       });
       save.complete();
-    } catch (error) { alert(error instanceof Error ? error.message : 'Payment could not be recorded'); } finally {
+    } catch (error) { showAppAlert(getUserErrorMessage(error, 'Payment could not be recorded')); } finally {
       save.release();
     }
   };
@@ -350,8 +354,8 @@ export default function FinancePage() {
   const handleDelete = async (id: string, type: 'expense' | 'income') => {
     if (!company?.id || !canManageFinance) return;
     const record = (type === 'expense' ? expenses : income).find(record => record.id === id);
-    if (!record || isSourceLinkedFinance(record)) { alert('Correct or void linked entries from their source record.'); return; }
-    if (!window.confirm(t.messages.deleteConfirm)) return;
+    if (!record || isSourceLinkedFinance(record)) { showAppAlert('Correct or void linked entries from their source record.'); return; }
+    if (!(await confirmAppAction(t.messages.deleteConfirm))) return;
     const collectionName = type === 'expense' ? 'expenses' : 'revenues';
     try {
       await deleteDoc(doc(db, 'companies', company.id, collectionName, id));

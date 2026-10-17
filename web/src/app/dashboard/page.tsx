@@ -1,4 +1,6 @@
 "use client";
+import { showAppAlert } from '@/lib/appDialogs';
+
 
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 
@@ -419,7 +421,7 @@ function BuyerDashboard({ t, user }: { t: ReturnType<typeof useLanguage>['t']; u
       await deleteDoc(doc(db, 'users', user.uid, 'monitoredCompanies', confirmDelete));
       setConfirmDelete(null);
     } catch (error) {
-      alert(t.buyer.stopMonitoringError || 'Failed to remove farm');
+      showAppAlert(t.buyer.stopMonitoringError || 'Failed to remove farm');
     } finally {
       setIsDeleting(false);
     }

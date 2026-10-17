@@ -1,4 +1,6 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
 
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, Lock, Mail, ShieldCheck, User } from 'lucide-react';
@@ -58,7 +60,7 @@ export default function JoinPage() {
       await signUp(email, password, name, inviteToken);
       router.push('/auth/verify');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to create account');
+      setError(getUserErrorMessage(err, 'Failed to create account'));
     } finally {
       setLoading(false);
     }

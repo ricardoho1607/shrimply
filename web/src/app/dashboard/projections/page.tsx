@@ -1,4 +1,6 @@
 "use client";
+import { getUserErrorMessage } from '@/lib/userError';
+
 
 import { useSaveOperation } from '../../../../../shared/useSaveOperation';
 import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
@@ -430,7 +432,7 @@ export default function HarvestProjectionsPage() {
     } catch (error) {
       console.error('Failed to save harvest market prices:', error);
       setPriceSaveStatus('error');
-      setPriceSaveError(error instanceof Error ? error.message : 'Unable to save market prices.');
+      setPriceSaveError(getUserErrorMessage(error, 'Unable to save market prices.'));
     } finally {
       save.release();
     }

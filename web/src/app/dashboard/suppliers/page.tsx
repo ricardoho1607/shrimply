@@ -1,4 +1,6 @@
 "use client";
+import { showAppAlert } from '@/lib/appDialogs';
+
 
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { 
@@ -132,7 +134,7 @@ export default function SuppliersPage() {
         monitoredAt: new Date().toISOString(),
       }), 12000, 'Updating monitoring status is taking too long. Please try again.');
     } catch (error: unknown) {
-      alert(getErrorMessage(error, t.buyer.monitorError || 'Failed to update monitoring status'));
+      showAppAlert(getErrorMessage(error, t.buyer.monitorError || 'Failed to update monitoring status'));
     }
   };
 
@@ -143,7 +145,7 @@ export default function SuppliersPage() {
       await withTimeout(deleteDoc(doc(db, 'users', user.uid, 'monitoredCompanies', monitorConfirm.company.id)), 12000, 'Stopping monitoring is taking too long. Please try again.');
       setMonitorConfirm({ isOpen: false, company: null });
     } catch (error: unknown) {
-      alert(getErrorMessage(error, t.buyer.stopMonitoringError || 'Failed to stop monitoring'));
+      showAppAlert(getErrorMessage(error, t.buyer.stopMonitoringError || 'Failed to stop monitoring'));
     } finally {
       setIsUpdating(false);
     }
