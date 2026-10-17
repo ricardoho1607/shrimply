@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {

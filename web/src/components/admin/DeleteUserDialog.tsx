@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, Loader2, Trash2, X } from 'lucide-react';
+import { Loader2, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { validateDeleteUserAction } from '@/lib/admin/adminCore';

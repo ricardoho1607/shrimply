@@ -1,24 +1,11 @@
 "use client";
 
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import NavbarID from '@/components/NavbarID';
 import FooterID from '@/components/FooterID';
 import Cursor from '@/components/Cursor';
-import { 
-  Smartphone, 
-  Monitor, 
-  Database, 
-  ChevronRight,
-  ShieldAlert,
-  BarChart3,
-  QrCode,
-  Users,
-  FileText,
-  ShoppingBag,
-  Clock,
-  UserLock
-} from 'lucide-react';
+import { Smartphone, Monitor, ChevronRight, ShieldAlert, BarChart3, QrCode, Users, FileText, ShoppingBag, Clock, UserLock } from 'lucide-react';
 
 export default function HowItWorksPage() {
   useEffect(() => {

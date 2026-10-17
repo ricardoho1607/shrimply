@@ -1,6 +1,7 @@
 import { useCurrentTime } from './hooks/useCurrentTime';
 // app/companydetails.tsx - Android Optimized with Safe Area
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+// app/companydetails.tsx - Android Optimized with Safe Area
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, Alert, ActivityIndicator, RefreshControl, StatusBar, Platform, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -10,7 +11,6 @@ import { useLanguage } from '../context/LanguageContext';
 import { hasFarmPermission } from '../shared/permissions';
 
 const { width } = Dimensions.get('window');
-const isSmallDevice = width < 375;
 
 interface TeamMember {
   id: string;

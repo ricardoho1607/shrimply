@@ -27,38 +27,7 @@ import {
   type FarmStaffRole,
 } from '../../../../shared/permissions';
 import { getInitials, getLatestIsoTimestamp, maskEmail, maskPhone } from './adminCore';
-import type {
-  AccountIntelligence,
-  AccountStatus,
-  AdminAuditEvent,
-  AdminDirectoryResponse,
-  AdminDirectoryUser,
-  AdminEventType,
-  AdminTimelineEvent,
-  AuditLogFilters,
-  CompanyOverviewItem,
-  DataAvailability,
-  DeleteAdminUserInput,
-  DeleteAdminUserResult,
-  DetailedFarm,
-  DetailedFarmMember,
-  DetailedFarmPond,
-  FeatureAdoptionItem,
-  FarmBusinessSize,
-  HealthInput,
-  OrsonAiTelemetry,
-  OverviewTriageItem,
-  PlatformHealthOverview,
-  PlatformOverviewMetrics,
-  PlatformScaleMetrics,
-  SecurityPostureData,
-  SecurityTelemetry,
-  ServiceHealthItem,
-  SupportDiseaseReport,
-  SupportJoinRequest,
-  SupportOverviewData,
-  SupportTesterRequest,
-} from './types';
+import type { AccountIntelligence, AccountStatus, AdminAuditEvent, AdminDirectoryResponse, AdminDirectoryUser, AdminEventType, AdminTimelineEvent, AuditLogFilters, CompanyOverviewItem, DataAvailability, DeleteAdminUserInput, DeleteAdminUserResult, DetailedFarm, DetailedFarmMember, DetailedFarmPond, FeatureAdoptionItem, FarmBusinessSize, HealthInput, OrsonAiTelemetry, OverviewTriageItem, PlatformHealthOverview, PlatformOverviewMetrics, PlatformScaleMetrics, SecurityPostureData, ServiceHealthItem, SupportDiseaseReport, SupportJoinRequest, SupportOverviewData, SupportTesterRequest } from './types';
 import type { DirectoryQuery } from './adminRepository';
 
 type FirestoreDocument = QueryDocumentSnapshot<DocumentData>;

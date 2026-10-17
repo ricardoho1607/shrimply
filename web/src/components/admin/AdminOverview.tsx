@@ -1,29 +1,8 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Activity,
-  AlertTriangle,
-  ArrowDown,
-  ArrowRight,
-  ArrowUp,
-  ArrowUpDown,
-  Building2,
-  CalendarDays,
-  Check,
-  CheckCircle2,
-  Clock,
-  Loader2,
-  RefreshCcw,
-  Search,
-  Sparkles,
-  Trash2,
-  TrendingUp,
-  UserCheck,
-  Users,
-  Waves,
-} from 'lucide-react';
-import type { AdminDirectoryUser, CompanyOverviewItem, OverviewTriageItem, PlatformOverviewMetrics } from '@/lib/admin/types';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, ArrowRight, ArrowUpDown, Building2, CalendarDays, Check, Loader2, RefreshCcw, Trash2, Users } from 'lucide-react';
+import type { AdminDirectoryUser, PlatformOverviewMetrics } from '@/lib/admin/types';
 import { createAdminIntelligenceRepository } from '@/lib/admin/adminRepository';
 import { BatchDeleteUsersDialog } from './BatchDeleteUsersDialog';
 import styles from '@/app/admin/admin.module.css';

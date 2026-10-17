@@ -5,32 +5,9 @@ import { createRecordOnce } from '@/lib/saveData';
 import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
 import { updateRecordOnline } from '@/lib/saveData';
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Search, 
-  MapPin, 
-  Filter, 
-  Plus, 
-  ChevronRight, 
-  Clock, 
-  Eye, 
-  MessageSquare, 
-  Tag, 
-  CreditCard, 
-  Truck,
-  Loader2,
-  AlertCircle,
-  X,
-  CheckCircle2,
-  ArrowUpRight,
-  TrendingUp,
-  Store,
-  Navigation,
-  Edit,
-  Trash2
-} from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { Search, MapPin, Plus, Clock, Eye, MessageSquare, Tag, CreditCard, Loader2, X, CheckCircle2, ArrowUpRight, TrendingUp, Store, Edit, Trash2 } from 'lucide-react';
 import { collection, query, where, onSnapshot, doc, serverTimestamp, increment, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';

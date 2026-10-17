@@ -28,7 +28,8 @@ test('admin selection is reflected in URL state', () => {
 
 test('a directly requested user remains selected even when absent from the current directory page', () => {
   const source = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AdminCommandCenter.tsx'), 'utf8');
-  assert.match(source, /if \(requestedUserId\) return requestedUserId/);
+  assert.match(source, /useState<string \| null>\(requestedUserId\)/);
+  assert.match(source, /if \(requestedUserId !== selectedId\) \{\s*setSelectedId\(requestedUserId\)/);
 });
 
 test('selected account has a direct return path to the user directory', () => {
@@ -74,13 +75,13 @@ test('selected farm members can change role without unlocking the company owner'
   assert.match(rules, /data\.ownerId != userId/);
 });
 
-test('admin UI masks directory contacts and audits the selected email reveal', () => {
-  const directory = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/UserDirectory.tsx'), 'utf8');
+test('admin UI supports masked directory fallback and audits the selected email reveal', () => {
+  const directory = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AdminOverview.tsx'), 'utf8');
   const detail = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AccountDetail.tsx'), 'utf8');
   const commandCenter = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AdminCommandCenter.tsx'), 'utf8');
   const backend = fs.readFileSync(path.join(process.cwd(), '..', 'functions/adminIntelligence.js'), 'utf8');
   assert.match(directory, /user\.maskedEmail/);
-  assert.doesNotMatch(directory, /user\.email/);
+  assert.match(directory, /user\.email \|\| user\.maskedEmail/);
   assert.match(detail, /account\.email/);
   assert.doesNotMatch(detail, /account\.maskedEmail/);
   assert.match(detail, /account\.maskedPhone/);

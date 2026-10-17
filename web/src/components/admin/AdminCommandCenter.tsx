@@ -1,25 +1,13 @@
 'use client';
 
 import { onIdTokenChanged, signOut } from 'firebase/auth';
-import { ArrowLeft, Clock, LayoutGrid, Menu, RefreshCcw, Trash2, UserCheck, X } from 'lucide-react';
+import { ArrowLeft, Clock, Menu, RefreshCcw, Trash2, UserCheck, X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { createAdminIntelligenceRepository } from '@/lib/admin/adminRepository';
-import type {
-  AccountIntelligence,
-  AdminAuditEvent,
-  AdminDirectoryFilters,
-  AdminDirectoryResponse,
-  AdminViewMode,
-  DetailedFarm,
-  FarmBusinessSize,
-  PlatformHealthOverview,
-  PlatformOverviewMetrics,
-  SecurityPostureData,
-  SupportOverviewData,
-} from '@/lib/admin/types';
+import type { AccountIntelligence, AdminAuditEvent, AdminViewMode, DetailedFarm, FarmBusinessSize, PlatformHealthOverview, PlatformOverviewMetrics, SecurityPostureData, SupportOverviewData } from '@/lib/admin/types';
 import { AccountDetail } from './AccountDetail';
 import { AdminActions } from './AdminActions';
 import { AdminAuditView } from './AdminAuditView';
@@ -31,7 +19,6 @@ import { AdminSidebar } from './AdminSidebar';
 import { AdminSupportView } from './AdminSupportView';
 import { AccountTimeline } from './AccountTimeline';
 import { DeleteUserDialog } from './DeleteUserDialog';
-import { UserDirectory } from './UserDirectory';
 import { getFirestorePlatformHealth } from '@/lib/admin/firestoreAdminAdapter';
 import type { FarmPermissionOverrides, FarmStaffRole } from '../../../../shared/permissions';
 import styles from '@/app/admin/admin.module.css';
@@ -349,12 +336,6 @@ export default function AdminCommandCenter() {
     });
     return () => { cancelled = true; };
   }, [access, activeView, loadAudit]);
-
-  const resolveRequestedUser = useCallback(() => {
-    // Ensure directly requested user remains selected even when absent from directory
-    if (requestedUserId) return requestedUserId;
-    return null;
-  }, [requestedUserId]);
 
   // Selected User Account Loader
   const loadAccount = useCallback(async () => {

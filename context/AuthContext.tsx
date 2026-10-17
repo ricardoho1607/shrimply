@@ -1,6 +1,5 @@
 // context/AuthContext.tsx - Fixed version with stable references and proper hook ordering
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useRouter } from 'expo-router';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -30,7 +29,6 @@ import { useBuyerStore } from '../app/store/buyerStore';
 import { usePondStore } from '../app/store/pondStore';
 import { syncPublicCompanyProfile } from '../app/utils/publicCompanyProfile';
 import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
 import { getSystemTimeZone, isValidTimeZone, resolveFarmTimeZone } from '../shared/farmDate';
 import { isCompanyProfileComplete, isUserOnboardingComplete } from '../shared/onboarding';
 import type { FarmPermissionOverrides } from '../shared/permissions';

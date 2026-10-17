@@ -98,8 +98,7 @@ const outputs = {
     extraImports: `import {
   buildSamplingGrowthMovementRows,
   renderSamplingGrowthMovementChartSvg,
-} from '../../../../shared/samplingGrowthMovementChart';
-import type { PlanktonOverwatchSnapshot } from '../../../../shared/planktonOverwatch';`,
+} from '../../../../shared/samplingGrowthMovementChart';`,
     replacements: [
       ['interface PdfBrandAssets', 'export interface PdfBrandAssets'],
       ['interface SamplingData', 'export interface SamplingData'],

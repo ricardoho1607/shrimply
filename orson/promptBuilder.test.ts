@@ -1,18 +1,7 @@
 import { calculatePondMetrics } from './metrics';
 import { normalizePondData } from './normalizePondData';
 import { build72HourOutlook } from './outlook';
-import {
-  buildOrsonPromptPackage,
-  buildOrsonRequestPrompt,
-  cleanOrsonResponse,
-  estimateOrsonPromptTokens,
-  expandReferences,
-  isFarmSpecificQuestion,
-  ORSON_FALLBACK_RESPONSE,
-  ORSON_PROMPT_TOKEN_BUDGET,
-  selectCompleteContextSections,
-  withOrsonTimeout,
-} from './promptBuilder';
+import { buildOrsonPromptPackage, buildOrsonRequestPrompt, cleanOrsonResponse, estimateOrsonPromptTokens, isFarmSpecificQuestion, ORSON_FALLBACK_RESPONSE, ORSON_PROMPT_TOKEN_BUDGET, selectCompleteContextSections, withOrsonTimeout } from './promptBuilder';
 import { analyzePondRisks } from './riskEngine';
 import { consumeOrsonCallableStream } from './callableStream';
 import { loadCachedOrsonCalibration } from './calibrationCache';
@@ -209,9 +198,12 @@ export const runPromptBuilderSelfTest = () => {
   assert(farmPackage.systemInstruction.includes('Always use farm-local calendar dates'), 'instructs farm-local calendar dates');
   assert(farmPackage.systemInstruction.includes('Stale normal data is not current safety'), 'instructs stale data is not current safety');
   assert(farmPackage.systemInstruction.includes('Logged feed allocation is an operational distribution'), 'distinguishes allocation from appetite');
-  assert(farmPackage.systemInstruction.includes('Explicit zero feed (0 kg) indicates feeding was halted or fasted'), 'preserves explicit zero feed rule');
+  assert(farmPackage.systemInstruction.includes('Explicit zero feed (0 kg) means the recorded daily feed allocation or total is zero; the reason and actual consumption are unknown'), 'preserves explicit zero feed without inferring its cause');
+  assert(farmPackage.systemInstruction.includes('Do not infer fasting, halted feeding, appetite, tray clearance, or consumption from this value'), 'prevents unsupported conclusions from zero feed');
+  assert(farmPackage.systemInstruction.includes('Do not treat zero feed as missing data or assume it means zero living biomass'), 'keeps explicit zero feed distinct from missing data and biomass');
   assert(farmPackage.systemInstruction.includes('A missing observation is strictly unknown'), 'enforces missing observations stay unknown');
-  assert(farmPackage.systemInstruction.includes('Prompt context carries source IDs, measurement dates, precision, freshness, and per-metric coverage'), 'instructs evidence provenance');
+  assert(farmPackage.systemInstruction.includes('Prompt context carries source IDs internally, measurement dates, precision, freshness, and per-metric coverage'), 'instructs internal evidence provenance');
+  assert(farmPackage.systemInstruction.includes('never expose record IDs'), 'keeps internal record identifiers out of answers');
   assert(farmPackage.context.includes('biomass_range_kg'), 'includes biomass range');
   assert(farmPackage.context.includes('calibration'), 'includes bounded company calibration context');
   assert(farmRiskPayload[0].evidence, 'includes evidence object in risk payload');
@@ -219,7 +211,8 @@ export const runPromptBuilderSelfTest = () => {
   assert(farmRiskPayload[0].evidence.water.source_id !== undefined, 'evidence carries source ID for water');
   assert(farmRiskPayload[0].evidence.water.date === '2026-01-15', 'evidence carries measurement date');
   assert(typeof farmRiskPayload[0].evidence.water.age_days === 'number', 'evidence carries freshness age_days');
-  assert(farmRiskPayload[0].evidence.water.is_fresh === true, 'evidence carries freshness flag');
+  assert(farmRiskPayload[0].evidence.water.is_fresh === false, 'yesterday\'s water reading is not current evidence');
+  assert(farmRiskPayload[0].evidence.water.is_stale === true, 'yesterday\'s water reading carries the stale flag');
   assert(farmRiskPayload[0].evidence.water.coverage.recorded_days > 0, 'evidence carries per-metric coverage');
   assert(farmRiskPayload[0].growth_evidence.sample_count !== undefined, 'growth_evidence carries sample_count');
   assert(farmRiskPayload[0].growth_evidence.adg_source !== undefined, 'growth_evidence carries adg_source');
@@ -227,7 +220,8 @@ export const runPromptBuilderSelfTest = () => {
   assert(farmRiskPayload[0].daily_records_14d[0].source_ids !== undefined, 'daily records carry source_ids');
   assert(farmRiskPayload[0].daily_records_14d[0].date !== undefined, 'daily records carry dates');
   assert(farmRiskPayload[0].daily_records_14d[0].ph_morning === undefined, 'missing analyte in daily record stays unknown');
-  assert(estimateOrsonPromptTokens(farmPackage.context) < ORSON_PROMPT_TOKEN_BUDGET, 'keeps prompt context within its token budget');
+  const farmRequestPrompt = buildOrsonRequestPrompt(farmPackage.context, farmPackage.userMessage);
+  assert(estimateOrsonPromptTokens(farmRequestPrompt) <= ORSON_PROMPT_TOKEN_BUDGET, 'keeps the final farm request within its token budget');
   assert(cleanOrsonResponse('## **Risk**  \nUse aeration.') === 'Risk\nUse aeration.', 'cleans markdown-heavy responses');
   assert(cleanOrsonResponse('Weather: heavy_rain') === 'Weather: Heavy Rain', 'formats raw enum values for display');
 
@@ -275,8 +269,12 @@ export const runPromptBuilderSelfTest = () => {
 
   assert(comparisonPackage.questionFocus.intent === 'comparison', 'detects comparison intent');
   assert(comparisonPackage.questionFocus.isComparison === true, 'sets isComparison flag');
-  assert(comparisonPackage.context.includes('ORSON COMPARATIVE MATRIX'), 'includes comparative matrix in context');
-  assert(comparisonPackage.context.includes('recent_treatments'), 'includes recent treatments');
+  const comparisonOverview = JSON.parse(comparisonPackage.context.split('ORSON FARM OVERVIEW:\n')[1]);
+  assert(comparisonOverview.ponds.length === 2, 'includes both requested ponds in the comparison overview');
+  assert(comparisonOverview.ponds.some((pond: { pond: string }) => pond.pond === 'Prompt Pond'), 'includes the first requested pond');
+  assert(comparisonOverview.ponds.some((pond: { pond: string }) => pond.pond === 'Prompt Pond 2'), 'includes the second requested pond');
+  assert(comparisonPackage.context.includes('"summary_only":true'), 'labels the comparison as summary-only');
+  assert(comparisonPackage.context.includes('"detailed_history_included":false'), 'does not claim detailed treatment history was supplied');
 
   const oversizedMetrics = {
     ...metrics,
@@ -310,12 +308,17 @@ export const runPromptBuilderSelfTest = () => {
   });
   const focusedRiskPayload = JSON.parse(focusedPackage.context.split('ORSON RISK PAYLOAD:\n')[1]);
   const focusedRecords = focusedRiskPayload[0].daily_records_14d;
-  const requestPrompt = buildOrsonRequestPrompt(focusedPackage.context, focusedPackage.userMessage);
+  let oversizedRequestError = '';
+  try {
+    buildOrsonRequestPrompt(focusedPackage.context, focusedPackage.userMessage);
+  } catch (error) {
+    oversizedRequestError = error instanceof Error ? error.message : String(error);
+  }
   assert(focusedRiskPayload.length === 1, 'sends only the explicitly selected pond');
   assert(focusedRecords.length === 14, 'sends the selected pond calendar window for a diagnostic question');
   assert(focusedRecords.at(-1).date === '2026-01-16', 'excludes future-dated selected-pond records');
   assert(focusedRecords.every((record: { operational_notes?: string | null }) => !record.operational_notes || record.operational_notes.length <= 180), 'trims long operational notes');
-  assert(estimateOrsonPromptTokens(requestPrompt) <= ORSON_PROMPT_TOKEN_BUDGET, 'enforces the Orson request token budget');
+  assert(oversizedRequestError.startsWith('Orson context budget exceeded: protected structured evidence'), 'rejects oversized protected evidence instead of silently dropping records');
 
   return {
     farmPackage,

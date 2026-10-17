@@ -1,6 +1,5 @@
 "use client";
 
-import React from 'react';
 import { Activity, BarChart3, Building2, Database, Filter, Search, Sparkles, UserRoundCheck, Users, type LucideIcon } from 'lucide-react';
 
 type AdminTab = 'overview' | 'companies' | 'users' | 'usage' | 'followUp' | 'testers';

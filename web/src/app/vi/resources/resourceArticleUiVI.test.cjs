@@ -71,6 +71,6 @@ test('Vietnamese navbar and footer include Cẩm nang resources links', () => {
 });
 
 test('Language toggle supports 1:1 switching for /resources, /id/resources, /th/resources, and /vi/resources', () => {
-  assert.match(languageToggle, /isResourcesPath/);
+  assert.match(languageToggle, /const enHref = basePath === "\/" \? "\/" : basePath/);
   assert.match(languageToggle, /\/vi\$\{basePath\}/);
 });

@@ -14,7 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useCurrency } from '../context/CurrencyContext';
 import financeService, { Expense, ExpenseInput } from './services/financeService';
-import revenueService, { Revenue, RevenueInput } from './services/revenueService';
+import revenueService, { Revenue } from './services/revenueService';
 import { usePondStore } from './store/pondStore';
 import { useFeedAdditiveStore } from './store/feedAdditiveStore';
 import { getFarmDateKey, getFarmPeriodDateKeys, isDateKeyInRange } from '../shared/farmDate';
@@ -30,7 +30,6 @@ import { buildProductionAllocation, getActiveExpensePonds, getPlExpensePonds, pr
 import { getFinanceAllocationCopy, productionExpenseLabel } from '../shared/financeAllocationCopy';
 import { hasFarmPermission } from '../shared/permissions';
 
-const PAYMENT_TYPES = ['Cash', 'Bank Transfer', 'Mobile Payment'];
 const PERIOD_OPTIONS = ['Today', 'This Week', 'This Month', 'All Time'] as const;
 const conciseFinanceDescription = (value: string) => value
   .replace(/\s*\(Batch:[^)]+\)/gi, '')

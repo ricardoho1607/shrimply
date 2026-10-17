@@ -8,7 +8,6 @@ import {
   Layers,
   RefreshCcw,
 } from 'lucide-react';
-import React from 'react';
 import styles from '@/app/admin/admin.module.css';
 import type { PlatformHealthOverview } from '@/lib/admin/types';
 

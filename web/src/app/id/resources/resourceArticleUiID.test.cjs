@@ -71,6 +71,6 @@ test('Indonesian navbar and footer include Panduan resources links', () => {
 });
 
 test('Language toggle supports 1:1 switching for /resources and /id/resources', () => {
-  assert.match(languageToggle, /isResourcesPath/);
+  assert.match(languageToggle, /const enHref = basePath === "\/" \? "\/" : basePath/);
   assert.match(languageToggle, /\/id\$\{basePath\}/);
 });

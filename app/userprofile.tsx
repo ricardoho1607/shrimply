@@ -1,5 +1,6 @@
 // app/userprofile.tsx - User Profile with Firebase Storage Upload
-import React, { useState, useEffect } from 'react';
+// app/userprofile.tsx - User Profile with Firebase Storage Upload
+import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Alert, ActivityIndicator, StatusBar, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';

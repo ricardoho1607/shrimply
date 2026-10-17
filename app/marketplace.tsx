@@ -1,9 +1,6 @@
 import { useCurrentTime } from './hooks/useCurrentTime';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { 
-  FlatList, View, Text, ScrollView, TouchableOpacity, StyleSheet, StatusBar, 
-  RefreshControl, Alert, Switch, Platform, Modal, ActivityIndicator, TextInput
-} from 'react-native';
+import { FlatList, View, Text, ScrollView, TouchableOpacity, StyleSheet, StatusBar, RefreshControl, Switch, Platform, Modal, TextInput } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';

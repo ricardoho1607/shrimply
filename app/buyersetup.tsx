@@ -1,5 +1,6 @@
 // app/buyersetup.tsx - With location coordinates and country
-import React, { useState } from 'react';
+// app/buyersetup.tsx - With location coordinates and country
+import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView,
   ScrollView, Alert, ActivityIndicator, Platform,

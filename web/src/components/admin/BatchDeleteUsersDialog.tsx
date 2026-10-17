@@ -1,7 +1,7 @@
 'use client';
 
-import { AlertTriangle, CheckCircle2, Loader2, Trash2, X } from 'lucide-react';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2, Trash2, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { AdminDirectoryUser } from '@/lib/admin/types';
 import styles from '@/app/admin/admin.module.css';

@@ -1,34 +1,9 @@
 'use client';
 
-import {
-  AlertCircle,
-  AlertTriangle,
-  ArrowRight,
-  Check,
-  CheckCircle2,
-  Clock,
-  Copy,
-  ExternalLink,
-  Filter,
-  Headphones,
-  Mail,
-  RefreshCcw,
-  Search,
-  ShieldAlert,
-  Smartphone,
-  Sparkles,
-  UserCheck,
-  Users,
-  X,
-} from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import { ArrowRight, Check, CheckCircle2, Copy, Mail, RefreshCcw, ShieldAlert, Smartphone, Users, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import styles from '@/app/admin/admin.module.css';
-import type {
-  SupportDiseaseReport,
-  SupportJoinRequest,
-  SupportOverviewData,
-  SupportTesterRequest,
-} from '@/lib/admin/types';
+import type { SupportDiseaseReport, SupportOverviewData } from '@/lib/admin/types';
 
 interface AdminSupportViewProps {
   data: SupportOverviewData | null;

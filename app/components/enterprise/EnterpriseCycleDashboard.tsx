@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import React, { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,

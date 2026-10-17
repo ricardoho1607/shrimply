@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Modal,
   ScrollView,

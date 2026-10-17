@@ -1,18 +1,9 @@
 "use client";
 
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { 
-  Zap, 
-  BarChart2, 
-  Database, 
-  Brain, 
-  ShieldCheck, 
-  TrendingDown,
-  Shuffle,
-  ClipboardX
-} from 'lucide-react';
+import { BarChart2, Database, Brain, ShieldCheck, TrendingDown, Shuffle, ClipboardX } from 'lucide-react';
 
 import Cursor from '@/components/Cursor';
 

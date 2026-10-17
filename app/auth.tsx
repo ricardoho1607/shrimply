@@ -5,7 +5,7 @@ import * as Google from 'expo-auth-session/providers/google';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,

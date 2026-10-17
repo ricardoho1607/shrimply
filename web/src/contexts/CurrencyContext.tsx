@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { Language } from '../translations';
 import { useAuth } from './AuthContext';

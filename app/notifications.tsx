@@ -1,6 +1,7 @@
 import { dedupeOrsonNotifications, getOrsonAlertCaption } from '../shared/orsonNotification';
 // app/notifications.tsx - Updated with Clear All Button
-import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react';
+// app/notifications.tsx - Updated with Clear All Button
+import { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, StatusBar,
   ActivityIndicator, FlatList, RefreshControl, Alert

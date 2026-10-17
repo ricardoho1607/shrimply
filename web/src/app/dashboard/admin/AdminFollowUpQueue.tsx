@@ -1,6 +1,5 @@
 "use client";
 
-import React from 'react';
 import { AlertTriangle, ArrowRight, Building2, Mail, UserRoundCheck } from 'lucide-react';
 import { getCompanyHealth } from './AdminPremiumSections';
 

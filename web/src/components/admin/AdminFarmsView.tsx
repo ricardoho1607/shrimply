@@ -1,25 +1,9 @@
 'use client';
 
-import {
-  ArrowRight,
-  Building2,
-  Calendar,
-  Check,
-  ChevronRight,
-  ExternalLink,
-  Layers,
-  MapPin,
-  RefreshCcw,
-  Search,
-  Sparkles,
-  User,
-  Users,
-  Waves,
-  X,
-} from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import { ArrowRight, Building2, ExternalLink, Layers, MapPin, RefreshCcw, Sparkles, User, Users, Waves, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import styles from '@/app/admin/admin.module.css';
-import type { DetailedFarm, DetailedFarmPond } from '@/lib/admin/types';
+import type { DetailedFarm } from '@/lib/admin/types';
 
 interface AdminFarmsViewProps {
   farms: DetailedFarm[];

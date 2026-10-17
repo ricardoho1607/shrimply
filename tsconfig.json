@@ -24,6 +24,8 @@
     "dist",
     "out",
     "artifacts",
+    "output",
+    "tmp",
     "sites"
   ]
 }

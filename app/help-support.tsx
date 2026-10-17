@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Alert,
   Linking,

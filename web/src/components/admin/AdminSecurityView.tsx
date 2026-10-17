@@ -1,21 +1,6 @@
 'use client';
 
-import {
-  AlertCircle,
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle2,
-  ExternalLink,
-  KeyRound,
-  Lock,
-  RefreshCcw,
-  Shield,
-  ShieldAlert,
-  ShieldCheck,
-  UserCheck,
-  Users,
-} from 'lucide-react';
-import React from 'react';
+import { ArrowRight, KeyRound, RefreshCcw, ShieldCheck } from 'lucide-react';
 import styles from '@/app/admin/admin.module.css';
 import type { SecurityPostureData } from '@/lib/admin/types';
 

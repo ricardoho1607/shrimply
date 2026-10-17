@@ -1,7 +1,7 @@
 import { pondExistsOnReportDate } from '../shared/reportSnapshots';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Check, ChevronDown, Globe } from "lucide-react";
@@ -29,7 +29,6 @@ export default function LanguageToggle({ isMobile = false }: { isMobile?: boolea
       : pathname.replace(/^\/id/, "")
     : pathname;
 
-  const isResourcesPath = basePath === "/resources" || basePath.startsWith("/resources/");
   const enHref = basePath === "/" ? "/" : basePath;
   const idHref = basePath === "/" ? "/id" : `/id${basePath}`;
   const thHref = basePath === "/" ? "/th" : `/th${basePath}`;

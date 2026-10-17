@@ -1,8 +1,7 @@
 "use client";
 
-import React from 'react';
 import AccessibleDialog from './AccessibleDialog';
-import { AlertCircle, X, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 
 interface ConfirmationModalProps {
   isOpen: boolean;

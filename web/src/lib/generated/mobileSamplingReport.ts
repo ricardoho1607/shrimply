@@ -11,7 +11,6 @@ import {
   buildSamplingGrowthMovementRows,
   renderSamplingGrowthMovementChartSvg,
 } from '../../../../shared/samplingGrowthMovementChart';
-import type { PlanktonOverwatchSnapshot } from '../../../../shared/planktonOverwatch';
 
 export interface PdfBrandAssets {
   backgroundBase64: string;

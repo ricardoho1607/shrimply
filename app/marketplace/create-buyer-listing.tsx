@@ -2,7 +2,7 @@ import { useCurrentTime } from '../hooks/useCurrentTime';
 // app/marketplace/create-buyer-listing.tsx - Android Optimized
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   Alert, Platform,
   ScrollView,
@@ -24,7 +24,6 @@ import AppDatePicker from '../components/forms/AppDatePicker';
 import { hasFarmPermission } from '../../shared/permissions';
 
 const { width } = Dimensions.get('window');
-const isSmallDevice = width < 375;
 
 interface PriceList {
   size20: string;

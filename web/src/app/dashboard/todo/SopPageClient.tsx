@@ -3,7 +3,7 @@ import { sopTaskMatchesView } from "../../../../../shared/sop/presentation";
 import { sopMeasurementLabel } from "../../../../../shared/sop/editor";
 import { sopText, sopTaskTitle } from "../../../../../shared/sop/uiCopy";
 import { useAuth } from "@/contexts/AuthContext";
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import AccessibleDialog from "@/components/AccessibleDialog";
 import { SopTodoList } from "@/components/SopTodoList";

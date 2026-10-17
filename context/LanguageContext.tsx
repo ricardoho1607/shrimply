@@ -1,13 +1,8 @@
 // contexts/LanguageContext.tsx
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getLocales } from 'expo-localization';
 import { translations, Language, Translations } from '../app/translations';
-
-// Context type
-type DeepPartial<T> = {
-  [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : any;
-};
 
 type LanguageContextType = {
   currentLanguage: Language;  // ✅ Changed from `language: string`

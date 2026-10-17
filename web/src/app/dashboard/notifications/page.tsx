@@ -1,7 +1,7 @@
 "use client";
 
 import { dedupeOrsonNotifications, getOrsonAlertCaption } from '../../../../../shared/orsonNotification';
-import React, { useMemo, useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { 
   Bell, 
   CheckCircle2, 

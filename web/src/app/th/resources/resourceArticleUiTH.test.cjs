@@ -71,6 +71,6 @@ test('Thai navbar and footer include คู่มือ resources links', () => 
 });
 
 test('Language toggle supports 1:1 switching for /resources, /id/resources, and /th/resources', () => {
-  assert.match(languageToggle, /isResourcesPath/);
+  assert.match(languageToggle, /const enHref = basePath === "\/" \? "\/" : basePath/);
   assert.match(languageToggle, /\/th\$\{basePath\}/);
 });

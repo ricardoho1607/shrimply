@@ -1,6 +1,5 @@
 "use client";
 
-import React from 'react';
 import { AlertTriangle, BarChart3, Target, TrendingUp } from 'lucide-react';
 
 type CompanyMetric = {

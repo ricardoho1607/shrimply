@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import Script from "next/script";
 import { canonicalUrl, seoMetadata } from "@/config/seo";
 import { SITE_CONFIG } from "@/config/site";
 

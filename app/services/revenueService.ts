@@ -1,16 +1,7 @@
 import { isSourceLinkedFinance, sumMoney, monetaryValue, appendSettlement } from '../../shared/financeIntegrity';
 // services/revenueService.ts
 import { normalizeCategory } from '../utils/categoryNormalizer';
-import { 
-  onSnapshot,
-  getDoc,
-  collection, 
-  doc, 
-  getDocs, 
-  query, 
-  orderBy, 
-  Timestamp,
-} from 'firebase/firestore';
+import { onSnapshot, getDoc, collection, doc, getDocs, query, Timestamp } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
 import {
   createOfflineOperationId,

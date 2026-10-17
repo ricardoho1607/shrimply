@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity } from "react-native";
 import { SOP_FIELDS } from "../../shared/sop/registry";
 import { sopText } from "../../shared/sop/uiCopy";

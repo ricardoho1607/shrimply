@@ -19,11 +19,7 @@ import {
   normalizeFarmDateKey,
   resolveFarmTimeZone,
 } from '../shared/farmDate';
-import {
-  parseFeedKg,
-  validateFeedKg,
-  evaluateMeasurementFreshness,
-} from '../shared/orsonEvidence';
+import { parseFeedKg, evaluateMeasurementFreshness } from '../shared/orsonEvidence';
 
 type RawRecord = Record<string, any>;
 type RawPond = Record<string, any>;

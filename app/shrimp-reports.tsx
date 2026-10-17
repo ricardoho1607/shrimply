@@ -6,14 +6,14 @@ import { useEnterpriseBlocks } from './hooks/useEnterpriseBlocks';
 // app/shrimp-reports.tsx - Optimized with Android Consistency
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { usePondStore, type Pond, getPondCurrentDoc, getPondPlSupplier, isBaselineSampling, isPondCycleActive } from './store/pondStore';
 import { exportSamplingReportPDF, prepareSamplingReportData } from './services/samplingReportExportService';
-import { DAY_MS, calculateSamplingAdg, getSamplingMbw, toFiniteNumber } from '../shared/pondCalculations';
+import { calculateSamplingAdg, getSamplingMbw, toFiniteNumber } from '../shared/pondCalculations';
 import { hasFarmPermission } from '../shared/permissions';
 import { useFarmDateKey } from './hooks/useFarmDateKey';
 import { FARM_OPERATIONAL_DAY_ROLLOVER_HOUR } from '../shared/farmDate';

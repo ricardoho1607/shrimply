@@ -3,7 +3,7 @@
 import { useSaveOperation } from '../../../../../shared/useSaveOperation';
 import { prepareSaveData as removeUndefinedFields } from '@/lib/saveData';
 import { updateRecordOnline } from '@/lib/saveData';
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Target, 
   TrendingUp, 

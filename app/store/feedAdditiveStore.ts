@@ -757,13 +757,6 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
       const quantityDelta = desiredDailyTotal - currentDailyTotal;
       if (Math.abs(quantityDelta) < 0.000001) return [];
       if (quantityDelta > 0 && quantityDelta > currentStock) throw new Error(DAILY_FEED_ERROR_CODES.insufficientStock);
-      const matchingUsage = (feed.usageHistory || [])
-        .filter((usage) => isDailyFeedUsage(usage, pondId, date) && Number(usage.quantity) > 0)
-        .slice().reverse()
-        .find((usage) => Number(usage.unitPrice) > 0 || Number(usage.totalCost) > 0);
-      const historicalUnitPrice = matchingUsage
-        ? Number(matchingUsage.unitPrice) || (Number(matchingUsage.totalCost) / Number(matchingUsage.quantity))
-        : 0;
       const unitPrice = quantityDelta > 0 && currentStock > 0
         ? currentCost / currentStock
         : getUsageReturnCost((feed.usageHistory || []).filter(usage => isDailyFeedUsage(usage, pondId, date)), Math.abs(quantityDelta)).unitPrice;

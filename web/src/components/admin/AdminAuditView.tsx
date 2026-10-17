@@ -1,26 +1,8 @@
 'use client';
 
 import { useCurrentTime } from '@/hooks/useCurrentTime';
-import {
-  ArrowRight,
-  Calendar,
-  Check,
-  Code,
-  Copy,
-  Download,
-  ExternalLink,
-  FileJson,
-  FileSpreadsheet,
-  Filter,
-  ListChecks,
-  RefreshCcw,
-  Search,
-  Shield,
-  Trash2,
-  User,
-  X,
-} from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import { Check, Code, Copy, FileJson, FileSpreadsheet, ListChecks, RefreshCcw, Shield, User, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import styles from '@/app/admin/admin.module.css';
 import type { AdminAuditEvent, AuditLogFilters } from '@/lib/admin/types';
 

@@ -1,5 +1,6 @@
 // app/company-setup2.tsx - With location coordinates and i18n support
-import React, { useState, useCallback, useEffect } from 'react';
+// app/company-setup2.tsx - With location coordinates and i18n support
+import { useState, useCallback } from 'react';
 import {
   View,
   Text,

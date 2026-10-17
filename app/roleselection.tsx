@@ -1,5 +1,6 @@
 // app/roleselection.tsx - Updated with translations
-import React, { useState } from 'react';
+// app/roleselection.tsx - Updated with translations
+import { useState } from 'react';
 import {
   View,
   Text,

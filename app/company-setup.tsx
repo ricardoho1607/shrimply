@@ -1,5 +1,6 @@
 // app/company-setup.tsx - Fixed to save location with coordinates
-import React, { useState, useCallback, useEffect } from 'react';
+// app/company-setup.tsx - Fixed to save location with coordinates
+import { useState, useCallback } from 'react';
 import {
   View,
   Text,

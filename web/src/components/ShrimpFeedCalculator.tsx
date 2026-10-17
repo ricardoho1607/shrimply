@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Check, Copy, RotateCcw, Info, Sparkles } from "lucide-react";
 import { getFeedRateFromMbw } from "../../../shared/pondCalculations";
 

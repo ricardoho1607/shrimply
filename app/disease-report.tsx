@@ -29,7 +29,6 @@ import {
 } from './services/offlineWorkspace';
 
 const { width, height } = Dimensions.get('window');
-const isSmallDevice = width < 375;
 
 interface DiseaseReport {
   isPublic?: boolean;

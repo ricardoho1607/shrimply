@@ -1,31 +1,8 @@
-import type {
-  OrsonCalibrationAdjustment,
-  OrsonCalibrationProfile,
-  OrsonDataCompleteness,
-  OrsonDiagnosticHarvestEvent,
-  OrsonEvidenceSummary,
-  OrsonFeedBiomassModel,
-  OrsonGrowthEvidence,
-  OrsonMetricEvidenceItem,
-  OrsonNormalizedPond,
-  OrsonNormalizedRecord,
-  OrsonNumber,
-  OrsonPondMetrics,
-  OrsonPromptDailyRecord,
-  OrsonPromptLabReport,
-  OrsonRangeEstimate,
-  OrsonSurvivalAssumption,
-  OrsonTrendResult,
-} from './types';
+import type { OrsonCalibrationAdjustment, OrsonCalibrationProfile, OrsonDataCompleteness, OrsonDiagnosticHarvestEvent, OrsonEvidenceSummary, OrsonFeedBiomassModel, OrsonMetricEvidenceItem, OrsonNormalizedPond, OrsonNormalizedRecord, OrsonNumber, OrsonPondMetrics, OrsonPromptDailyRecord, OrsonPromptLabReport, OrsonRangeEstimate, OrsonSurvivalAssumption, OrsonTrendResult } from './types';
 import { getOrsonCalibrationAdjustment } from './learning';
 import { buildPondDiagnosticContext, selectDiagnosticRecords } from './diagnosticContext';
-import { differenceInFarmCalendarDays, shiftDateKey } from '../shared/farmDate';
-import {
-  evaluateMeasurementFreshness,
-  evaluateMetricCoverage,
-  parseFeedKg,
-  selectDailyFeedEntries,
-} from '../shared/orsonEvidence';
+import { shiftDateKey } from '../shared/farmDate';
+import { evaluateMeasurementFreshness, evaluateMetricCoverage, selectDailyFeedEntries } from '../shared/orsonEvidence';
 import {
   calculateAdg as calculateSharedAdg,
   calculateSmoothedAdg,
