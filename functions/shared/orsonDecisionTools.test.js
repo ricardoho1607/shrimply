@@ -1222,7 +1222,7 @@ test('evaluate_inventory_replenishment: strictly isolates pricing from technicia
     timeZone: 'UTC',
   };
   const techResult = await evaluateInventoryReplenishment(
-    { itemId: 'add-calcium' },
+    { itemId: 'add-calcium', requiredQuantity: 50, unit: 'kg' },
     techContext,
   );
   assert.equal(techResult.items[0].finance.financeAllowed, false);
@@ -1239,12 +1239,12 @@ test('evaluate_inventory_replenishment: strictly isolates pricing from technicia
     timeZone: 'UTC',
   };
   const ownerResult = await evaluateInventoryReplenishment(
-    { itemId: 'add-calcium' },
+    { itemId: 'add-calcium', requiredQuantity: 50, unit: 'kg' },
     ownerContext,
   );
   assert.equal(ownerResult.items[0].finance.financeAllowed, true);
   assert.equal(ownerResult.items[0].finance.unitCost, 1.8);
-  assert.ok(ownerResult.items[0].finance.estimatedReplenishmentCost > 0);
+  assert.equal(ownerResult.items[0].finance.estimatedReplenishmentCost, 45);
 });
 
 test('evaluate_inventory_replenishment: cross-company item lookup returns not_found', async () => {
