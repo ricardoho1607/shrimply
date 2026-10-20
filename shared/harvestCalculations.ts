@@ -118,6 +118,8 @@ export interface HarvestTrackingPond extends SharedPond {
 
 export interface HarvestRecordForReadiness {
   cycleId?: string | null;
+  date?: string;
+  voided?: boolean;
   ponds?: (HarvestLineInput & {
     pondId?: string | null;
     pondCycleId?: string | null;
@@ -195,15 +197,23 @@ export const hasFinalHarvestForPondCycle = (
   pond: PondCycleIdentity,
 ): boolean => records.some((record) =>
   (record.ponds || []).some((harvestPond) => {
-    if (harvestPond.harvestType !== 'final') return false;
+    if (record.voided || harvestPond.harvestType !== 'final') return false;
     const matchesPond = harvestPond.pondId === pond.id || (
       Boolean(pond.pondCycleId) && harvestPond.pondCycleId === pond.pondCycleId
     );
     if (!matchesPond) return false;
-    if (!pond.cycleId) return true;
-    return harvestPond.cycleId === pond.cycleId || record.cycleId === pond.cycleId || harvestPond.pondId === pond.id;
+    if (pond.pondCycleId && harvestPond.pondCycleId && pond.pondCycleId !== harvestPond.pondCycleId) return false;
+    const recordCycleId = harvestPond.cycleId || record.cycleId;
+    return !pond.cycleId || !recordCycleId || recordCycleId === pond.cycleId;
   })
 );
+
+/** Resolve old records too, without changing pond visibility or finance posting dates. */
+export const withFinalHarvestDates = <T extends PondCycleIdentity>(pond: T, records: HarvestRecordForReadiness[]): T & { finalHarvestDates: string[] } => ({
+  ...pond,
+  finalHarvestDates: records.filter(record => record.date && hasFinalHarvestForPondCycle([record], pond))
+    .map(record => record.date!).sort(),
+});
 
 export const withHarvestReference = <T extends HarvestLineInput>(
   pond: HarvestTrackingPond,
@@ -248,6 +258,7 @@ export const applyHarvestImpactToPond = <T extends HarvestTrackingPond>(
 
   return {
     ...pond,
+    finalHarvestDates: harvest.harvestType === 'final' ? [...(pond.finalHarvestDates || []), harvestDate].sort() : (pond.finalHarvestDates || []),
     totalHarvestedBiomass: toFiniteNumber(pond.totalHarvestedBiomass) + removal.biomass,
     totalHarvestedPopulation: toFiniteNumber(pond.totalHarvestedPopulation) + removal.population,
     partialHarvestCount,
@@ -263,7 +274,13 @@ export const applyHarvestImpactToPond = <T extends HarvestTrackingPond>(
 export const reverseHarvestImpactOnPond = <T extends HarvestTrackingPond>(
   pond: T,
   harvest: HarvestLineInput,
+  harvestDate?: string,
 ): T => {
+  const finalHarvestDates = [...(pond.finalHarvestDates || [])];
+  if (harvest.harvestType === 'final') {
+    const index = harvestDate ? finalHarvestDates.indexOf(harvestDate) : finalHarvestDates.length - 1;
+    if (index >= 0) finalHarvestDates.splice(index, 1);
+  }
   const removal = calculateHarvestRemoval(harvest);
   const hasBiomassBaseline = pond.postHarvestRemainingBiomass !== undefined && pond.postHarvestRemainingBiomass !== null;
   const hasPopulationBaseline = pond.postHarvestRemainingPopulation !== undefined && pond.postHarvestRemainingPopulation !== null;
@@ -274,6 +291,7 @@ export const reverseHarvestImpactOnPond = <T extends HarvestTrackingPond>(
 
   return {
     ...pond,
+    finalHarvestDates,
     totalHarvestedBiomass: Math.max(0, toFiniteNumber(pond.totalHarvestedBiomass) - removal.biomass),
     totalHarvestedPopulation: Math.max(0, toFiniteNumber(pond.totalHarvestedPopulation) - removal.population),
     ...(hasBiomassBaseline

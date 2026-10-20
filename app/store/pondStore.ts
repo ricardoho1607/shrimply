@@ -3,6 +3,7 @@ import { resolvePhysicalPond } from '../../shared/physicalPondIdentity';
 import {
   calculatePondMetricsWithHarvest as calculateSharedPondMetricsWithHarvest,
   isBaselineSampling,
+  getPondCurrentDoc as getSharedPondCurrentDoc,
   toFiniteNumber,
   type MortalityObservationType,
   type PondMetricsWithHarvest,
@@ -15,6 +16,7 @@ import {
   getNextPartialHarvestNumber,
   reverseHarvestImpactOnPond,
   withHarvestReference,
+  withFinalHarvestDates,
   type HarvestType,
 } from '../../shared/harvestCalculations';
 import { harvestPondsBelongToCycle } from '../../shared/harvestCycleScope';
@@ -29,7 +31,6 @@ import {
 export {
   getPondBaselineFeed,
   getPondBaselinePopulation,
-  getPondCurrentDoc,
   getPondOperationalFeed,
   getPondTotalFeedConsumed,
   getSamplingFeedAmount,
@@ -181,6 +182,7 @@ export interface Pond {
   mortalityRecords?: MortalityRecord[];
   totalHarvestedBiomass?: number; totalHarvestedPopulation?: number; totalHarvestedFeed?: number;
   partialHarvestCount?: number;
+  finalHarvestDates?: string[] | null;
   postHarvestBaselineDate?: string | null;
   postHarvestRemainingBiomass?: number | null;
   postHarvestRemainingPopulation?: number | null;
@@ -520,6 +522,7 @@ export const usePondStore = create<PondStore>()(
           pondCycleId: pond.pondCycleId || pond.id,
           supplier: pond.plSupplier || pond.supplier,
           plSupplier: pond.plSupplier || pond.supplier,
+          finalHarvestDates: [],
           totalHarvestedBiomass: 0,
           totalHarvestedPopulation: 0,
           totalHarvestedFeed: 0,
@@ -823,7 +826,7 @@ export const usePondStore = create<PondStore>()(
           const nextHarvestPond = record.ponds.find((item) => item.pondId === pond.id);
           const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
           if (previousHarvestPond && !nextHarvestPond) {
-            const updated = reverseHarvestImpactOnPond(pond, previousHarvestPond);
+            const updated = reverseHarvestImpactOnPond(pond, previousHarvestPond, previousRecord.date);
             const nextAppliedIds = currentAppliedIds.filter((id) => id !== previousRecord.id && id !== replacementId);
             return {
               ...updated,
@@ -850,7 +853,7 @@ export const usePondStore = create<PondStore>()(
               appliedHarvestIds: nextAppliedIds,
             };
           }
-          const revertedPond = reverseHarvestImpactOnPond(pond, previousHarvestPond!);
+          const revertedPond = reverseHarvestImpactOnPond(pond, previousHarvestPond!, previousRecord.date);
           const updated = applyHarvestImpactToPond(
             revertedPond,
             nextHarvestPond!,
@@ -976,7 +979,7 @@ export const usePondStore = create<PondStore>()(
             ? state.ponds.map((pond) => {
                 const harvestPond = harvestRecord.ponds.find((item) => item.pondId === pond.id);
                 if (!harvestPond) return pond;
-                const updated = reverseHarvestImpactOnPond(pond, harvestPond);
+                const updated = reverseHarvestImpactOnPond(pond, harvestPond, harvestRecord.date);
                 const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
                 const nextAppliedIds = currentAppliedIds.filter((id) => id !== harvestRecord.id);
                 return {
@@ -1081,7 +1084,7 @@ export const usePondStore = create<PondStore>()(
             const harvestForPond = record.ponds.find(p => p.pondId === pond.id);
             if (!harvestForPond) return pond;
 
-            const updatedPond = reverseHarvestImpactOnPond(pond, harvestForPond);
+            const updatedPond = reverseHarvestImpactOnPond(pond, harvestForPond, record.date);
             updatedPonds.push(updatedPond);
             return updatedPond;
           })
@@ -1089,7 +1092,7 @@ export const usePondStore = create<PondStore>()(
         updatedPonds.forEach((pond) => get().firebaseSync?.syncPond('update', pond));
       },
 
-      calculatePondMetricsWithHarvest: (pond) => calculateSharedPondMetricsWithHarvest(pond, get().currentTimeZone),
+      calculatePondMetricsWithHarvest: (pond) => calculateSharedPondMetricsWithHarvest(withFinalHarvestDates(pond, get().harvestRecords), get().currentTimeZone),
       addSampling: async (pondId, sampling) => {
         const operationState = get();
         const operationScope = { companyId: operationState.currentCompanyId, userId: operationState.farmCacheUserId };
@@ -1424,3 +1427,6 @@ export const usePondStore = create<PondStore>()(
       getSamplingDataFlat: () => get().ponds.flatMap((pond) => pond.samplings.map((sampling) => ({ ...sampling, pondName: pond.pondName }))),
     })
 );
+
+export const getPondCurrentDoc = (pond: Pond, timeZone?: string, now?: Date | string): number =>
+  getSharedPondCurrentDoc(withFinalHarvestDates(pond, usePondStore.getState().harvestRecords), timeZone, now);

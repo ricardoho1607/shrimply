@@ -115,6 +115,7 @@ for (const metadata of [true, false]) {
       assert.equal(harvest.ponds[0].harvestReferenceMbw, 13.04);
       assert.equal(harvest.ponds[0].partialHarvestNumber, harvestType === 'partial' ? 1 : undefined);
       assert.equal(Object.hasOwn(harvest.ponds[0], 'partialHarvestNumber'), harvestType === 'partial');
+      assert.deepEqual(pond.finalHarvestDates, harvestType === 'final' ? ['2026-09-17'] : []);
       assert.ok(Math.abs(pond.totalHarvestedBiomass - 3926.73) < 1e-6);
       assert.equal(revenue.amount, 3489.29 * 56987 + 437.44 * 52571.98);
       assert.equal(harvest.financeEntry.amount, revenue.amount);

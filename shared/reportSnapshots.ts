@@ -1,9 +1,10 @@
+import { withFinalHarvestDates } from './harvestCalculations.ts';
 import { differenceInFarmCalendarDays, normalizeFarmDateKey } from './farmDate.ts';
-import { type SharedPond, toFiniteNumber } from './pondCalculations.ts';
+import { type SharedPond, toFiniteNumber, getPondCurrentDoc } from './pondCalculations.ts';
 
 export interface ReportHarvest {
   date: string; voided?: boolean; cycleId?: string;
-  ponds: { pondId: string; cycleId?: string; biomass?: number | string; size?: number | string; subBiomass?: number | string; subSize?: number | string }[];
+  ponds: { pondId: string; cycleId?: string; harvestType?: 'partial' | 'final'; biomass?: number | string; size?: number | string; subBiomass?: number | string; subSize?: number | string }[];
 }
 export function pondExistsOnReportDate(pond: { docStart?: string | null; cycleStartedAt?: string | null; cycleEndedAt?: string | null }, date: string, timeZone?: string): boolean {
   const start = normalizeFarmDateKey(pond.cycleStartedAt || pond.docStart, timeZone);
@@ -41,6 +42,8 @@ export function buildPondReportSnapshot<T extends SharedPond & { id: string; cyc
   const laterPostHarvest = (normalizeFarmDateKey(pond.postHarvestBaselineDate, timeZone) || '') > key;
   return {
     ...pond,
+    finalHarvestDates: withFinalHarvestDates(pond, harvests).finalHarvestDates
+      .map(date => normalizeFarmDateKey(date, timeZone)).filter((date): date is string => Boolean(date && date <= key)).sort(),
     samplings: (pond.samplings || []).filter(throughDate),
     mortalityRecords: (pond.mortalityRecords || []).filter(throughDate),
     totalHarvestedPopulation: population, totalHarvestedBiomass: biomass,
@@ -56,5 +59,5 @@ export function reportCalculationOptions(pond: SharedPond, date: string, timeZon
   const currentDoc = baseline && toFiniteNumber(pond.baselineDoc) > 0 && baseline <= currentDateKey
     ? toFiniteNumber(pond.baselineDoc) + differenceInFarmCalendarDays(currentDateKey, baseline)
     : start ? differenceInFarmCalendarDays(currentDateKey, start) : 0;
-  return { currentDateKey, currentDoc: Math.max(0, currentDoc), now: new Date(`${currentDateKey}T12:00:00Z`) };
+  return { currentDateKey, currentDoc: Math.min(Math.max(0, currentDoc), getPondCurrentDoc(pond, timeZone, currentDateKey)), now: new Date(`${currentDateKey}T12:00:00Z`) };
 }

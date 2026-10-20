@@ -57,6 +57,7 @@ export interface SharedMortalityRecord {
 
 export interface SharedPond {
   docStart?: string | null;
+  finalHarvestDates?: string[] | null;
   baselineDate?: string | null;
   baselineDoc?: number | string | null;
   baselineMbw?: number | string | null;
@@ -382,13 +383,15 @@ export const calculatePopulationFromSampling = (sampling: SharedSampling): numbe
 };
 
 export const getPondCurrentDoc = (
-  pond: Pick<SharedPond, 'docStart' | 'baselineDate' | 'baselineDoc'>,
+  pond: Pick<SharedPond, 'docStart' | 'baselineDate' | 'baselineDoc' | 'finalHarvestDates'>,
   timeZone?: string,
   now: Date | string = new Date(),
 ): number => {
-  const today = typeof now === 'string'
+  const currentDate = typeof now === 'string'
     ? normalizeFarmDateKey(now, timeZone) || getFarmDateKey(new Date(), timeZone)
     : getFarmOperationalDateKey(now, timeZone);
+  const finalHarvestDate = (pond.finalHarvestDates || []).map(date => normalizeFarmDateKey(date, timeZone)).filter((date): date is string => Boolean(date)).sort().at(-1);
+  const today = finalHarvestDate && finalHarvestDate < currentDate ? finalHarvestDate : currentDate;
   const docStartDate = normalizeFarmDateKey(pond.docStart, timeZone);
   const docFromStart = docStartDate === null ? 0 : differenceInFarmCalendarDays(today, docStartDate);
   const baselineDoc = toFiniteNumber(pond.baselineDoc);
@@ -888,6 +891,21 @@ export const calculatePondMetricsWithHarvest = (
     || (typeof now === 'string'
       ? normalizeFarmDateKey(now, timeZone) || getFarmDateKey(new Date(), timeZone)
       : getFarmDateKey(now, timeZone));
+  const harvestDateKey = normalizeFarmDateKey(pond.postHarvestBaselineDate, timeZone);
+  if (harvestDateKey && harvestDateKey > currentDateKey) {
+    // A later harvest's saved totals cannot reduce the stock on an earlier observation date.
+    pond = {
+      ...pond,
+      totalHarvestedPopulation: 0,
+      totalHarvestedBiomass: 0,
+      postHarvestBaselineDate: null,
+      postHarvestRemainingBiomass: null,
+      postHarvestRemainingPopulation: null,
+      postHarvestReferenceSamplingId: null,
+      postHarvestReferenceSamplingDate: null,
+      postHarvestReferenceMbw: null,
+    };
+  }
   const samplings = (pond.samplings || []).filter((sampling) => {
     const dateKey = normalizeFarmDateKey(sampling.date, timeZone);
     return dateKey === null ? isBaselineSampling(sampling) : dateKey <= currentDateKey;

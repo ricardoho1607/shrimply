@@ -1,7 +1,7 @@
 "use client";
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useCompanyBlocks } from '@/hooks/useDashboardData';
+import { useCompanyBlocks, useCompanyHarvestRecords } from '@/hooks/useDashboardData';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { auth, db } from '@/lib/firebase';
@@ -24,6 +24,7 @@ import {
   type MortalityObservationType
 } from "../../../../../../shared/pondCalculations";
 import { useSaveOperation } from "../../../../../../shared/useSaveOperation";
+import { withFinalHarvestDates, type HarvestRecordForReadiness } from '../../../../../../shared/harvestCalculations';
 import { FarmCycle, MortalityFormState, Pond } from './PondDetailModel';
 
 export function usePondDetailState() {
@@ -42,6 +43,8 @@ export function usePondDetailState() {
   const requestedAction = searchParams.get('action');
 
   const router = useRouter();
+
+  const harvests = useCompanyHarvestRecords<HarvestRecordForReadiness>();
 
   const [pond, setPond] = useState<Pond | null>(null);
 
@@ -225,7 +228,7 @@ export function usePondDetailState() {
     copy,
     id,
     router,
-    pond,
+    pond: pond && !harvests.loading && !harvests.error ? withFinalHarvestDates(pond, harvests.data) : pond,
     loading,
     companyId,
     today,

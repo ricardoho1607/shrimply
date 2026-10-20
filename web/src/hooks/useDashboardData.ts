@@ -1,5 +1,7 @@
 "use client";
 
+import { withFinalHarvestDates, type HarvestRecordForReadiness, type PondCycleIdentity } from '../../../shared/harvestCalculations';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   collection,
@@ -96,7 +98,12 @@ function useCompanySubcollection<T>(
 
 export function useCompanyPonds<T>(sort: 'asc' | 'desc' = 'desc') {
   const constraints = useMemo(() => [orderBy('createdAt', sort)], [sort]);
-  return useCompanySubcollection<T>('ponds', constraints);
+  const state = useCompanySubcollection<T>('ponds', constraints);
+  const harvests = useCompanyHarvestRecords<HarvestRecordForReadiness>();
+  const data = useMemo(() => state.data.map(pond => !harvests.loading && !harvests.error
+    ? withFinalHarvestDates(pond as T & PondCycleIdentity, harvests.data)
+    : pond), [state.data, harvests.data, harvests.loading, harvests.error]);
+  return { ...state, data };
 }
 
 export function useCompanyPhysicalPonds<T>(sort: 'asc' | 'desc' = 'asc') {

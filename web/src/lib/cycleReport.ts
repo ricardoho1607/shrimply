@@ -1,3 +1,5 @@
+import { withFinalHarvestDates } from '../../../shared/harvestCalculations';
+import { getPondCurrentDoc } from '../../../shared/pondCalculations';
 import { monetaryValue } from '../../../shared/financeIntegrity';
 import { scopeExpenseRecords, type ExpenseAllocationLink } from '../../../shared/financeExpenseAllocation';
 import { savedUsageCost, isCycleOperatingExpense, isMaintenanceExpense } from '../../../shared/reportingIntegrity';
@@ -180,13 +182,6 @@ const getDateTime = (value?: string): number | null => {
   return Number.isFinite(timestamp) ? timestamp : null;
 };
 
-const daysBetween = (start?: string, end?: string): number => {
-  const startTime = getDateTime(start);
-  const endTime = getDateTime(end) ?? Date.now();
-  if (startTime === null) return 0;
-  return Math.max(0, Math.floor((endTime - startTime) / (24 * 60 * 60 * 1000)));
-};
-
 const usageCost = savedUsageCost;
 
 const getLatestMbw = (pond: CycleReportPondSource): number => {
@@ -336,8 +331,8 @@ export function buildWebCycleReport({
       supplier: pond.plSupplier || pond.supplier || 'N/A',
       status: pond.cycleStatus === 'ended' ? 'ended' as const : 'active' as const,
       stockingDate: pond.cycleStartedAt || pond.docStart || undefined,
-      endedAt: pond.cycleEndedAt,
-      doc: daysBetween(pond.cycleStartedAt || pond.docStart || undefined, pond.cycleEndedAt || cycle.closedAt),
+      endedAt: withFinalHarvestDates(pond, matchedHarvestRecords).finalHarvestDates.at(-1) || pond.cycleEndedAt,
+      doc: getPondCurrentDoc(withFinalHarvestDates(pond, matchedHarvestRecords), timeZone),
       area: toFiniteNumber(pond.pondArea || pond.area),
       initialPopulation,
       initialWeight,

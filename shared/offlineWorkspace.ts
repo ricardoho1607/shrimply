@@ -377,7 +377,7 @@ export const persistOfflineFarmChange = async (
 };
 
 const HARVEST_OWNED_POND_FIELDS = [
-  'totalHarvestedBiomass', 'totalHarvestedPopulation', 'partialHarvestCount',
+  'finalHarvestDates', 'totalHarvestedBiomass', 'totalHarvestedPopulation', 'partialHarvestCount',
   'postHarvestBaselineDate', 'postHarvestRemainingBiomass', 'postHarvestRemainingPopulation',
   'postHarvestReferenceSamplingId', 'postHarvestReferenceSamplingDate', 'postHarvestReferenceMbw',
   'appliedHarvestOperationId', 'appliedHarvestOperationIds', 'reversedHarvestOperationIds',
@@ -418,7 +418,7 @@ export const rollbackPendingHarvestCreate = <T extends Record<string, any>>(
   operationId: string,
 ): T => {
   if (hasNoLaterHarvestReceipt(current, previous, operationId)) return restoreHarvestOwnedFields(current, previous!);
-  const reversed = clearHarvestReceipt(reverseHarvestImpactOnPond(current, line), operationId);
+  const reversed = clearHarvestReceipt(reverseHarvestImpactOnPond(current, line, record.date), operationId);
   return {
     ...reversed,
     appliedHarvestIds: (reversed.appliedHarvestIds || []).filter((id: string) => id !== record.id),
@@ -441,7 +441,7 @@ export const rollbackPendingHarvestEdit = <T extends Record<string, any>>(
   operationId: string,
 ): T => {
   if (hasNoLaterHarvestReceipt(current, previous, operationId)) return restoreHarvestOwnedFields(current, previous!);
-  const reverted = nextLine ? reverseHarvestImpactOnPond(current, nextLine) : current;
+  const reverted = nextLine ? reverseHarvestImpactOnPond(current, nextLine, record.date) : current;
   // Keep the newer biological baseline when undoing an older optimistic edit.
   const restored = previousLine
     ? applyHarvestImpactToPond(reverted, previousLine, current.postHarvestBaselineDate || previousRecord.date, previousLine.partialHarvestNumber)
@@ -449,6 +449,9 @@ export const rollbackPendingHarvestEdit = <T extends Record<string, any>>(
   const cleaned = clearHarvestReceipt(restored, operationId);
   return {
     ...cleaned,
+    finalHarvestDates: previousLine?.harvestType === 'final'
+      ? [...(reverted.finalHarvestDates || []), previousRecord.date].sort()
+      : (reverted.finalHarvestDates || []),
     appliedHarvestIds: [
       ...(cleaned.appliedHarvestIds || []).filter((id: string) => id !== replacementId && id !== record.id),
       ...(previousLine ? [previousRecord.id] : []),
@@ -475,6 +478,7 @@ export const rollbackPendingHarvestDelete = <T extends Record<string, any>>(
   );
   return {
     ...restored,
+    finalHarvestDates: line.harvestType === 'final' ? [...(current.finalHarvestDates || []), record.date].sort() : (current.finalHarvestDates || []),
     appliedHarvestIds: [...new Set([...(restored.appliedHarvestIds || []), record.id])],
     postHarvestBaselineDate: current.postHarvestBaselineDate,
     postHarvestReferenceSamplingId: current.postHarvestReferenceSamplingId,
@@ -700,7 +704,7 @@ export const applyPendingPondChanges = (
           const harvestPond = record.ponds.find((item: any) => item.pondId === pond.id);
           if (!harvestPond) return pond;
           if (isHarvestImpactReversedOnPond(pond, change, record)) return pond;
-          const updated = reverseHarvestImpactOnPond(pond, harvestPond);
+          const updated = reverseHarvestImpactOnPond(pond, harvestPond, record.date);
           const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
           const nextAppliedIds = currentAppliedIds.filter((id: string) => id !== record.id);
           return {
@@ -720,7 +724,7 @@ export const applyPendingPondChanges = (
           if (isHarvestImpactAppliedToPond(pond, change, record)) return pond;
           const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
           if (previousHarvestPond && !nextHarvestPond) {
-            const updated = reverseHarvestImpactOnPond(pond, previousHarvestPond);
+            const updated = reverseHarvestImpactOnPond(pond, previousHarvestPond, previousRecord.date);
             const nextAppliedIds = currentAppliedIds.filter((id: string) => id !== previousRecord?.id && id !== record.id);
             return {
               ...updated,
@@ -741,7 +745,7 @@ export const applyPendingPondChanges = (
               appliedHarvestIds: nextAppliedIds,
             };
           }
-          const revertedPond = reverseHarvestImpactOnPond(pond, previousHarvestPond!);
+          const revertedPond = reverseHarvestImpactOnPond(pond, previousHarvestPond!, previousRecord.date);
           const updated = applyHarvestImpactToPond(revertedPond, nextHarvestPond!, record.date, nextHarvestPond!.partialHarvestNumber);
           const nextAppliedIds = [
             ...currentAppliedIds.filter((id: string) => id !== previousRecord?.id && id !== record.id),
@@ -898,7 +902,7 @@ export const replayPendingFarmState = (
               appliedHarvestIds: nextAppliedIds,
             };
           }
-          const updated = reverseHarvestImpactOnPond(pond, harvestPond);
+          const updated = reverseHarvestImpactOnPond(pond, harvestPond, record.date);
           const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
           const nextAppliedIds = currentAppliedIds.filter((id: string) => id !== record.id);
           return {
@@ -920,7 +924,7 @@ export const replayPendingFarmState = (
             if (isHarvestImpactAppliedToPond(pond, change, record)) return pond;
             const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
             if (previousHarvestPond && !nextHarvestPond) {
-              const updated = reverseHarvestImpactOnPond(pond, previousHarvestPond);
+              const updated = reverseHarvestImpactOnPond(pond, previousHarvestPond, previousRecord.date);
               const nextAppliedIds = currentAppliedIds.filter((id: string) => id !== previousRecord?.id && id !== record.id);
               return {
                 ...updated,
@@ -941,7 +945,7 @@ export const replayPendingFarmState = (
                 appliedHarvestIds: nextAppliedIds,
               };
             }
-            const revertedPond = reverseHarvestImpactOnPond(pond, previousHarvestPond!);
+            const revertedPond = reverseHarvestImpactOnPond(pond, previousHarvestPond!, previousRecord.date);
             const updated = applyHarvestImpactToPond(revertedPond, nextHarvestPond!, record.date, nextHarvestPond!.partialHarvestNumber);
             const nextAppliedIds = [
               ...currentAppliedIds.filter((id: string) => id !== previousRecord?.id && id !== record.id),

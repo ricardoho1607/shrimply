@@ -1,3 +1,5 @@
+import { withFinalHarvestDates } from '../../shared/harvestCalculations';
+import { getPondCurrentDoc } from '../../shared/pondCalculations';
 import { monetaryValue } from '../../shared/financeIntegrity';
 import { savedUsageCost, isCycleOperatingExpense, isMaintenanceExpense } from '../../shared/reportingIntegrity';
 import type { Asset } from '../store/assetStore';
@@ -136,14 +138,6 @@ const LEGACY_CYCLE_ID = 'legacy-active-cycle';
 const toNumber = (value: unknown): number => {
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const daysBetween = (start?: string, end?: string): number => {
-  if (!start) return 0;
-  const startTime = new Date(start).getTime();
-  const endTime = end ? new Date(end).getTime() : Date.now();
-  if (!Number.isFinite(startTime) || !Number.isFinite(endTime)) return 0;
-  return Math.max(0, Math.floor((endTime - startTime) / (1000 * 60 * 60 * 24)));
 };
 
 const getLatestMbw = (pond: Pond): number => {
@@ -393,8 +387,8 @@ export const buildCycleReport = ({
       supplier: getPondPlSupplier(pond),
       status: isPondCycleActive(pond) ? 'active' : 'ended',
       stockingDate: pond.cycleStartedAt || pond.docStart,
-      endedAt: pond.cycleEndedAt,
-      doc: daysBetween(pond.cycleStartedAt || pond.docStart, pond.cycleEndedAt || cycle.closedAt),
+      endedAt: withFinalHarvestDates(pond, matchedHarvestRecords).finalHarvestDates.at(-1) || pond.cycleEndedAt,
+      doc: getPondCurrentDoc(withFinalHarvestDates(pond, matchedHarvestRecords)),
       area,
       density: toNumber(pond.density),
       initialPopulation: toNumber(pond.initialPopulation),

@@ -224,7 +224,14 @@ export const runHarvestCalculationsSelfTest = () => {
   const laterHarvest = withHarvestReference(afterNewSampling, { biomass: 50, size: 100, harvestType: 'partial' as const });
   const afterLaterHarvest = applyHarvestImpactToPond(afterNewSampling, laterHarvest, '2026-07-15', 2);
   const oldHarvestRemoved = reverseHarvestImpactOnPond(afterLaterHarvest, harvest);
-  assertClose(calculatePondMetricsWithHarvest(oldHarvestRemoved).currentBiomass, 1_150, 'old harvest reversal uses newer sampled MBW');
+  const restoredMetrics = calculatePondMetricsWithHarvest(oldHarvestRemoved, undefined, { now: '2026-07-15' });
+  // Only the later 50 kg x 100 shrimp/kg harvest remains. Value those heads at the newer 12 g MBW.
+  const remainingHeads = 100_000 - (50 * 100);
+  assertClose(restoredMetrics.currentPopulation, remainingHeads, 'old harvest reversal restores heads, retaining later harvest removal');
+  assertClose(restoredMetrics.latestMbw, 12, 'old harvest reversal retains newer sampled MBW');
+  assertClose(restoredMetrics.currentBiomass, (remainingHeads * 12) / 1000, 'reversed biomass uses remaining heads and newer sampled MBW');
+  assertClose(Number(oldHarvestRemoved.totalHarvestedPopulation), 5_000, 'reversal preserves later harvested heads');
+  assertClose(Number(oldHarvestRemoved.totalHarvestedBiomass), 50, 'reversal preserves later harvested kilograms');
 
   const readinessRecords = [{
     cycleId: 'cycle-1',
@@ -698,7 +705,7 @@ export const runFeedRateBiomassSelfTest = () => {
   assertClose(cycleMetrics.currentBiomass, norm5, 'cycle mismatch on day 1 resets streak, retaining normal biomass');
 
   // 10. Harvest precedence and no future harvest leakage
-  // Post-harvest precedence: post-harvest biomass takes precedence over 5-day qualifying FR override
+  // A saved harvest anchor is adjusted for expected mortality; unrelated pre-harvest feed cannot override it.
   const postHarvestPrecedencePond = {
     ...fiveDayPond,
     postHarvestBaselineDate: '2026-08-17',
@@ -712,7 +719,15 @@ export const runFeedRateBiomassSelfTest = () => {
     currentDateKey: '2026-08-22',
     now: new Date('2026-08-22T12:00:00+10:00'),
   });
-  assertClose(postHarvestMetrics.currentBiomass, 750, 'post-harvest biomass takes precedence over qualifying FR override');
+  const onHarvestDay = calculatePondMetricsWithHarvest(postHarvestPrecedencePond, timeZone, {
+    now: '2026-08-17', currentDateKey: '2026-08-17',
+  });
+  assertClose(onHarvestDay.currentBiomass, 750, 'saved biomass is unchanged on the harvest date');
+  // At DOC > 30 the default model loses 0.15% daily. Apply five days to the saved population.
+  const expectedHeads = Math.round(53_571 * Math.pow(1 - 0.0015, 5));
+  const expectedLossKg = ((53_571 - expectedHeads) * 14) / 1000;
+  assertClose(postHarvestMetrics.currentPopulation, expectedHeads, 'post-harvest population includes five days of expected mortality');
+  assertClose(postHarvestMetrics.currentBiomass, 750 - expectedLossKg, 'saved biomass loses the weight of expected mortalities');
   if (postHarvestMetrics.biomassEstimate.method !== 'post_harvest') {
     throw new Error('post-harvest precedence must preserve method post_harvest');
   }

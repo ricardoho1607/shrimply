@@ -151,7 +151,7 @@ export async function commitHarvestChange({ activeCompanyId, user, company }: Co
         const pondData = updatedPondsById.get(previousHarvestPond.pondId);
         if (pondData) updatedPondsById.set(
           previousHarvestPond.pondId,
-          reverseHarvestImpactOnPond(pondData, previousHarvestPond),
+          reverseHarvestImpactOnPond(pondData, previousHarvestPond, previousRecord!.date),
         );
       });
 
@@ -202,6 +202,7 @@ export async function commitHarvestChange({ activeCompanyId, user, company }: Co
           ? (currentReversedOps.includes(change.id) ? currentReversedOps : [...currentReversedOps, change.id])
           : currentReversedOps;
         const authoritativeHarvestFields = removeUndefinedFields({
+          finalHarvestDates: updatedPond.finalHarvestDates || [],
           totalHarvestedBiomass: updatedPond.totalHarvestedBiomass,
           totalHarvestedPopulation: updatedPond.totalHarvestedPopulation,
           partialHarvestCount: updatedPond.partialHarvestCount,
@@ -266,7 +267,7 @@ export async function commitHarvestChange({ activeCompanyId, user, company }: Co
       const pondSnapshot = pondSnapshotsById.get(harvestPond.pondId);
       if (!pondSnapshot?.exists()) return;
       const pondData = { id: pondSnapshot.id, ...pondSnapshot.data() } as Pond;
-      const updatedPond = reverseHarvestImpactOnPond(pondData, harvestPond);
+      const updatedPond = reverseHarvestImpactOnPond(pondData, harvestPond, previousRecord!.date);
       const currentAppliedIds = Array.isArray(pondSnapshot.data()?.appliedHarvestIds)
         ? pondSnapshot.data().appliedHarvestIds
         : [];
@@ -276,6 +277,7 @@ export async function commitHarvestChange({ activeCompanyId, user, company }: Co
         : [];
       const nextReversedOps = currentReversedOps.includes(change.id) ? currentReversedOps : [...currentReversedOps, change.id];
       const authoritativeHarvestFields = removeUndefinedFields({
+        finalHarvestDates: updatedPond.finalHarvestDates || [],
         totalHarvestedBiomass: updatedPond.totalHarvestedBiomass,
         totalHarvestedPopulation: updatedPond.totalHarvestedPopulation,
         partialHarvestCount: updatedPond.partialHarvestCount,

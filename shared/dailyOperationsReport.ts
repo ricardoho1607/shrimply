@@ -1,5 +1,5 @@
 import { buildPondReportSnapshot, type ReportHarvest } from './reportSnapshots.ts';
-import type { MortalityObservationType } from './pondCalculations.ts';
+import { getPondCurrentDoc, type MortalityObservationType } from './pondCalculations.ts';
 import { dailyOperationsTranslations, type DailyOperationsLanguage } from './dailyOperationsI18n.ts';
 import { normalizeFarmDateKey } from './farmDate.ts';
 
@@ -57,6 +57,8 @@ export interface DailyOperationsPondSource {
   blockName?: string | null;
   cycleStatus?: 'active' | 'ended' | null;
   docStart?: string | null;
+  finalHarvestDates?: string[] | null;
+  baselineDoc?: number | string | null;
   initialWeight?: number | string | null;
   baselineDate?: string | null;
   baselineMbw?: number | string | null;
@@ -170,15 +172,6 @@ const isBaselineRecord = (record: DailyOperationsWaterRecord): boolean =>
 const formatDecimal = (value: number, digits = 2): string =>
   value.toFixed(digits).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
 
-const getDoc = (stockingDate: unknown, reportDate: string, timeZone?: string): number => {
-  const startKey = dateKey(stockingDate, timeZone);
-  if (!startKey) return 0;
-  const start = Date.parse(`${startKey}T00:00:00Z`);
-  const end = Date.parse(`${reportDate}T00:00:00Z`);
-  if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
-  return Math.max(0, Math.floor((end - start) / 86_400_000));
-};
-
 const belongsToCurrentCycle = (
   record: { pondCycleId?: string | null },
   pond: DailyOperationsPondSource,
@@ -209,7 +202,7 @@ const buildSiponRow = (pond: DailyOperationsPondSource, reportDate: string, time
   const initialPopulation = numberValue(pond.initialPopulation ?? pond.initialStock);
   const estimatedPopulation = Math.max(0, initialPopulation - cumulativeTotal - numberValue(pond.totalHarvestedPopulation));
   const pondArea = numberValue(pond.pondArea);
-  const doc = getDoc(pond.docStart, reportDate, timeZone);
+  const doc = getPondCurrentDoc(pond, timeZone, reportDate);
   const density = pondArea > 0 ? estimatedPopulation / pondArea : numberValue(pond.density);
 
   return {
@@ -317,7 +310,7 @@ const buildWaterQualityRow = (
   const dailyFeed = dailyFeedRecords.reduce((total, record) => total + numberValue(record.feedData?.totalDailyFeed), 0);
   const hasCumulativeFeed = baselineFeed > 0 || operationalFeedRecords.length > 0;
   const cumulativeFeed = baselineFeed + operationalFeed;
-  const doc = getDoc(pond.docStart, reportDate, timeZone);
+  const doc = getPondCurrentDoc(pond, timeZone, reportDate);
   const initialPopulation = numberValue(pond.initialPopulation ?? pond.initialStock);
   const siponRow = buildSiponRow(pond, reportDate, timeZone);
   const estimatedPopulation = initialPopulation > 0 ? siponRow.estimatedPopulation : null;

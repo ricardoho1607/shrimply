@@ -203,6 +203,7 @@ export function useSyncListeners({ activeCompanyId, user, setSyncStatus }: SyncR
                 totalHarvestedPopulation: data.totalHarvestedPopulation || 0,
                 totalHarvestedFeed: data.totalHarvestedFeed || 0,
                 partialHarvestCount: data.partialHarvestCount || 0,
+                finalHarvestDates: data.finalHarvestDates || [],
                 postHarvestBaselineDate: data.postHarvestBaselineDate ?? null,
                 postHarvestRemainingBiomass: data.postHarvestRemainingBiomass ?? null,
                 postHarvestRemainingPopulation: data.postHarvestRemainingPopulation ?? null,

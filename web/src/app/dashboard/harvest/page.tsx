@@ -89,6 +89,7 @@ interface HarvestRecord {
 }
 
 interface Pond {
+  finalHarvestDates?: string[] | null;
   docStart?: string;
   baselineDate?: string;
   baselineDoc?: number;
@@ -527,7 +528,7 @@ export default function HarvestPage() {
         });
         previousRecord?.ponds.forEach((harvestPond) => {
           const pond = updatedPondsById.get(harvestPond.pondId);
-          if (pond) updatedPondsById.set(harvestPond.pondId, reverseHarvestImpactOnPond(pond, harvestPond));
+          if (pond) updatedPondsById.set(harvestPond.pondId, reverseHarvestImpactOnPond(pond, harvestPond, previousRecord.date));
         });
 
         const canonicalPonds = newRecord.ponds.map((harvestPond) => {
@@ -551,6 +552,7 @@ export default function HarvestPage() {
           if (!pondSnapshot.exists()) return;
           const updatedPond = updatedPondsById.get(pondSnapshot.id)!;
           transaction.update(pondSnapshot.ref, prepareHarvestWriteData({
+            finalHarvestDates: updatedPond.finalHarvestDates || [],
             totalHarvestedBiomass: updatedPond.totalHarvestedBiomass,
             totalHarvestedPopulation: updatedPond.totalHarvestedPopulation,
             partialHarvestCount: updatedPond.partialHarvestCount || 0,
@@ -754,8 +756,9 @@ export default function HarvestPage() {
           const pondSnapshot = pondSnapshotsById.get(harvestPond.pondId);
           if (!pondSnapshot?.exists()) return;
           const pond = { id: pondSnapshot.id, ...pondSnapshot.data() } as Pond;
-          const updatedPond = reverseHarvestImpactOnPond(pond, harvestPond);
+          const updatedPond = reverseHarvestImpactOnPond(pond, harvestPond, record.date);
           transaction.update(pondSnapshot.ref, prepareHarvestWriteData({
+            finalHarvestDates: updatedPond.finalHarvestDates || [],
             totalHarvestedBiomass: updatedPond.totalHarvestedBiomass,
             totalHarvestedPopulation: updatedPond.totalHarvestedPopulation,
             postHarvestRemainingBiomass: updatedPond.postHarvestRemainingBiomass ?? null,

@@ -53,6 +53,7 @@ function fixture(hookName, ...args) {
       if (name === '@/lib/firebase') return { db: {} };
       if (name === '@/contexts/AuthContext') return { useAuth: () => auth };
       if (name.endsWith('shared/operationalSummary')) return { isOperationalSummaryFresh: () => true };
+      if (name.endsWith('shared/harvestCalculations')) return require('../../../shared/harvestCalculations.ts');
       if (name.startsWith('./')) return load(path.resolve(path.dirname(filename), name + '.ts'));
       throw new Error(`Unexpected dependency ${name}`);
     }, mod.exports, mod);
@@ -144,13 +145,13 @@ for (const hook of ['useCompanyPonds', 'useCompanyNotifications']) {
     const f = fixture(hook); f.render(); await f.flush();
     const old = f.listeners[0];
     f.replayEffects();
-    const current = f.listeners.at(-1);
+    const current = f.listeners.filter(item => !item.stopped).find(item => hook !== 'useCompanyPonds' || item.ref.path.endsWith('/ponds'));
     current.next(f.snapshot(['current']));
     old.next(f.snapshot(['stale']));
     old.error(new Error('stopped listener'));
     for (let i = 0; i < 3; i++) { f.render(); await f.flush(); }
     assert.deepEqual(f.render().data.map(row => row.id), ['current']);
-    assert.equal(f.listeners.filter(item => !item.stopped).length, 1);
+    assert.equal(f.listeners.filter(item => !item.stopped).length, hook === 'useCompanyPonds' ? 2 : 1);
     f.unmount();
     assert.equal(f.listeners.filter(item => !item.stopped).length, 0);
   });
@@ -236,5 +237,5 @@ test('company queries wait for matching metadata before exposing records to role
   await f.flush();
   assert.ok(f.listeners.every(item => item.stopped));
   f.setCompanyDocument('b'); f.render(); await f.flush();
-  assert.equal(f.listeners.at(-1).ref.path, 'companies/b/ponds');
+  assert.ok(f.listeners.some(item => !item.stopped && item.ref.path === 'companies/b/ponds'));
 });
