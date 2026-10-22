@@ -96,6 +96,9 @@ export function sopTaskBucket(task: SopTask, now: number, timeZone: string): "to
   return "today";
 }
 export function sopTaskMatchesView(task: SopTask, view: string, now: number, timeZone: string): boolean {
+  const waiting = ["submitted", "needs_review"].includes(task.status);
+  if (view === "review") return waiting;
+  if (view === "attention") return !finished(task) && !waiting && sopTaskBucket(task, now, timeZone) !== "upcoming";
   if (view === "all") return true;
   if (view === "active") return !finished(task);
   if (["today", "pending", "upcoming"].includes(view)) return sopTaskBucket(task, now, timeZone) === view;

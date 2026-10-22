@@ -87,6 +87,8 @@ exports.runSopScheduler = onSchedule(
     timeoutSeconds: 540,
     memory: "512MiB",
     maxInstances: 1,
+    // One instance can otherwise accept overlapping scheduled requests.
+    concurrency: 1,
   },
   async () => runtime().scheduler(),
 );

@@ -89,6 +89,7 @@ function SopsPageContent() {
     c = sopCopy(currentLanguage);
   const ui = (value: string) => sopText(value, currentLanguage);
   const options = (values: string[]) => renderOptions(values, currentLanguage);
+  const [creationMode, setCreationMode] = useState<"choose" | "template" | "import" | "checklist" | null>(null);
   const [saveError, setSaveError] = useState("");
   const [savingDraft, setSavingDraft] = useState(false);
   const savingDraftRef = useRef(false);
@@ -274,24 +275,6 @@ function SopsPageContent() {
           </button>
         ))}
       </div>
-      <details className="sop-extra-tools">
-        <summary>{ui("More options")}</summary>
-        <div className="sop-toolbar">
-          {[
-            ["community", c.community],
-            ["dashboard", c.dashboard],
-            ["history", c.history],
-          ].map(([id, label]) => (
-            <button
-              key={id}
-              aria-pressed={tab === id}
-              disabled={!!draftProgress}
-              onClick={() => setTab(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
         <div className="sop-language-bar">
           <Field label={ui("Display language")}>
             <select
@@ -316,18 +299,37 @@ function SopsPageContent() {
             )}
           </p>
         </div>
+      <details className="sop-extra-tools">
+        <summary>{ui("More options")}</summary>
+        <div className="sop-toolbar">
+          {[
+            ["community", c.community],
+            ["dashboard", c.dashboard],
+            ["history", c.history],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              aria-pressed={tab === id}
+              disabled={!!draftProgress}
+              onClick={() => setTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
       </details>
       {tab === "dashboard" && (
         <>
           <div className="sop-metrics">
             {[
-              [c.recorded, `${summary.recorded}/${summary.total}`],
+              [ui("Work recorded"), `${summary.recorded}/${summary.total}`],
               [
-                c.targets,
+                ui("Check results"),
                 `${summary.pass} ${ui("pass")} · ${summary.fail} ${ui("outside target")}`,
               ],
-              [c.missing, summary.missing],
-              [c.exceptions, summary.exempt],
+              [ui("Records still needed"), summary.missing],
+              [ui("Checks not required"), summary.exempt],
               [c.issues, summary.issues],
             ].map(([label, value]) => (
               <article key={String(label)} className="sop-card">
@@ -336,6 +338,7 @@ function SopsPageContent() {
               </article>
             ))}
           </div>
+          <p className="sop-help">{ui("A passed recording check does not mean the water is within safe limits.")}</p>
           <p>
             {w.summary
               ? ui("These totals cover {period} in the farm timezone.").replace(
@@ -388,16 +391,16 @@ function SopsPageContent() {
               <p>
                 {i.rechecks} {ui("rechecks ·")}{" "}
                 {i.recoveryVerified
-                  ? ui("Recovery verified")
-                  : ui("Recovery evidence required")}
+                  ? ui("New evidence received. Check whether manager review is still needed.")
+                  : ui("Record the requested reading or work, then check the task status.")}
               </p>
-              {i.failureExplanation && <p>{ui(i.failureExplanation)}</p>}
+              {i.failureExplanation && <details><summary>{ui("Details")}</summary><p>{ui(i.failureExplanation)}</p></details>}
               {i.openedAt && (
                 <p>
                   {ui("Opened")}:{" "}
-                  {new Date(i.openedAt).toLocaleString(currentLanguage)}
+                  {new Date(i.openedAt).toLocaleString(currentLanguage, {timeZone: w.timeZone || "UTC"})}
                   {i.closedAt
-                    ? ` · ${ui("Closed")}: ${new Date(i.closedAt).toLocaleString(currentLanguage)}`
+                    ? ` · ${ui("Closed")}: ${new Date(i.closedAt).toLocaleString(currentLanguage, {timeZone: w.timeZone || "UTC"})}`
                     : ""}
                 </p>
               )}
@@ -411,28 +414,29 @@ function SopsPageContent() {
           <div className="sop-toolbar">
             <button
               className="sop-primary"
-              onClick={() => {
-                setEditing(null);
-                setEditorTarget({ id: "sop-editor-start" });
-                setAiFile(null);
-                setAiText("");
-                setImportError("");
-                setMessage("");
-                setDefinition({
-                  title: "",
-                  description: "",
-                  language: currentLanguage,
-                  steps: [
-                    { ...emptySopStep(), title: ui("Record a measurement") },
-                  ],
-                });
-              }}
+              onClick={() => setCreationMode("choose")}
             >
               {c.create}
             </button>
             <button onClick={() => void client.refresh()}>{c.refresh}</button>
           </div>
-          <details className="sop-template-picker">
+          {creationMode === "choose" && <section className="sop-card" aria-label={ui("Create a farm guide")}>
+            <h2>{ui("How would you like to start?")}</h2>
+            <div className="sop-toolbar">
+              <button onClick={() => setCreationMode("template")}>{ui("Use a template")}</button>
+              {(["import", "checklist"] as const).map(mode => <button key={mode} onClick={() => {
+                setCreationMode(mode); setEditing(null); setAiFile(null); setAiText(""); setImportError(""); setMessage("");
+                setEditorTarget({id: "sop-editor-start"});
+                const step = emptySopStep();
+                setDefinition({title: "", description: "", language: currentLanguage,
+                  steps: mode === "import" ? [] : [{...step, title: ui("Task"), instructions: "", requireNotes: true,
+                    check: {...step.check, field: "manual", operator: "narrative", unit: "", exactTime: false,
+                      rubric: ui("Describe the work completed and any problems.")}}]});
+              }}>{ui(mode === "import" ? "Upload my guide" : "Write a simple checklist")}</button>)}
+              <button onClick={() => setCreationMode(null)}>{c.back}</button>
+            </div>
+          </section>}
+          <details className="sop-template-picker" open={creationMode === "template" || undefined}>
             <summary>{ui("Starter templates")}</summary>
             <div className="sop-grid">
               {SOP_TEMPLATES.map((t) => (
@@ -476,7 +480,7 @@ function SopsPageContent() {
                     <span
                       className={`sop-library-status ${s.status === "approved" ? "sop-library-status-approved" : ""}`}
                     >
-                      {ui(s.status)}
+                      {ui(s.status === "approved" ? "Document reviewed" : s.status)}
                     </span>
                   </div>
                   {!!s.definition.description && (
@@ -1038,7 +1042,7 @@ function SopsPageContent() {
                   )
                 }
               >
-                {ui("Record transition")}
+                {ui("Save pond stage")}
               </button>
             </section>
           }
@@ -1114,7 +1118,7 @@ function SopsPageContent() {
               <p>{ui("Your edits are still here. Retry Save draft.")}</p>
             </div>
           )}
-          {!!errors.length && (
+          {!!errors.length && (!!editing || !!definition.title.trim()) && (
             <details
               className="sop-alert sop-review-items"
               id="sop-completion-links"
@@ -1140,7 +1144,7 @@ function SopsPageContent() {
               </ul>
             </details>
           )}
-          <details className="sop-card sop-import" open={!editing}>
+          <details className="sop-card sop-import" open={creationMode === "import"}>
             <summary>{ui("Import SOP document")}</summary>
             <p>
               {ui(

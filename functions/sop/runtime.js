@@ -687,9 +687,10 @@ function createSopRuntime(db) {
             )) || createdTasks;
           }
         }
-    for (const task of tasks) {
-      if (!terminal(task) && !canWaitForTask(task, ad, now)) await evaluateTask(companyId, task.id, now);
-    }
+    await require("./taskQueue").evaluateTaskPage(
+      tasks.filter((task) => !terminal(task) && !canWaitForTask(task, ad, now)),
+      (task) => evaluateTask(companyId, task.id, now, { scheduler: true }),
+    );
     const gates = await ref
       .collection("sopGates")
       .where("adoptionIds", "array-contains", adId)
@@ -735,10 +736,15 @@ function createSopRuntime(db) {
         });
     });
   }
-  async function evaluateTask(companyId, taskId, now = Date.now()) {
+  async function evaluateTask(companyId, taskId, now = Date.now(), options = {}) {
     const ref = base(companyId),
       taskRef = ref.collection("tasks").doc(taskId);
-    return db.runTransaction(async (tx) => {
+    return db.runTransaction(async (transaction) => {
+      let changed = false, idleCache = null;
+      const tx = { get: transaction.get.bind(transaction) };
+      for (const method of ["create", "set", "update"])
+        tx[method] = (...args) => { changed = true; return transaction[method](...args); };
+      const result = await (async () => {
       const s = await tx.get(taskRef);
       if (!s.exists) return;
       const task = { id: s.id, ...s.data() };
@@ -752,6 +758,22 @@ function createSopRuntime(db) {
       // Unchanged waiting tasks can sleep until their next time boundary.
       // Automatic checks also require the adoption's source wake revision to match.
       if (canWaitForTask(task, ad, now)) return;
+      // An action acknowledgment does not use measured evidence. Read adoption
+      // first so paused work still defers source reconciliation correctly.
+      if (task.purpose === "corrective") {
+        if (task.status === "submitted")
+          tx.update(taskRef, {
+            status:
+              task.requiresHumanReview ||
+              task.step.requireAttachment ||
+              task.attachments?.some((a) => a.contentType?.startsWith("image/"))
+                ? "needs_review"
+                : "completed",
+            result: "needs_review",
+            actionRecordedAt: now,
+          });
+        return;
+      }
       let evidenceStart = task.windowStart, evidenceEnd = task.dueAt;
       if (recordingOnly(task) && ["daily", "weekly", "doc"].includes(task.step.trigger.kind)) {
         const date = farmDate(task.windowStart, ad.timeZone);
@@ -759,9 +781,6 @@ function createSopRuntime(db) {
         evidenceStart = localInstant(date, "00:00", ad.timeZone);
         evidenceEnd = localInstant(nextDate, "00:00", ad.timeZone) - 1;
       }
-      const evidenceSnap = await require("./evidenceQuery").taskEvidence(
-        tx, ref, task, ad.timeZone, evidenceStart, evidenceEnd, now,
-      );
       const episodeKey = hash([
         task.adoptionId,
         task.step.id,
@@ -779,6 +798,28 @@ function createSopRuntime(db) {
         );
       let issueSnap = await tx.get(issueRef),
         issue = issueSnap.exists ? issueSnap.data() : null;
+      const initialActionSnap = issue && !["closed", "exempted"].includes(issue.status) && issue.correctiveTaskId
+        ? await tx.get(ref.collection("tasks").doc(issue.correctiveTaskId)) : null;
+      // Only expired, noncritical issue checks can reuse a settled result. Read
+      // related state transactionally first; commands need no special cache API.
+      const canCache = options.scheduler && now > evidenceEnd && now > task.dueAt && task.step.severity !== "critical" &&
+        issue && !["closed", "exempted"].includes(issue.status) &&
+        !task.step.onPass?.length && !task.step.onFail?.length &&
+        !(issue.nextEscalationAt <= now);
+      let cacheKey;
+      if (canCache) {
+        const withoutCache = (data) => {
+          if (!data) return null;
+          const { schedulerEvaluationCache, ...rest } = data;
+          return rest;
+        };
+        cacheKey = hash([withoutCache(task), ad.revision || 0, ad.wakeRevision || 0,
+          ad.timeZone, pointer.data() || null, issue, withoutCache(initialActionSnap?.data())]);
+        if (task.schedulerEvaluationCache?.key === cacheKey && task.schedulerEvaluationCache.until > now) return;
+      }
+      const evidenceSnap = await require("./evidenceQuery").taskEvidence(
+        tx, ref, task, ad.timeZone, evidenceStart, evidenceEnd, now,
+      );
       let evaluation = evaluateSopStep(task.step, rows(evidenceSnap), {
         target: task.target,
         start: evidenceStart,
@@ -809,21 +850,6 @@ function createSopRuntime(db) {
           };
         }
       }
-      // Corrective actions are acknowledgments; recovery must come from a later recheck.
-      if (task.purpose === "corrective") {
-        if (task.status === "submitted")
-          tx.update(taskRef, {
-            status:
-              task.requiresHumanReview ||
-              task.step.requireAttachment ||
-              task.attachments?.some((a) => a.contentType?.startsWith("image/"))
-                ? "needs_review"
-                : "completed",
-            result: "needs_review",
-            actionRecordedAt: now,
-          });
-        return;
-      }
       if (task.step.check.field === "manual") {
         const reviewed = ["pass", "fail", "not_applicable"].includes(
           task.result,
@@ -846,6 +872,10 @@ function createSopRuntime(db) {
           explanation: "Reviewed written evidence.",
         };
       }
+      if (cacheKey && !sourcePending && !evaluation.recorded)
+        // A paginated routine sweep can exceed 30 minutes. Keep the settled
+        // result until its alert deadline, with a six-hour repair ceiling.
+        idleCache = { key: cacheKey, until: Math.min(now + 6 * 3600000, issue.nextEscalationAt || Infinity) };
       const decisionId = hash([
         task.id,
         task.versionId,
@@ -944,7 +974,8 @@ function createSopRuntime(db) {
       );
       const actionSnap =
         activeIssue && issue.correctiveTaskId
-          ? await tx.get(ref.collection("tasks").doc(issue.correctiveTaskId))
+          ? initialActionSnap?.id === issue.correctiveTaskId ? initialActionSnap
+            : await tx.get(ref.collection("tasks").doc(issue.correctiveTaskId))
           : null;
       const actionDone = actionSnap?.data()?.status === "completed";
       const actionTime = actionSnap?.data()?.evidenceObservedAt;
@@ -1171,6 +1202,9 @@ function createSopRuntime(db) {
             branches[i].assigneeId,
           ]);
         }
+      })();
+      if (idleCache && !changed) transaction.update(taskRef, { schedulerEvaluationCache: idleCache });
+      return result;
     });
   }
   async function refreshAssignments(companyId) {

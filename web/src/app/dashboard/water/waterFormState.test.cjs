@@ -59,3 +59,25 @@ test('draft initializes morning and evening fields and falls back to legacy sing
   assert.equal(emptyDraft.waterDepthCmMorning, '');
   assert.equal(emptyDraft.waterDepthCmEvening, '');
 });
+
+
+test('nitrite and test-kit basis survive reopening a dated reading without inventing units', () => {
+  const record = {date:'2026-10-13', mbw:0, feed:0, mortality:0, nitriteMgL:0, nitriteBasis:'NO2-N', ammoniaBasis:'TAN-N'};
+  const draft = initializeWaterDraft('pond-a', '2026-10-13', [record]);
+  assert.equal(draft.nitriteMgL, '0');
+  assert.equal(draft.nitriteBasis, 'NO2-N');
+  assert.equal(draft.ammoniaBasis, 'TAN-N');
+  const otherDate = initializeWaterDraft('pond-a', '2026-10-14', [record]);
+  assert.equal(otherDate.nitriteMgL, '');
+  assert.equal(otherDate.nitriteBasis, '');
+});
+
+test('a nitrite-only record, including zero, remains visible in water history', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'WaterQualityModel.ts'), 'utf8');
+  const compiled = ts.transpileModule(source, { compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020} }).outputText;
+  const model = {exports: {}};
+  new Function('module', 'exports', 'require', compiled)(model, model.exports, require);
+  assert.equal(model.exports.hasWaterQualityHistory({nitriteMgL: '0'}), true);
+  assert.equal(model.exports.hasWaterQualityHistory({nitriteMgL: '0.2'}), true);
+  assert.equal(model.exports.hasWaterQualityHistory({nitriteMgL: ''}), false);
+});

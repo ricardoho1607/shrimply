@@ -1,5 +1,11 @@
 "use client";
+import Link from "next/link";
+import { sopMeasurementLabel } from "../../../../../shared/sop/editor";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { ADAPTIVE_SOPS_ENABLED } from "@/lib/sopFeature";
+import { SopDateTimeInput } from "@/components/SopDateTimeInput";
+import { SOP_FIELDS } from "../../../../../shared/sop/registry";
+import { sopText } from "../../../../../shared/sop/uiCopy";
 import { SopObservationTimes } from "@/components/SopObservationTimes";
 import {
   X
@@ -7,7 +13,8 @@ import {
 
 import type { WaterQualityViewModel } from './useWaterQuality';
 type Props = Pick<WaterQualityViewModel,
-  'isModalOpen'
+  'sopTask' | 'sopTaskError'
+  | 'isModalOpen'
   | 'sopTimes'
   | 'setSopTimes'
   | 'copy'
@@ -20,14 +27,18 @@ type Props = Pick<WaterQualityViewModel,
   | 'setFormData'
   | 't'
   | 'waterSubmitting'>;
-export function WaterReadingDialog({ sopTimes, setSopTimes, isModalOpen, copy, setModalOpen, savePending, handleAddWQ, formData, selectWaterRecord, accessiblePonds, setFormData, t, waterSubmitting }: Props) {
+export function WaterReadingDialog({ sopTask, sopTaskError, sopTimes, setSopTimes, isModalOpen, copy, setModalOpen, savePending, handleAddWQ, formData, selectWaterRecord, accessiblePonds, setFormData, t, waterSubmitting }: Props) {
+  const { currentLanguage } = useLanguage();
+  const ui = (text: string) => sopText(text, currentLanguage);
+  const requestedField = SOP_FIELDS.find(field => field.key === `water.${sopTask?.field}`);
+  const numericTask = !!sopTask && !['weatherEvent', 'sludgeLoad', 'surfaceScum', 'shrimpBehaviour'].includes(sopTask.field);
   return (<>{isModalOpen && (
     <div className="responsive-modal-overlay water-log-overlay">
       <div className="glass-card responsive-modal animate-fade-up water-log-modal">
         <div className="responsive-modal-header water-log-header">
           <div>
             <h2>{copy('Log Parameters')}</h2>
-            <p>{copy('Sync environmental readings with Orson AI.')}</p>
+            <p>{ui('Enter the readings you measured.')}</p>
           </div>
           <button onClick={() => setModalOpen(false)} className="water-modal-close" aria-label={copy('Close parameter log')} disabled={savePending}>
             <X size={18} />
@@ -36,11 +47,38 @@ export function WaterReadingDialog({ sopTimes, setSopTimes, isModalOpen, copy, s
 
         <form onSubmit={handleAddWQ} className="water-log-form"><fieldset disabled={savePending} style={{ display: 'contents' }}>
           <div className="responsive-modal-body water-log-form-grid">
-            {ADAPTIVE_SOPS_ENABLED && <SopObservationTimes values={formData} times={sopTimes} onChange={setSopTimes} />}
+            {sopTask && <div style={{gridColumn: '1 / -1'}}>
+              <strong>{sopTask.pondName} · {sopTask.title}</strong>
+              <p>{ui('Reading needed')}: {sopMeasurementLabel(`water.${sopTask.field}`, currentLanguage)} · {sopTask.date}</p>
+              <p>{ui('Reading window')}: {new Date(sopTask.windowStart).toLocaleString(currentLanguage, {timeZone: sopTask.timeZone})} – {new Date(sopTask.dueAt).toLocaleString(currentLanguage, {timeZone: sopTask.timeZone})} · {sopTask.timeZone}</p>
+              <Link href={`/dashboard/todo?taskId=${encodeURIComponent(sopTask.taskId)}`}>{ui('Back to task')}</Link>
+            </div>}
+            {sopTaskError && <p role="alert" style={{gridColumn:'1 / -1'}}>{copy(sopTaskError)}</p>}
+            {sopTask && <div style={{gridColumn:'1 / -1', display:'grid', gap:12}}>
+              {numericTask && <label className="form-label">{sopMeasurementLabel(`water.${sopTask.field}`, currentLanguage)} {requestedField?.unit}
+                <input type="number" step="any" required className="form-input" value={String(formData[sopTask.field as keyof typeof formData] ?? '')}
+                  onChange={e => setFormData({...formData, [sopTask.field]: e.target.value})} />
+              </label>}
+              {['ammonia', 'nitriteMgL'].includes(sopTask.field) && <label className="form-label">{ui('Check the test-kit label')}
+                <select className="form-input" value={sopTask.field === 'ammonia' ? formData.ammoniaBasis : formData.nitriteBasis}
+                  onChange={e => setFormData({...formData, [sopTask.field === 'ammonia' ? 'ammoniaBasis' : 'nitriteBasis']: e.target.value})}>
+                  <option value="">{ui('Check the test-kit label')}</option>
+                  {(sopTask.field === 'ammonia' ? ['TAN-N','NH3-N','NH3'] : ['NO2-N','NO2']).map(unit => <option key={unit}>{unit}</option>)}
+                </select>
+              </label>}
+              <SopDateTimeInput label={ui('When was this reading taken?')} language={currentLanguage} timeZone={sopTask.timeZone}
+                value={sopTimes[sopTask.field] || ''} onChange={value => setSopTimes({...sopTimes, [sopTask.field]: value})} />
+            </div>}
+            <details open={!numericTask} style={{gridColumn:'1 / -1'}}>
+              <summary hidden={!sopTask}>{ui('Other readings (optional)')}</summary>
+              <div className="water-log-form-grid">
+            {ADAPTIVE_SOPS_ENABLED && <SopObservationTimes key={`${formData.pondId}:${formData.date}`} values={formData} times={sopTimes} onChange={setSopTimes} />}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', gridColumn: 'span 2' }}>
               <label className="form-label">{copy('Target Pond')}</label>
               <select
                 required
+                aria-label={copy('Target Pond')}
+                disabled={!!sopTask}
                 value={formData.pondId}
                 onChange={e => selectWaterRecord(e.target.value, formData.date)}
                 className="form-input"
@@ -52,7 +90,7 @@ export function WaterReadingDialog({ sopTimes, setSopTimes, isModalOpen, copy, s
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
               <label className="form-label">{copy('Date')}</label>
-              <input type="date" value={formData.date} onChange={e => selectWaterRecord(formData.pondId, e.target.value)} className="form-input" />
+              <input type="date" required aria-label={copy('Date')} disabled={!!sopTask} value={formData.date} onChange={e => selectWaterRecord(formData.pondId, e.target.value)} className="form-input" />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
@@ -131,9 +169,27 @@ export function WaterReadingDialog({ sopTimes, setSopTimes, isModalOpen, copy, s
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-              <label className="form-label">{copy('Ammonia (TAN) (mg/L)')}</label>
+              <label className="form-label">{ADAPTIVE_SOPS_ENABLED ? copy('Ammonia (mg/L)') : copy('Ammonia (TAN) (mg/L)')}</label>
               <input type="number" min="0" step="0.01" placeholder="N/A" value={formData.ammonia} onChange={e => setFormData({ ...formData, ammonia: e.target.value })} className="form-input" />
             </div>
+
+            {ADAPTIVE_SOPS_ENABLED && <>
+              <label className="form-label">{ui('Ammonia test-kit unit')}
+                <select className="form-input" value={formData.ammoniaBasis} onChange={e => setFormData({...formData, ammoniaBasis: e.target.value})}>
+                  <option value="">{ui('Check the test-kit label')}</option>
+                  <option value="TAN-N">TAN-N</option><option value="NH3-N">NH3-N</option><option value="NH3">NH3</option>
+                </select>
+              </label>
+              <label className="form-label">{ui('Nitrite (mg/L)')}
+                <input type="number" min="0" step="any" className="form-input" value={formData.nitriteMgL} onChange={e => setFormData({...formData, nitriteMgL: e.target.value})} />
+              </label>
+              <label className="form-label">{ui('Nitrite test-kit unit')}
+                <select className="form-input" value={formData.nitriteBasis} onChange={e => setFormData({...formData, nitriteBasis: e.target.value})}>
+                  <option value="">{ui('Check the test-kit label')}</option>
+                  <option value="NO2-N">NO2-N</option><option value="NO2">NO2</option>
+                </select>
+              </label>
+            </>}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
               <label className="form-label">{copy('Water Exchange (%)')}</label>
@@ -207,6 +263,8 @@ export function WaterReadingDialog({ sopTimes, setSopTimes, isModalOpen, copy, s
                 className="form-input"
               />
             </div>
+              </div>
+            </details>
           </div>
 
           <div className="responsive-modal-footer water-log-footer">

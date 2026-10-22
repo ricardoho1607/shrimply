@@ -75,9 +75,13 @@ export function WaterHistoryDrawer({ selectedPondForHistory, copy, setSelectedPo
                       <span className="wq-val-small">{hasSavedValue(log.alkalinity) ? `${log.alkalinity} PPM` : 'N/A'}</span>
                     </div>
                     <div className="wq-metric-small">
-                      <span className="wq-label-small">{copy('Ammonia (TAN)')}</span>
-                      <span className="wq-val-small">{hasSavedValue(log.ammonia) ? `${log.ammonia} mg/L` : 'N/A'}</span>
+                      <span className="wq-label-small">{log.ammoniaBasis ? copy('Ammonia') : copy('Ammonia (TAN)')}</span>
+                      <span className="wq-val-small">{hasSavedValue(log.ammonia) ? `${log.ammonia} mg/L ${log.ammoniaBasis || ''}` : 'N/A'}</span>
                     </div>
+                    {hasSavedValue(log.nitriteMgL) && <div className="wq-metric-small">
+                      <span className="wq-label-small">{copy('Nitrite')}</span>
+                      <span className="wq-val-small">{log.nitriteMgL} mg/L {log.nitriteBasis || ''}</span>
+                    </div>}
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginTop: '14px' }}>
                     <div className="wq-metric-small">

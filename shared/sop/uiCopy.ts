@@ -1,5 +1,44 @@
 /** Interface text only. Farm instructions and approved rules retain their original language. */
 const rows = `
+When was this reading taken?|Kapan pengukuran ini dilakukan?|Số đo này được lấy lúc nào?|วัดค่านี้เมื่อใด|何时进行此测量？
+Other readings (optional)|Pengukuran lain (opsional)|Số đo khác (không bắt buộc)|ค่าอื่นๆ (ไม่บังคับ)|其他测量值（可选）
+Enter the readings you measured.|Masukkan hasil pengukuran Anda.|Nhập các số đo đã đo.|กรอกค่าที่คุณวัดได้|输入实际测得的数值。
+Reading needed|Pengukuran yang diperlukan|Số đo cần ghi|ค่าที่ต้องวัด|所需测量值
+Reading window|Rentang waktu pengukuran|Khoảng thời gian đo|ช่วงเวลาที่วัด|测量时间范围
+Back to task|Kembali ke tugas|Quay lại công việc|กลับไปที่งาน|返回任务
+Ammonia test-kit unit|Satuan alat uji amonia|Đơn vị bộ thử amoniac|หน่วยชุดทดสอบแอมโมเนีย|氨测试盒单位
+Nitrite (mg/L)|Nitrit (mg/L)|Nitrit (mg/L)|ไนไตรต์ (mg/L)|亚硝酸盐 (mg/L)
+Nitrite test-kit unit|Satuan alat uji nitrit|Đơn vị bộ thử nitrit|หน่วยชุดทดสอบไนไตรต์|亚硝酸盐测试盒单位
+Check the test-kit label|Periksa label alat uji|Kiểm tra nhãn bộ thử|ตรวจฉลากชุดทดสอบ|查看测试盒标签
+Document reviewed|Dokumen ditinjau|Đã duyệt tài liệu|ตรวจเอกสารแล้ว|文档已审核
+Some checks only confirm a record exists. They do not check water limits.|Sebagian pemeriksaan hanya memastikan ada catatan, bukan memeriksa batas kualitas air.|Một số kiểm tra chỉ xác nhận có bản ghi, không kiểm tra giới hạn nước.|บางการตรวจยืนยันว่ามีบันทึกเท่านั้น ไม่ได้ตรวจขีดจำกัดคุณภาพน้ำ|部分检查仅确认已记录，不检查水质限值。
+Open my tasks|Buka tugas saya|Mở công việc của tôi|เปิดงานของฉัน|打开我的任务
+Use your pond task for today's work. Keep this guide as a reference.|Gunakan tugas kolam untuk pekerjaan hari ini. Panduan ini untuk referensi.|Dùng công việc của ao cho hôm nay. Giữ hướng dẫn này để tham khảo.|ใช้งานของบ่อสำหรับงานวันนี้ เก็บคู่มือนี้ไว้อ้างอิง|今天的工作请查看池塘任务。本指南供参考。
+Full guide and reference tables|Panduan lengkap dan tabel referensi|Hướng dẫn đầy đủ và bảng tham khảo|คู่มือฉบับเต็มและตารางอ้างอิง|完整指南与参考表
+Tasks in this guide|Tugas dalam panduan ini|Công việc trong hướng dẫn này|งานในคู่มือนี้|本指南中的任务
+Choose when each reading was taken in farm time. Leave blank only when a date is enough.|Pilih waktu setiap pengukuran menurut waktu tambak. Kosongkan hanya jika tanggal saja cukup.|Chọn giờ đo theo múi giờ trang trại. Chỉ để trống khi chỉ cần ngày.|เลือกเวลาที่วัดตามเวลาฟาร์ม เว้นว่างได้เมื่อใช้แค่วันที่ก็พอ|按养殖场时间选择每次测量时间。只需日期时才可留空。
+Older tasks still need attention.|Tugas sebelumnya masih perlu ditangani.|Công việc cũ vẫn cần xử lý.|งานเก่ายังต้องดำเนินการ|较早的任务仍需处理。
+Show work needing attention|Tampilkan tugas yang perlu ditangani|Hiện công việc cần xử lý|แสดงงานที่ต้องดำเนินการ|显示待处理工作
+Record the measurement first. Notes and photos are supporting information.|Catat hasil pengukuran dahulu. Catatan dan foto adalah informasi pendukung.|Ghi số đo trước. Ghi chú và ảnh là thông tin bổ sung.|บันทึกค่าที่วัดก่อน หมายเหตุและรูปเป็นข้อมูลประกอบ|请先记录测量值。备注和照片为补充信息。
+Work saved. Check its status in the task list. Measurements are checked from pond records.|Pekerjaan disimpan. Periksa status di daftar tugas. Pengukuran diperiksa dari catatan kolam.|Đã lưu công việc. Xem trạng thái trong danh sách. Số đo được kiểm tra từ hồ sơ ao.|บันทึกงานแล้ว ดูสถานะในรายการงาน ค่าที่วัดจะตรวจจากบันทึกบ่อ|工作已保存。请查看任务列表中的状态。测量值从池塘记录中核对。
+Reading saved. Check the task status below; automatic checks may take a moment.|Pengukuran disimpan. Periksa status tugas di bawah; pemeriksaan otomatis mungkin perlu waktu.|Đã lưu số đo. Xem trạng thái bên dưới; kiểm tra tự động có thể mất chút thời gian.|บันทึกค่าแล้ว ดูสถานะงานด้านล่าง การตรวจอัตโนมัติอาจใช้เวลาสักครู่|测量值已保存。请查看下方任务状态；自动检查可能需要片刻。
+Work recorded|Pekerjaan tercatat|Công việc đã ghi|งานที่บันทึกแล้ว|已记录工作
+Check results|Hasil pemeriksaan|Kết quả kiểm tra|ผลการตรวจ|检查结果
+Records still needed|Catatan yang masih diperlukan|Bản ghi còn thiếu|บันทึกที่ยังต้องการ|仍需记录
+Checks not required|Pemeriksaan tidak diperlukan|Kiểm tra không cần thiết|การตรวจที่ไม่จำเป็น|无需检查
+A passed recording check does not mean the water is within safe limits.|Lulus pemeriksaan pencatatan bukan berarti air berada dalam batas aman.|Đạt kiểm tra ghi chép không có nghĩa nước nằm trong giới hạn an toàn.|ผ่านการตรวจบันทึกไม่ได้หมายความว่าน้ำอยู่ในขีดจำกัดที่ปลอดภัย|记录检查通过并不表示水质处于安全范围内。
+New evidence received. Check whether manager review is still needed.|Bukti baru diterima. Periksa apakah masih perlu tinjauan manajer.|Đã nhận bằng chứng mới. Kiểm tra xem còn cần quản lý duyệt không.|ได้รับหลักฐานใหม่แล้ว ตรวจว่ายังต้องให้ผู้จัดการตรวจหรือไม่|已收到新证据。请检查是否仍需经理审核。
+Record the requested reading or work, then check the task status.|Catat pengukuran atau pekerjaan yang diminta, lalu periksa status tugas.|Ghi số đo hoặc công việc được yêu cầu rồi kiểm tra trạng thái.|บันทึกค่าหรืองานที่ขอ แล้วตรวจสถานะงาน|记录所需测量值或工作，然后查看任务状态。
+Details|Rincian|Chi tiết|รายละเอียด|详情
+Create a farm guide|Buat panduan tambak|Tạo hướng dẫn trang trại|สร้างคู่มือฟาร์ม|创建养殖场指南
+How would you like to start?|Bagaimana Anda ingin memulai?|Bạn muốn bắt đầu thế nào?|คุณต้องการเริ่มอย่างไร|您想如何开始？
+Use a template|Gunakan templat|Dùng mẫu|ใช้แม่แบบ|使用模板
+Upload my guide|Unggah panduan saya|Tải hướng dẫn lên|อัปโหลดคู่มือของฉัน|上传我的指南
+Write a simple checklist|Tulis daftar tugas sederhana|Viết danh sách kiểm tra đơn giản|เขียนรายการตรวจง่ายๆ|编写简单清单
+Task|Tugas|Công việc|งาน|任务
+Describe the work completed and any problems.|Jelaskan pekerjaan yang selesai dan masalah yang ditemukan.|Mô tả công việc đã xong và vấn đề gặp phải.|อธิบายงานที่เสร็จและปัญหาที่พบ|说明已完成的工作及遇到的问题。
+Save pond stage|Simpan tahap kolam|Lưu giai đoạn ao|บันทึกระยะของบ่อ|保存池塘阶段
+Choose a valid farm date and time. Check for a clock change.|Pilih tanggal dan waktu tambak yang valid. Periksa perubahan jam.|Chọn ngày giờ hợp lệ của trang trại. Kiểm tra thay đổi giờ.|เลือกวันที่และเวลาฟาร์มที่ถูกต้อง ตรวจสอบการเปลี่ยนเวลา|请选择有效的养殖场日期和时间。请检查时钟调整。
 today|Hari ini|Hôm nay|วันนี้|今天
 upcoming|Mendatang|Sắp tới|กำลังจะถึง|即将到来
 Today|Hari ini|Hôm nay|วันนี้|今天

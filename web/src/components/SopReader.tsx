@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { useId } from "react";
 import { SopContentView } from "./SopContent";
 import type { SopDocument } from "../../../shared/sop/client";
@@ -34,7 +35,7 @@ export function SopReader({
         <p className="sop-eyebrow">{ui("STANDARD OPERATING PROCEDURE")}</p>
         <h2>{definition.title}</h2>
         <div className="sop-document-meta">
-          <span className="sop-status">{ui(document.status)}</span>
+          <span className="sop-status">{ui(document.status === "approved" ? "Document reviewed" : document.status)}</span>
           <span>
             {ui("revision")} {document.revision}
           </span>
@@ -59,6 +60,11 @@ export function SopReader({
           </p>
         )}
       </header>
+      {definition.steps.some(step => step.check.field.startsWith("water.") && step.check.operator === "present") && (
+        <p className="sop-help">{ui("Some checks only confirm a record exists. They do not check water limits.")}</p>
+      )}
+      <Link className="sop-button sop-primary" href="/dashboard/todo">{ui("Open my tasks")}</Link>
+      <p>{ui("Use your pond task for today's work. Keep this guide as a reference.")}</p>
       {!!reviewItems.length && (
         <details className="sop-review-items">
           <summary>
@@ -91,11 +97,8 @@ export function SopReader({
       {definition.steps.some((step) =>
         step.check.field.startsWith("water."),
       ) && (
-        <section
-          className="sop-card"
-          aria-label={ui("Water parameter targets")}
-        >
-          <h3>{ui("Water parameter targets")}</h3>
+        <details className="sop-card">
+          <summary>{ui("Water parameter targets")}</summary>
           <p className="sop-help">
             {ui("These are SOP targets, not today’s measurements.")}
           </p>
@@ -126,7 +129,7 @@ export function SopReader({
                 ))}
             </tbody>
           </table>
-        </section>
+        </details>
       )}
       {!!definition.attachments?.length && (
         <section className="sop-source-documents">
@@ -164,6 +167,8 @@ export function SopReader({
           )}
         </p>
       )}
+      <details className="sop-reference" open={document.status !== "approved"}>
+      <summary>{ui("Full guide and reference tables")}</summary>
       <details className="sop-contents" open={!!definition.content}>
         <summary>
           {ui("Contents")}{" "}
@@ -191,20 +196,21 @@ export function SopReader({
         idPrefix={contentId}
         onResolve={document.status === "draft" ? onResolve : undefined}
       />
-      <details className="sop-workflow-rules" open={!definition.content}>
+      </details>
+      <details className="sop-workflow-rules" open>
         <summary>
-          {ui("Workflow rules")} · {definition.steps.length}
+          {ui("Tasks in this guide")} · {definition.steps.length}
         </summary>
         {definition.steps.map((step, index) => (
-          <section
+          <details
             className="sop-procedure"
             id={`sop-procedure-${index}`}
             key={step.id}
           >
-            <h3 className="sop-procedure-title">
+            <summary className="sop-procedure-title">
               <span>{String(index + 1).padStart(2, "0")}</span>
               {step.title}
-            </h3>
+            </summary>
             <p className="sop-prose">{step.instructions}</p>
             <p className="sop-procedure-scope">
               {ui("Applies to")}: {ui(step.scope)} ·{" "}
@@ -245,7 +251,7 @@ export function SopReader({
                 <p className="sop-prose">{step.check.rubric}</p>
               </div>
             )}
-          </section>
+          </details>
         ))}
       </details>
     </article>

@@ -1339,3 +1339,9 @@
     width: 100%;
   }
 }
+
+/* Farm work filters stay visible without horizontal discovery on a phone. */
+.todo-status-tabs { flex-wrap: wrap; overflow: visible; }
+.todo-shell .todo-status-tabs button { white-space: normal; min-height: 44px; }
+.sop-reference > summary, .sop-workflow-rules > summary { padding: 14px 0; font-weight: 700; }
+.sop-procedure > summary { cursor: pointer; min-height: 44px; }

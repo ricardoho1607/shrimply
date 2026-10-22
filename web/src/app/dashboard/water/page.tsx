@@ -1,4 +1,5 @@
 "use client";
+import Link from 'next/link';
 import { useCompanyId } from '@/hooks/useDashboardData';
 
 import { LabReportActionsDialog } from './LabReportActionsDialog';
@@ -20,6 +21,9 @@ function WaterQualityContent() {
 
   return (
     <div className="dashboard-page water-quality-page">
+      {model.sopTaskError && <div role="alert" className="glass-card" style={{padding: 16}}>
+        <p>{model.copy(model.sopTaskError)}</p><Link href="/dashboard/todo">{model.copy('Back to tasks')}</Link>
+      </div>}
       <WaterQualityTabs {...model} />
 
       {/* Toolbar */}

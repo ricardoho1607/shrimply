@@ -76,8 +76,10 @@ export function useSopWorkspace(): SopClient {
           full = true;
         }
         const taskChanges = { items: [] as SopWorkspace["tasks"], removedIds: [] as string[] };
-        if (full && watchedTasks.current.size) {
+        if (full) {
+          const linkedId = new URLSearchParams(window.location.search).get("taskId");
           const extras = workspaceRef.current.tasks.filter((task) => ["open", "scheduled", "submitted", "needs_review"].includes(task.status) && !watchedTasks.current.has(task.id)).map((task) => task.id);
+          if (linkedId && !extras.includes(linkedId) && !data.tasks.some(task => task.id === linkedId)) extras.push(linkedId);
           for (let offset = 0; offset < extras.length; offset += 50) {
             const result = await call("getSopWorkspace", { taskUpdates: true, companyId, taskIds: extras.slice(offset, offset + 50) }) as unknown as typeof taskChanges;
             taskChanges.items.push(...result.items); taskChanges.removedIds.push(...result.removedIds);

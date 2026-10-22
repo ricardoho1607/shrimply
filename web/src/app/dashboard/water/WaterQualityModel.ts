@@ -3,6 +3,8 @@ import type { PlanktonOverwatchSnapshot } from "../../../../../shared/planktonOv
 export interface Sampling {
   observedAtByField?: Record<string, string>;
   ammoniaBasis?: string;
+  nitriteMgL?: string;
+  nitriteBasis?: string;
   id: string; date: string; mbw: number; mortality: number; feed: number;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
   isBaselineEstimate?: boolean; source?: string;
@@ -176,6 +178,7 @@ export const hasWaterQualityHistory = (sampling: Sampling): boolean => Boolean(
   hasSavedValue(sampling.waterDepthCmMorning) || hasSavedValue(sampling.waterDepthCmEvening) || hasSavedValue(sampling.waterDepthCm) ||
   hasSavedValue(sampling.alkalinity) ||
   hasSavedValue(sampling.ammonia) ||
+  hasSavedValue(sampling.nitriteMgL) ||
   hasSavedValue(sampling.weatherEvent) || hasSavedValue(sampling.operationalNotes) ||
   hasSavedValue(sampling.waterExchangePercent) || hasSavedValue(sampling.sludgeLoad) ||
   sampling.surfaceScum !== null && sampling.surfaceScum !== undefined ||

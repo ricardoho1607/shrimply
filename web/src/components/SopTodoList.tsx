@@ -1,4 +1,5 @@
 "use client";
+import { waterTaskLink } from "../../../shared/sop/farmerWorkflow";
 import Link from "next/link";
 import type { SopTask } from "../../../shared/sop/contracts";
 import {
@@ -23,6 +24,7 @@ function TaskCard({
   ...props
 }: Omit<Props, "tasks"> & { task: SopTask }) {
   const ui = (text: string) => sopText(text, props.language);
+  const readingLink = waterTaskLink(task);
   const finished = ["completed", "waived", "cancelled"].includes(task.status);
   const due = new Date(task.dueAt).toLocaleString(props.language, {
     timeZone: props.timeZone,
@@ -45,10 +47,10 @@ function TaskCard({
         <p role="status">{ui("Waiting to save")}</p>
       )}
       <div className="sop-toolbar">
-        {isPondReadingTask(task) ? (
+        {readingLink ? (
           <Link
             className="sop-button sop-primary"
-            href={`/dashboard/water?pondId=${encodeURIComponent(task.target.pondId)}`}
+            href={readingLink}
           >
             {ui("Enter readings")}
           </Link>
@@ -71,7 +73,7 @@ function TaskCard({
           <p>
             {ui("Status")}: {ui(task.status)}
           </p>
-          {isPondReadingTask(task) && (
+          {readingLink && (
             <button onClick={() => props.onOpen(task)}>
               {ui("Open task")}
             </button>
@@ -122,7 +124,7 @@ export function SopTodoList({ tasks, ...props }: Props) {
             )}
             <Link
               className="sop-button sop-primary"
-              href={`/dashboard/water?pondId=${encodeURIComponent(item.tasks[0].target.pondId)}`}
+              href={waterTaskLink(item.tasks[0])!}
             >
               {ui("Enter readings")}
             </Link>

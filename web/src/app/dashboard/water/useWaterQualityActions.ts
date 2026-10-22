@@ -1,5 +1,8 @@
 "use client";
+import { useRouter } from 'next/navigation';
+import { assertWaterTaskPond } from '../../../../../shared/sop/farmerWorkflow';
 import { showAppAlert } from '@/lib/appDialogs';
+import { getUserErrorMessage } from '@/lib/userError';
 
 import { ADAPTIVE_SOPS_ENABLED } from "@/lib/sopFeature";
 import { parseObservationTimes } from "../../../../../shared/sop/observationTimes";
@@ -19,7 +22,8 @@ import { LAB_PDF_PENDING_MS, LabPdfUsageType, LabPondResult, LabReport, LabRepor
 
 import type { useWaterQualityState } from './useWaterQualityState';
 type Context = Pick<ReturnType<typeof useWaterQualityState>,
-  'formData'
+  'sopTask' | 'setSopTask' | 'setSopTaskError'
+  | 'formData'
   | 'sopTimes'
   | 'setSopTimes'
   | 'accessiblePonds'
@@ -56,6 +60,7 @@ type Context = Pick<ReturnType<typeof useWaterQualityState>,
   | 'setExpandedLabDateKeys'>;
 export function useWaterQualityActions(context: Context) {
   const {
+    sopTask, setSopTask, setSopTaskError,
     formData,
     sopTimes, setSopTimes,
     accessiblePonds,
@@ -91,28 +96,35 @@ export function useWaterQualityActions(context: Context) {
     company,
     setExpandedLabDateKeys,
   } = context;
-  const waterDrafts = useRef(new Map<string, typeof formData>());
+  const router = useRouter();
+  const waterDrafts = useRef(new Map<string, {values: typeof formData; times: Record<string, string>}>());
 
   const [waterSubmitting, setWaterSubmitting] = useState(false);
 
   const createWaterDraft = (pondId: string, date: string) => {
     const pond = accessiblePonds.find(pond => pond.id === pondId);
     const record = pond?.samplings.find(row => isDailyWaterRecord(row, date));
-    setSopTimes(record?.observedAtByField || {});
-    return initializeWaterDraft(pondId, date, pond?.samplings || []);
+    return {values: initializeWaterDraft(pondId, date, pond?.samplings || []), times: {...record?.observedAtByField}};
   };
 
   const openWaterRecord = (pondId = '') => {
     if (!save.reset()) return;
+    setSopTask(null);
+    setSopTaskError('');
     waterDrafts.current.clear();
-    setFormData(createWaterDraft(pondId, today));
+    const draft = createWaterDraft(pondId, today);
+    setFormData(draft.values);
+    setSopTimes(draft.times);
     setModalOpen(true);
   };
 
   const selectWaterRecord = (pondId: string, date: string) => {
+    if (sopTask && (pondId !== sopTask.pondId || date !== sopTask.date)) return;
     if (save.busy) return;
-    waterDrafts.current.set(`${formData.pondId}:${formData.date}`, formData);
-    setFormData(waterDrafts.current.get(`${pondId}:${date}`) || createWaterDraft(pondId, date));
+    waterDrafts.current.set(`${formData.pondId}:${formData.date}`, {values: formData, times: {...sopTimes}});
+    const draft = waterDrafts.current.get(`${pondId}:${date}`) || createWaterDraft(pondId, date);
+    setFormData(draft.values);
+    setSopTimes(draft.times);
   };
 
   const handleAddWQ = async (e: React.FormEvent) => {
@@ -122,8 +134,8 @@ export function useWaterQualityActions(context: Context) {
     if (!canEditWater) return;
     if (!accessiblePonds.some((pond) => pond.id === formData.pondId)) return;
 
-    setWaterSubmitting(true);
     if (!save.acquire()) return;
+    setWaterSubmitting(true);
     try {
       const pondRef = doc(db, 'companies', companyId, 'ponds', formData.pondId);
       await runTransaction(db, async transaction => {
@@ -131,11 +143,22 @@ export function useWaterQualityActions(context: Context) {
 
         if (!pondDoc.exists()) throw new Error('Pond no longer exists.');
         const pondData = pondDoc.data();
+        if (sopTask) {
+          assertWaterTaskPond(sopTask, { ...pondData, id: pondDoc.id });
+          if (formData.pondId !== sopTask.pondId || formData.date !== sopTask.date)
+            throw new Error('The pond or date no longer matches this task. Reopen it from your tasks.');
+          if (formData[sopTask.field as keyof typeof formData] === '' || formData[sopTask.field as keyof typeof formData] == null)
+            throw new Error('Enter the reading requested by this task.');
+          const observed = sopTimes[sopTask.field];
+          if (sopTask.exactTime && !observed) throw new Error('Choose when you took the requested reading.');
+          if (observed && (Date.parse(observed) < sopTask.windowStart || Date.parse(observed) > sopTask.dueAt))
+            throw new Error('The observation time must fall within the task reading window.');
+        }
         const samplings = [...(pondData.samplings || [])];
         const existingIndex = samplings.findIndex((record: Sampling) => isDailyWaterRecord(record, formData.date));
 
         const wqData = {
-          ...(ADAPTIVE_SOPS_ENABLED ? { observedAtByField: { ...(existingIndex >= 0 ? samplings[existingIndex].observedAtByField : {}), ...parseObservationTimes(sopTimes) }, ammoniaBasis: formData.ammoniaBasis } : {}),
+          ...(ADAPTIVE_SOPS_ENABLED ? { observedAtByField: { ...(existingIndex >= 0 ? samplings[existingIndex].observedAtByField : {}), ...parseObservationTimes(sopTimes) }, ammoniaBasis: formData.ammoniaBasis, nitriteMgL: formData.nitriteMgL, nitriteBasis: formData.nitriteBasis } : {}),
           cycleId: pondData.cycleId,
           cycleName: pondData.cycleName,
           pondCycleId: pondData.pondCycleId || formData.pondId,
@@ -187,9 +210,12 @@ export function useWaterQualityActions(context: Context) {
       });
       setModalOpen(false);
       waterDrafts.current.clear();
+      if (sopTask) router.push(`/dashboard/todo?taskId=${encodeURIComponent(sopTask.taskId)}&readingSaved=1`);
     } catch (error) {
       console.error('Error adding water quality:', error);
-      showAppAlert(copy('Failed to update water quality.'));
+      const message = copy(getUserErrorMessage(error, 'Failed to update water quality.'));
+      setSopTaskError(message);
+      showAppAlert(message);
     } finally {
       save.release();
       setWaterSubmitting(false);

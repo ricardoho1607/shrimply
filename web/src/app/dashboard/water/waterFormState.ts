@@ -27,6 +27,8 @@ const textFields = [
   'alkalinity',
   'ammonia',
   'ammoniaBasis',
+  'nitriteMgL',
+  'nitriteBasis',
   'operationalNotes',
   'waterExchangePercent',
 ] as const;

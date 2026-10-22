@@ -4,7 +4,7 @@ import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { useCompanyBlocks, useCompanyId, useCompanyLabPdfUsage, useCompanyLabReports, useCompanyPonds } from '@/hooks/useDashboardData';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   filterEnterpriseRecordsForUser,
   isEnterpriseOwner,
@@ -13,6 +13,15 @@ import {
 import { useSaveOperation } from "../../../../../shared/useSaveOperation";
 import { LabEntryMode, LabPdfUsage, LabPondResult, LabReport, LabReportType, Pond, Sampling, WaterPageView } from './WaterQualityModel';
 
+
+import { ADAPTIVE_SOPS_ENABLED } from '@/lib/sopFeature';
+import { db } from '@/lib/firebase';
+import { getFunctions } from 'firebase/functions';
+import { callSopFunction } from '../../../../../shared/sop/callable';
+import { assertWaterTaskPond, waterTaskContext, type WaterTaskContext } from '../../../../../shared/sop/farmerWorkflow';
+import type { SopTask } from '../../../../../shared/sop/contracts';
+import { initializeWaterDraft, isDailyWaterRecord } from './waterFormState';
+import { getUserErrorMessage } from '@/lib/userError';
 
 export function useWaterQualityState() {
   const copy = useDashboardCopy();
@@ -23,6 +32,9 @@ export function useWaterQualityState() {
 
   const today = useFarmDateKey(company?.timeZone);
 
+  const [sopTask, setSopTask] = useState<WaterTaskContext | null>(null);
+  const [sopTaskError, setSopTaskError] = useState('');
+  const openedTask = useRef('');
   const [sopTimes, setSopTimes] = useState<Record<string, string>>({});
 
   const [activeView, setActiveView] = useState<WaterPageView>('daily');
@@ -67,7 +79,7 @@ export function useWaterQualityState() {
 
   const enterpriseOwnerView = isEnterpriseOwner(company?.businessSize, user?.role);
 
-  const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
+  const { data: farmBlocks, loading: blocksLoading } = useCompanyBlocks<FarmBlock>('asc');
 
   const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
     businessSize: company?.businessSize,
@@ -99,6 +111,8 @@ export function useWaterQualityState() {
     alkalinity: '',
     ammonia: '',
     ammoniaBasis: '',
+    nitriteMgL: '',
+    nitriteBasis: '',
     operationalNotes: '',
     weatherEvent: null as Sampling['weatherEvent'],
     waterExchangePercent: '',
@@ -125,10 +139,44 @@ export function useWaterQualityState() {
   const canManageLabReports = hasPermission('manageLabReports');
 
   useEffect(() => {
+    if (!ADAPTIVE_SOPS_ENABLED || !companyId || !user?.uid || loading || blocksLoading) return;
+    const taskId = new URLSearchParams(window.location.search).get('sopTaskId');
+    if (!taskId || openedTask.current === taskId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (!canEditWater) throw new Error('You do not have permission to record pond readings. Ask your manager.');
+        const result = await callSopFunction(getFunctions(db.app), 'getSopWorkspace', {
+          companyId, taskUpdates: true, taskIds: [taskId],
+        }) as unknown as {items: SopTask[]};
+        if (cancelled) return;
+        const task = result.items.find(item => item.id === taskId);
+        if (!task) throw new Error('This task is unavailable. Return to your tasks and refresh.');
+        const context = waterTaskContext(task, company?.timeZone || 'UTC');
+        const pond = accessiblePonds.find(item => item.id === context.pondId);
+        assertWaterTaskPond(context, pond);
+        setFormData(initializeWaterDraft(context.pondId, context.date, pond!.samplings || []));
+        setSopTimes(pond!.samplings.find(row => isDailyWaterRecord(row, context.date))?.observedAtByField || {});
+        setSopTask(context);
+        setModalOpen(true);
+        setSopTaskError('');
+        openedTask.current = taskId;
+      } catch (error) {
+        if (!cancelled) {
+          openedTask.current = taskId;
+          setSopTaskError(getUserErrorMessage(error, 'Unable to open this task. Return to your tasks and try again.'));
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [companyId, user?.uid, loading, blocksLoading, accessiblePonds, canEditWater, company?.timeZone]);
+
+  useEffect(() => {
     const interval = window.setInterval(() => setLabUsageNowMs(Date.now()), 60 * 1000);
     return () => window.clearInterval(interval);
   }, []);
   return {
+    sopTask, setSopTask, sopTaskError, setSopTaskError,
     sopTimes, setSopTimes,
     copy,
     user,

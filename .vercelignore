@@ -12,6 +12,7 @@ functions/shared/*
 !functions/shared/permissions.js
 !functions/shared/companyPlans.js
 output
+tmp
 .codex
 .agents
 .expo

@@ -203,7 +203,8 @@ test("source tables and procedures survive model output, draft saving, reload an
   assert.match(html, /<caption/);
   assert.match(html, /Source pages/);
   assert.match(html, /href="[^"]+-water-parameters"/);
-  assert.match(html, /<details class="sop-workflow-rules">/); // workflow secondary, document visible
+  assert.match(html, /<details class="sop-reference" open="">/); // Full source stays visible during draft review.
+  assert.match(html, /<details class="sop-workflow-rules" open="">/);
 });
 
 test("old task-only model responses cannot be silently imported as a complete SOP", async () => {
