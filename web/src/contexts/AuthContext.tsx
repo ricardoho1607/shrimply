@@ -15,7 +15,7 @@ import {
 } from 'firebase/auth';
 import {
   doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc,
-  serverTimestamp, onSnapshot, deleteField
+  serverTimestamp, onSnapshot, deleteField, writeBatch
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, auth, db } from '@/lib/firebase';
@@ -710,12 +710,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatedAt: serverTimestamp(),
         ...(!resumableCompany ? { createdAt: serverTimestamp() } : {}),
       };
-      await setDoc(companyRef, newCompany, { merge: Boolean(resumableCompany) });
-      await syncPublicCompanyProfile(companyRef.id, newCompany);
-      await updateDoc(doc(db, 'users', user.uid), {
+      const setupBatch = writeBatch(db);
+      setupBatch.set(companyRef, newCompany, { merge: Boolean(resumableCompany) });
+      setupBatch.update(doc(db, 'users', user.uid), {
         companyId: companyRef.id,
         hasCompletedSetup: true,
       });
+      await setupBatch.commit();
+      await syncPublicCompanyProfile(companyRef.id, newCompany);
       setUser({ ...user, companyId: companyRef.id, hasCompletedSetup: true });
       setCompany({ ...(newCompany as Company), id: companyRef.id });
       setCompanyResolved(true);

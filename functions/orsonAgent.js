@@ -17,6 +17,7 @@ const {
 } = require("./shared/orsonEntityResolver");
 const { commandSchema } = require("./orsonAgentTools");
 const { enforceFixedWindowLimits } = require("./abuseProtection");
+const { reservePaidAiRequest } = require("./shared/paidAiSafety");
 const key = defineSecret("GEMINI_API_KEY");
 const service = () => createOperationService(admin.firestore());
 const args = (request) => ({ ...request.data, uid: request.auth?.uid });
@@ -112,6 +113,7 @@ exports.extractFarmDocument = onCall(
         fail("Use a supported image, PDF, or CSV up to 10 MB.");
       const [buffer] = await file.download();
       if (buffer.length > 10 * 1024 * 1024) fail("File is too large.");
+      await reservePaidAiRequest(admin.firestore(), auth.uid, auth.companyId);
       const { GoogleGenerativeAI } = require("@google/generative-ai");
       const model = new GoogleGenerativeAI(key.value()).getGenerativeModel({
         model: "gemini-2.5-flash",

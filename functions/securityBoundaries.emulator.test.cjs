@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { test, before, after, beforeEach, mock } = require('node:test');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
-const { doc, setDoc, updateDoc, deleteDoc, deleteField } = require('firebase/firestore');
+const { doc, setDoc, updateDoc, deleteDoc, deleteField, writeBatch, serverTimestamp } = require('firebase/firestore');
 const { initializeApp, deleteApp } = require('firebase-admin/app');
 const { createSopService } = require('./sop/service');
 
@@ -38,10 +38,32 @@ const call = (name, uid = 'owner', companyId = 'farm') => handlers[name].run({
 test('new companies cannot preseed foreign members or approval state', async () => {
   await db.doc('users/new').set({ email: 'new@example.invalid', companyId: null });
   const client = env.authenticatedContext('new').firestore();
-  const payload = { ownerId: 'new', teamMembers: ['new'], companyName: 'New farm', farmType: 'shrimp', primaryLocation: 'A' };
+  const payload = { ownerId: 'new', teamMembers: ['new'], companyName: 'New farm', farmType: 'shrimp', primaryLocation: 'A', createdAt: serverTimestamp() };
   await assertFails(setDoc(doc(client, 'companies/injected'), { ...payload, teamMembers: ['new', 'tech'] }));
   await assertFails(setDoc(doc(client, 'companies/forged'), { ...payload, deletionRequest: { status: 'pending' } }));
-  await assertSucceeds(setDoc(doc(client, 'companies/new'), payload));
+  await assertFails(setDoc(doc(client, 'companies/unbound'), payload));
+  const batch = writeBatch(client);
+  batch.set(doc(client, 'companies/new'), payload);
+  batch.update(doc(client, 'users/new'), { companyId: 'new', hasCompletedSetup: true });
+  await assertSucceeds(batch.commit());
+  await assertFails(setDoc(doc(client, 'companies/second'), payload));
+  await assertSucceeds(updateDoc(doc(client, 'companies/new'), { companyName: 'Resumed setup' }));
+  await assertFails(updateDoc(doc(client, 'companies/new'), { createdAt: new Date('2000-01-01') }));
+});
+
+test('one atomic account binding cannot approve two company creates or a backdated create', async () => {
+  await db.doc('users/new').set({ email: 'new@example.invalid', companyId: null });
+  const client = env.authenticatedContext('new').firestore();
+  const payload = { ownerId: 'new', teamMembers: ['new'], companyName: 'Farm', farmType: 'shrimp', primaryLocation: 'A', createdAt: serverTimestamp() };
+  const batch = writeBatch(client);
+  batch.set(doc(client, 'companies/a'), payload);
+  batch.set(doc(client, 'companies/b'), payload);
+  batch.update(doc(client, 'users/new'), { companyId: 'a' });
+  await assertFails(batch.commit());
+  const backdated = writeBatch(client);
+  backdated.set(doc(client, 'companies/a'), { ...payload, createdAt: new Date('2000-01-01') });
+  backdated.update(doc(client, 'users/new'), { companyId: 'a' });
+  await assertFails(backdated.commit());
 });
 
 test('company deletion preserves foreign, missing, and already-moved users', async () => {
@@ -55,6 +77,18 @@ test('company deletion preserves foreign, missing, and already-moved users', asy
   assert.equal((await db.doc('users/moved').get()).data().companyId, 'other');
   assert.equal((await db.doc('users/missing').get()).exists, false);
   assert.equal((await db.doc('users/attacker').get()).data().companyId, null);
+});
+
+test('lab confirmation binds its AI actor to the actual writer', async () => {
+  const client = env.authenticatedContext('tech').firestore();
+  const report = { companyId: 'farm', status: 'confirmed', entryMode: 'manual' };
+  await assertFails(setDoc(doc(client, 'companies/farm/labReports/missing'), report));
+  await assertFails(setDoc(doc(client, 'companies/farm/labReports/forged'), { ...report, confirmedBy: 'owner' }));
+  await assertSucceeds(setDoc(doc(client, 'companies/farm/labReports/real'), { ...report, confirmedBy: 'tech' }));
+  await assertSucceeds(setDoc(doc(client, 'companies/farm/labReports/draft'), { ...report, status: 'draft', confirmedBy: 'owner' }));
+  await assertFails(updateDoc(doc(client, 'companies/farm/labReports/draft'), { status: 'confirmed' }));
+  await assertSucceeds(updateDoc(doc(client, 'companies/farm/labReports/draft'), { status: 'confirmed', confirmedBy: 'tech' }));
+  await assertFails(updateDoc(doc(client, 'companies/farm/labReports/real'), { confirmedBy: 'owner' }));
 });
 
 test('legacy forged visible approvals cannot authorize deletion', async () => {

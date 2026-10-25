@@ -58,6 +58,7 @@ async function loadData(db, auth, now = Date.now()) {
   const companies = [];
   // Bound concurrency to keep reads predictable for the founder's small directory.
   const sourceCompanies = rows(companySnapshot);
+  const companyCreationTimes = new Map(companySnapshot.docs.map(snapshot => [snapshot.id, snapshot.createTime]));
   for (let offset = 0; offset < sourceCompanies.length; offset += 5) {
     const batch = await Promise.all(sourceCompanies.slice(offset, offset + 5).map(async source => {
       const ref = db.collection('companies').doc(source.id);
@@ -68,8 +69,8 @@ async function loadData(db, auth, now = Date.now()) {
         ref.collection('orsonUsageMonthly').doc(monthKey).get(), ref.collection('orsonCost').doc(monthKey).get(),
         ref.collection('feeds').limit(1).get(), ref.collection('additives').limit(1).get(), ref.collection('founderNotes').orderBy('createdAt', 'desc').limit(100).get(), ref.collection('accessOverrides').doc('current').get(),
       ]);
-      const effective = resolveEntitlements(entitlement.data(), source, now, grant.data(), override.data());
-      const base = resolveBaseEntitlements(entitlement.data(), source, now, grant.data());
+      const effective = resolveEntitlements(entitlement.data(), source, now, grant.data(), override.data(), companyCreationTimes.get(source.id));
+      const base = resolveBaseEntitlements(entitlement.data(), source, now, grant.data(), companyCreationTimes.get(source.id));
       const temporary = override.data();
       const lifetime = hasLifetimeGrant(grant.data());
       const storedBilling = billing.data() || {};

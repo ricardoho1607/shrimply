@@ -123,13 +123,14 @@ const serializeEntitlements = (entitlements) => ({
 const ensureEntitlements = async (db, companyId, company, applyOverride = true) => {
   const ref = db.collection('companies').doc(companyId).collection('entitlements').doc('current');
   return db.runTransaction(async (transaction) => {
-    const [snapshot, grant, override] = await Promise.all([
+    const [snapshot, grant, override, companySnapshot] = await Promise.all([
       transaction.get(ref), transaction.get(db.collection('companies').doc(companyId).collection('subscriptionGrants').doc('current')),
       transaction.get(db.collection('companies').doc(companyId).collection('accessOverrides').doc('current')),
+      transaction.get(db.collection('companies').doc(companyId)),
     ]);
     if (snapshot.exists || hasLifetimeGrant(grant.data())) return { ref, entitlements: resolveEntitlements(snapshot.data(), company, Date.now(), grant.data(), applyOverride ? override.data() : null) };
 
-    const entitlements = resolveEntitlements(null, company);
+    const entitlements = resolveEntitlements(null, company, Date.now(), null, null, companySnapshot.createTime);
     const payload = {
       ...entitlements,
       ...(Number.isFinite(entitlements.graceUntilMs)
@@ -263,13 +264,14 @@ exports.createCompanyPhysicalPond = onCall(async (request) => {
   const existingCount = (await companyRef.collection('physicalPonds').count().get()).data().count;
 
   const created = await db.runTransaction(async (transaction) => {
-    const [pondSnapshot, usageSnapshot, entitlementsSnapshot, grantSnapshot, userSnapshot, overrideSnapshot] = await Promise.all([
+    const [pondSnapshot, usageSnapshot, entitlementsSnapshot, grantSnapshot, userSnapshot, overrideSnapshot, companySnapshot] = await Promise.all([
       transaction.get(pondRef),
       transaction.get(usageRef),
       transaction.get(entitlementsRef),
       transaction.get(companyRef.collection('subscriptionGrants').doc('current')),
       transaction.get(db.collection('users').doc(uid)),
       transaction.get(companyRef.collection('accessOverrides').doc('current')),
+      transaction.get(companyRef),
     ]);
     if (company.businessSize === 'enterprise' && company.ownerId !== uid
       && !['co-owner', 'manager', 'admin', 'mechanic', 'buyer'].includes(userSnapshot.data()?.role)) {
@@ -287,7 +289,7 @@ exports.createCompanyPhysicalPond = onCall(async (request) => {
       if (sameRequest) return false;
       throw new HttpsError('already-exists', 'This pond already exists.');
     }
-    const entitlements = resolveEntitlements(entitlementsSnapshot.exists ? entitlementsSnapshot.data() : null, company, Date.now(), grantSnapshot.data(), overrideSnapshot.data());
+    const entitlements = resolveEntitlements(entitlementsSnapshot.exists ? entitlementsSnapshot.data() : null, company, Date.now(), grantSnapshot.data(), overrideSnapshot.data(), companySnapshot.createTime);
     const storedCount = usageSnapshot.exists && Number.isFinite(usageSnapshot.data()?.physicalPondCount)
       ? Math.max(usageSnapshot.data().physicalPondCount, existingCount)
       : existingCount;
@@ -513,7 +515,7 @@ exports.midtransBillingWebhook = onRequest({ timeoutSeconds: 30, secrets: [midtr
         transaction.set(paymentRef, review, { merge: true });
         return;
       }
-      const current = resolveEntitlements(entitlementSnapshot.exists ? entitlementSnapshot.data() : null, companySnapshot.data());
+      const current = resolveEntitlements(entitlementSnapshot.exists ? entitlementSnapshot.data() : null, companySnapshot.data(), Date.now(), null, null, companySnapshot.createTime);
       const now = new Date();
       const currentEndMs = timestampMillis(current.currentPeriodEnd);
       const startsAt = current.planId === order.planId && currentEndMs > now.getTime()

@@ -124,6 +124,12 @@ test('company-wide pond limits, cycle references and lifetime grants', { skip: !
     await expireCompanyPlans.run({});
     assert.equal((await getCompanyBillingSummary.run(request('guard'))).entitlements.planId, 'lifetime');
 
+    // New documents cannot gain legacy benefits by supplying an old client date.
+    await seed('backdated', 'free', 0);
+    await db.doc('companies/backdated/entitlements/current').delete();
+    await db.doc('companies/backdated').update({ createdAt: new Date('2000-01-01') });
+    assert.equal((await getCompanyBillingSummary.run(request('backdated'))).entitlements.planId, 'free');
+
     await seed('enterprise', 'free', 0);
     await db.doc('companies/enterprise').update({ businessSize: 'enterprise' });
     await db.doc('users/manager').update({ role: 'technician' });

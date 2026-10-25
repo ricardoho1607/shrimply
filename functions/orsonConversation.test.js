@@ -557,6 +557,9 @@ function handlerHarness(options = {}) {
     './shared/guardedCallable': { onCall: (_config, fn) => ({ run: fn }) },
     'firebase-functions/params': { defineSecret: () => ({ value: () => 'synthetic-key' }) },
     './abuseProtection': { enforceFixedWindowLimits: async () => {}, logCallableAppCheckStatus: () => {} },
+    './shared/paidAiSafety': { reservePaidAiRequest: async () => {
+      if (options.aiSafetyError) throw options.aiSafetyError;
+    } },
     './shared/companyAccess': {
       assertCompanyMemberForCallable: async (_db, _uid, _company, _permission, { cache }) => {
         now += 5;
@@ -654,6 +657,13 @@ test('actual handler telemetry excludes company identifiers and raw provider/acc
   await assert.rejects(failed.run('Hello', 'out_of_scope'));
   assert.ok(!JSON.stringify(failed.logs).includes(sentinel));
   assert.ok(!JSON.stringify(failed.logs).includes(failed.companyId));
+});
+
+test('actual handler rejects a failed AI safety check before provider dispatch', async () => {
+  const denied = Object.assign(new Error('Verify your email address before using AI.'), { code: 'permission-denied' });
+  const h = handlerHarness({ aiSafetyError: denied });
+  await assert.rejects(h.run('Hello', 'out_of_scope'), { code: 'permission-denied' });
+  assert.equal(h.requests.length, 0);
 });
 
 test('stream cancellation stops later answer events already buffered in the same SSE chunk', async () => {

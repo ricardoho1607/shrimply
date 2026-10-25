@@ -17,7 +17,7 @@ import {
 } from 'firebase/auth';
 import {
   doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc,
-  serverTimestamp, onSnapshot
+  serverTimestamp, onSnapshot, writeBatch
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Platform } from 'react-native';
@@ -822,16 +822,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     console.log('Creating company with data:', newCompany);
 
-    // Save to Firestore
-    await setDoc(companyRef, newCompany, { merge: Boolean(resumableCompany) });
-    await syncPublicCompanyProfile(companyRef.id, newCompany);
-
-    // Update user document
-    await updateDoc(doc(db, 'users', user.uid), {
+    // Company creation and the one-company account binding must commit together.
+    const setupBatch = writeBatch(db);
+    setupBatch.set(companyRef, newCompany, { merge: Boolean(resumableCompany) });
+    setupBatch.update(doc(db, 'users', user.uid), {
       hasCompletedSetup: true,
       companyId: newCompany.id,
       lastActive: serverTimestamp()
     });
+    await setupBatch.commit();
+    await syncPublicCompanyProfile(companyRef.id, newCompany);
 
     console.log('Company created successfully with ID:', newCompany.id);
 

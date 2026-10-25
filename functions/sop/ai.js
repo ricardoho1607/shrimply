@@ -11,6 +11,7 @@ const { access, fail, id } = require("./service");
 const { assessNarrative } = require("../shared/orsonDomain/sop/engine");
 const { hash } = require("./evidence");
 const { enforceFixedWindowLimits } = require("../abuseProtection");
+const { reservePaidAiRequest } = require("../shared/paidAiSafety");
 const key = defineSecret("MODEL_API_KEY");
 const {
   SOP_ASSIST_TIMEOUT_SECONDS,
@@ -120,6 +121,7 @@ exports.assistSop = onCall(
           "Source text exceeds 200,000 characters. Split it into chapters; no content was silently truncated.",
         );
       const prompt = sopDraftPrompt(text, request.data.language || "en");
+      await reservePaidAiRequest(db, uid, companyId);
       let definition = await generate(prompt, SOP_DRAFT_FORMAT, parts);
       let warnings;
       try {
@@ -151,6 +153,7 @@ exports.assistSop = onCall(
           ),
         old = await cache.get();
       if (old.exists) return old.data();
+      await reservePaidAiRequest(db, uid, companyId);
       const translated = await generate(
         sopTranslationPrompt(sop.definition, language),
         SOP_TRANSLATION_FORMAT,
@@ -239,6 +242,7 @@ async function evaluateWrittenEvidence(
   if (previous.exists) return previous.data();
   let judgment;
   try {
+    await reservePaidAiRequest(db, uid, companyId);
     judgment = await generate(
       narrativePrompt({
         rubric: task.step.check.rubric,
@@ -333,6 +337,7 @@ async function evaluateWrittenEvidence(
 exports.assessSopSubmission = onDocumentCreated(
   {
     document: "companies/{companyId}/sopSubmissions/{submissionId}",
+    region: "asia-southeast1",
     secrets: [key],
     timeoutSeconds: 150,
     memory: "512MiB",

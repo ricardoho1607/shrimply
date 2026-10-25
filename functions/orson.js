@@ -17,6 +17,7 @@ const { generateGroundedOrsonResponse } = require('./shared/orsonAnswerGrounding
 const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { HttpsError } = require("firebase-functions/v2/https");
 const { onCall } = require('./shared/guardedCallable');
+const { reservePaidAiRequest } = require('./shared/paidAiSafety');
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("./firebaseAdmin");
@@ -551,7 +552,7 @@ const reserveServerOrsonRequest = async (db, companyId, aiFunction, timeZone) =>
     const entitlements = resolveEntitlements(
       entitlementsSnap.exists ? entitlementsSnap.data() : null,
       companySnap.exists ? companySnap.data() : {},
-      Date.now(), grantSnap.data(), overrideSnap.data(),
+      Date.now(), grantSnap.data(), overrideSnap.data(), companySnap.createTime,
     );
     const dailyLimits = {
       chat: entitlements.orson.dailyChat,
@@ -784,6 +785,7 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
   // This server-only transaction is the authoritative quota. Legacy aiUsage
   // counters may still be written by older clients during rollout, but cannot
   // bypass or reset this counter.
+  await reservePaidAiRequest(db, uid, companyId);
   await reserveServerOrsonRequest(db, companyId, aiFunction, company.timeZone);
   const quotaMs = Date.now() - requestStartedAt - authorizationMs;
 
@@ -2550,6 +2552,7 @@ exports.extractLabReportFromPdf = onCall({ timeoutSeconds: 120, memory: "1GiB", 
     if (pdfBuffer.length > 10 * 1024 * 1024) {
       throw new Error("PDF is larger than the supported 10 MB limit.");
     }
+    await reservePaidAiRequest(db, uid, companyId);
     const genAI = getGeminiClient(apiKey);
     const model = genAI.getGenerativeModel({
       model: LAB_EXTRACTION_MODEL,
@@ -2729,6 +2732,7 @@ exports.extractLabReportFromPdf = onCall({ timeoutSeconds: 120, memory: "1GiB", 
       },
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
+    if (error instanceof HttpsError) throw error;
     throw new HttpsError("internal", "Failed to extract the lab report PDF.", { message: error.message || String(error) });
   }
 });
@@ -2781,6 +2785,7 @@ const createPlanktonOverwatchNotification = async (db, companyId, snapshot) => {
 
 exports.processConfirmedLabReport = onDocumentWritten({
   document: "companies/{companyId}/labReports/{labReportId}",
+  region: "us-central1",
   secrets: [geminiApiKeySecret],
 }, async (event) => {
   const afterSnap = event.data?.after;
@@ -2836,10 +2841,14 @@ exports.processConfirmedLabReport = onDocumentWritten({
           message: "Daily lab insight generation limit reached.",
         }],
       });
+      // Rules bind confirmedBy to the writer and freeze confirmed reports.
+      // Old reports without a trusted actor retain deterministic processing.
+      await assertCompanyMemberForCallable(db, report.confirmedBy, companyId, "manageLabReports");
+      await reservePaidAiRequest(db, report.confirmedBy, companyId);
     } catch (error) {
-      if (error?.code !== "resource-exhausted") throw error;
+      if (!["resource-exhausted", "permission-denied", "unauthenticated", "unavailable", "failed-precondition"].includes(error?.code)) throw error;
       allowPaidInsights = false;
-      console.warn("Lab insights used the deterministic fallback after reaching the company limit", {
+      console.warn("Lab insights used the deterministic fallback after AI safety checks", {
         companyId,
         labReportId,
       });

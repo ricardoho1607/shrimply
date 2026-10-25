@@ -21,13 +21,19 @@ test('publishes company plans without user limits', () => {
 });
 
 test('gives older companies a temporary early-access entitlement', () => {
-  const beforeDeadline = resolveEntitlements(null, { createdAt: new Date('2026-08-01T00:00:00Z') }, LEGACY_GRACE_END_MS - 1);
+  const beforeDeadline = resolveEntitlements(null, {}, LEGACY_GRACE_END_MS - 1, null, null, new Date('2026-08-01T00:00:00Z'));
   assert.equal(beforeDeadline.planId, 'legacy');
   assert.equal(beforeDeadline.pondLimit, null);
 
-  const afterDeadline = resolveEntitlements(null, { createdAt: new Date('2026-08-01T00:00:00Z') }, LEGACY_GRACE_END_MS + 1);
+  const afterDeadline = resolveEntitlements(null, {}, LEGACY_GRACE_END_MS + 1, null, null, new Date('2026-08-01T00:00:00Z'));
   assert.equal(afterDeadline.planId, 'free');
   assert.equal(afterDeadline.pondLimit, 10);
+});
+
+test('backdating client fields cannot create early-access benefits', () => {
+  const forged = { createdAt: new Date('2000-01-01'), _serverCreatedAt: new Date('2000-01-01') };
+  assert.equal(resolveEntitlements(null, forged, LEGACY_GRACE_END_MS - 1).planId, 'free');
+  assert.equal(resolveEntitlements(null, forged, LEGACY_GRACE_END_MS - 1, null, null, new Date('2026-10-25')).planId, 'free');
 });
 
 test('stored paid and early-access entitlements expire even before the scheduler runs', () => {

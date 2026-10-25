@@ -157,7 +157,10 @@ test("only an unassigned user can create their first company", async () => {
   });
   const freeDb = testEnvironment.authenticatedContext("free-owner", { email: "free@example.com" }).firestore();
   const assignedDb = testEnvironment.authenticatedContext("assigned-owner", { email: "assigned@example.com" }).firestore();
-  await assertSucceeds(setDoc(doc(freeDb, "companies/company-new"), companyPayload("free-owner")));
+  const setup = writeBatch(freeDb);
+  setup.set(doc(freeDb, "companies/company-new"), { ...companyPayload("free-owner"), createdAt: serverTimestamp() });
+  setup.update(doc(freeDb, "users/free-owner"), { companyId: "company-new", hasCompletedSetup: true });
+  await assertSucceeds(setup.commit());
   await assertFails(setDoc(doc(assignedDb, "companies/company-second"), companyPayload("assigned-owner")));
   const created = await getDoc(doc(freeDb, "companies/company-new"));
   assert.equal(created.exists(), true);

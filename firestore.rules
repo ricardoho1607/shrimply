@@ -901,8 +901,8 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['companyId', 'hasCompletedSetup', 'lastActive'])
           && request.resource.data.companyId != null
           && (!('companyId' in resource.data) || resource.data.companyId == null || resource.data.companyId == request.resource.data.companyId)
-          && isCompanyOwner(request.resource.data.companyId)
-          && validRequiredCompanySetup(companyDoc(request.resource.data.companyId).data)
+          && getAfter(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.ownerId == request.auth.uid
+          && validRequiredCompanySetup(getAfter(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data)
         )
         || (
           isFounderAdmin()
@@ -959,6 +959,8 @@ service cloud.firestore {
         && validRequiredCompanySetup(request.resource.data)
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.teamMembers == [request.auth.uid]
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId
+        && request.resource.data.createdAt == request.time
         && !('deletionRequest' in request.resource.data));
       allow read: if currentSessionAllowed() && (signedIn() && (
         isFounderAdmin()
@@ -976,6 +978,7 @@ service cloud.firestore {
               'teamMembers',
               'pendingInvites',
               'isVerified',
+              'createdAt',
               'deletionRequest'
             ])
           )
@@ -1073,11 +1076,13 @@ service cloud.firestore {
         allow create: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'manageLabReports')
           && request.resource.data.companyId == companyId
           && request.resource.data.status in ['draft', 'extracted', 'confirmed', 'failed']
+          && (request.resource.data.status != 'confirmed' || request.resource.data.get('confirmedBy', null) == request.auth.uid)
           && request.resource.data.entryMode in ['manual', 'pdf_upload']);
         allow update: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'manageLabReports')
           && resource.data.status != 'confirmed'
           && request.resource.data.companyId == companyId
           && request.resource.data.status in ['draft', 'extracted', 'confirmed', 'failed']
+          && (request.resource.data.status != 'confirmed' || request.resource.data.get('confirmedBy', null) == request.auth.uid)
           && request.resource.data.entryMode in ['manual', 'pdf_upload']);
         allow delete: if currentSessionAllowed() && (hasCompanyPermission(companyId, 'manageLabReports') || isFounderAdmin());
       }
