@@ -605,6 +605,8 @@ function createSopService(db, storage) {
       fail("permission-denied", "You cannot record pond events.");
     const isPlatformAdmin =
       input.action === "unlist" && input.platformAdmin === true;
+    if (input.action === "unlist" && !isPlatformAdmin)
+      fail("permission-denied", "Only a platform moderator can unlist an SOP.");
     if (
       !staffActions.includes(input.action) &&
       !actualEvent &&

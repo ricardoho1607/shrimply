@@ -12,6 +12,8 @@
     "check:android-release": "node ./scripts/check-android-release-integrity.js",
     "test:team-security": "node --test functions/teamAccessPolicy.test.js functions/teamAccessRules.test.js",
     "test:team-security:emulator": "node --test functions/teamAccessRules.emulator.test.js",
+    "test:security-boundaries:emulator": "firebase emulators:exec --project demo-shrimply-security-boundaries --config firebase.orson-agent-test.json --only firestore \"node --test --test-concurrency=1 functions/securityBoundaries.emulator.test.cjs functions/teamAccessRules.emulator.test.js\"",
+    "test:security-pdf": "node --test web/src/lib/financialPdfSecurity.browser.cjs",
     "test": "node scripts/run-tests.cjs",
     "qa:daily": "node scripts/qa-bot/run.mjs --mode=all",
     "qa:morning": "node scripts/qa-bot/run.mjs --mode=morning",

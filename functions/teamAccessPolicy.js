@@ -111,20 +111,21 @@ const evaluateDeletionRequest = ({
 const evaluateDeletionApproval = ({
   company,
   approverUid,
+  ownerAndCoOwnerUids,
 }) => {
   if (!company) return { allowed: false, reason: "company-not-found" };
   const deletionRequest = company.deletionRequest;
   if (!deletionRequest || deletionRequest.status !== "pending") {
     return { allowed: false, reason: "no-pending-deletion-request" };
   }
-  const requiredApproverIds = Array.isArray(deletionRequest.requiredApproverIds)
-    ? deletionRequest.requiredApproverIds
+  const requiredApproverIds = Array.isArray(ownerAndCoOwnerUids)
+    ? Array.from(new Set(ownerAndCoOwnerUids))
     : [];
   if (!requiredApproverIds.includes(approverUid)) {
     return { allowed: false, reason: "not-an-owner-or-co-owner" };
   }
   const approvedByIds = Array.isArray(deletionRequest.approvedByIds)
-    ? deletionRequest.approvedByIds
+    ? Array.from(new Set(deletionRequest.approvedByIds)).filter(id => requiredApproverIds.includes(id))
     : [];
   if (approvedByIds.includes(approverUid)) {
     return { allowed: false, reason: "already-approved" };
@@ -134,6 +135,7 @@ const evaluateDeletionApproval = ({
   return {
     allowed: true,
     isFullyApproved,
+    requiredApproverIds,
     approvedByIds: nextApprovedByIds,
     totalRequired: requiredApproverIds.length,
     approvedCount: nextApprovedByIds.length,

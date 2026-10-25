@@ -121,6 +121,7 @@ test("company deletion approval requires all owners and co-owners to reach unani
   const firstApproval = evaluateDeletionApproval({
     company: companyWithPending,
     approverUid: "co-owner-1",
+    ownerAndCoOwnerUids: ["owner-1", "co-owner-1", "co-owner-2"],
   });
   assert.equal(firstApproval.allowed, true);
   assert.equal(firstApproval.isFullyApproved, false);
@@ -130,6 +131,7 @@ test("company deletion approval requires all owners and co-owners to reach unani
   const duplicateApproval = evaluateDeletionApproval({
     company: companyWithPending,
     approverUid: "owner-1",
+    ownerAndCoOwnerUids: ["owner-1", "co-owner-1", "co-owner-2"],
   });
   assert.equal(duplicateApproval.allowed, false);
   assert.equal(duplicateApproval.reason, "already-approved");
@@ -143,6 +145,7 @@ test("company deletion approval requires all owners and co-owners to reach unani
       },
     },
     approverUid: "co-owner-2",
+    ownerAndCoOwnerUids: ["owner-1", "co-owner-1", "co-owner-2"],
   });
   assert.equal(finalApproval.allowed, true);
   assert.equal(finalApproval.isFullyApproved, true);

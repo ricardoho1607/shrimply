@@ -958,7 +958,8 @@ service cloud.firestore {
         && validCompanyPayload(request.resource.data)
         && validRequiredCompanySetup(request.resource.data)
         && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.teamMembers.hasAny([request.auth.uid]));
+        && request.resource.data.teamMembers == [request.auth.uid]
+        && !('deletionRequest' in request.resource.data));
       allow read: if currentSessionAllowed() && (signedIn() && (
         isFounderAdmin()
         || isCompanyMember(companyId)
@@ -974,11 +975,17 @@ service cloud.firestore {
               'ownerId',
               'teamMembers',
               'pendingInvites',
-              'isVerified'
+              'isVerified',
+              'deletionRequest'
             ])
           )
         ));
-      allow delete: if currentSessionAllowed() && (isCompanyOwner(companyId) || isFounderAdmin());
+      // Company deletion and unanimous approvals are owned by the callables.
+      allow delete: if currentSessionAllowed() && isFounderAdmin();
+
+      match /deletionRequests/{requestId} {
+        allow read, write: if false;
+      }
 
       match /summaries/{summaryId} {
         allow read: if currentSessionAllowed() && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm'));
@@ -1496,7 +1503,8 @@ service cloud.firestore {
         isFounderAdmin()
         || hasCompanyPermission(resource.data.companyId, 'viewAssets')
       ));
-      allow update: if currentSessionAllowed() && (signedIn() && (
+      allow update: if currentSessionAllowed() && (signedIn()
+        && request.resource.data.companyId == resource.data.companyId && (
         hasCompanyPermission(resource.data.companyId, 'manageAssets')
         || (hasCompanyPermission(resource.data.companyId, 'logAssetMaintenance') && validMechanicAssetUpdate())
       ));
