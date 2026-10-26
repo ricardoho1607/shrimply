@@ -79,6 +79,9 @@ export default function IndonesianResourcesPage() {
           <p className="animate-hero" style={{ animationDelay: "0.6s", maxWidth: "760px", fontSize: "1.08rem", fontWeight: 500 }}>
             Panduan praktis budidaya vannamei untuk manajemen pakan, kualitas air, sampling pertumbuhan, risiko penyakit, rencana panen, dan keuangan tambak.
           </p>
+          <Link href="/id/tools" style={{ display: "inline-flex", alignItems: "center", gap: "12px", marginTop: "24px", color: "var(--blue)", fontWeight: 600, fontSize: "0.9rem" }}>
+            Kalkulator tambak gratis <span aria-hidden="true">→</span>
+          </Link>
         </div>
       </section>
 

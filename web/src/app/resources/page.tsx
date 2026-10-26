@@ -79,6 +79,9 @@ export default function ResourcesPage() {
           <p className="animate-hero" style={{ animationDelay: "0.6s", maxWidth: "760px", fontSize: "1.08rem", fontWeight: 500 }}>
             Practical vannamei farming guides for feed control, water quality, growth sampling, disease risk, harvest planning, and farm finance.
           </p>
+          <Link href="/tools" style={{ display: "inline-flex", alignItems: "center", gap: "12px", marginTop: "24px", color: "var(--blue)", fontWeight: 600, fontSize: "0.9rem" }}>
+            Free farming calculators <span aria-hidden="true">→</span>
+          </Link>
         </div>
       </section>
 

@@ -2,7 +2,7 @@ export const LANDING_LOCALES = ['en', 'id', 'th', 'vi'] as const;
 export type LandingLocale = typeof LANDING_LOCALES[number];
 
 const PUBLIC_PAGES = new Set([
-  '/', '/about', '/how-it-works', '/orson', '/download',
+  '/', '/about', '/how-it-works', '/orson', '/download', '/tools',
   '/shrimp-farm-management-software', '/vannamei-shrimp-farming-app',
   '/shrimp-feed-management-software',
   '/shrimp-water-quality-monitoring-software',

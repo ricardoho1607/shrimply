@@ -33,12 +33,13 @@ export default function LanguageToggle({ isMobile = false }: { isMobile?: boolea
   const idHref = basePath === "/" ? "/id" : `/id${basePath}`;
   const thHref = basePath === "/" ? "/th" : `/th${basePath}`;
   const viHref = basePath === "/" ? "/vi" : `/vi${basePath}`;
+  const toolsPage = basePath === "/tools";
   const languages = [
     { code: "EN", name: "English", href: enHref, active: isEnglish, ariaLabel: "Switch to English" },
     { code: "ID", name: "Bahasa Indonesia", href: idHref, active: isIndonesian, ariaLabel: "Ganti ke Bahasa Indonesia" },
     { code: "TH", name: "ภาษาไทย", href: thHref, active: isThai, ariaLabel: "เปลี่ยนเป็นภาษาไทย" },
     { code: "VI", name: "Tiếng Việt", href: viHref, active: isVietnamese, ariaLabel: "Chuyển sang Tiếng Việt" },
-  ];
+  ].filter(language => !toolsPage || language.code === "EN" || language.code === "ID");
   const currentLanguage = languages.find((language) => language.active) || languages[0];
 
   useEffect(() => {
@@ -81,20 +82,20 @@ export default function LanguageToggle({ isMobile = false }: { isMobile?: boolea
           >
             Indonesia
           </Link>
-          <Link
+          {!toolsPage && <Link
             href={thHref}
             className={`mobile-lang-btn ${isThai ? "active" : ""}`}
             aria-label="เปลี่ยนเป็นภาษาไทย"
           >
             ภาษาไทย
-          </Link>
-          <Link
+          </Link>}
+          {!toolsPage && <Link
             href={viHref}
             className={`mobile-lang-btn ${isVietnamese ? "active" : ""}`}
             aria-label="Chuyển sang Tiếng Việt"
           >
             Tiếng Việt
-          </Link>
+          </Link>}
         </div>
         <style jsx>{`
           .mobile-lang-toggle {
