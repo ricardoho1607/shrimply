@@ -115,3 +115,17 @@ test('an interim cycle report preserves ended pond results alongside active pond
   assert.equal(report.ponds.find(p => p.id === 'p2').status, 'active');
   assert.ok(report.notes.some(n => n.key === 'cycleNotClosed'));
 });
+
+test('pond report includes only its own harvest, feed and saved expense allocations', () => {
+  const ponds = [{ ...pond, cycleStatus: 'ended' }, { ...pond, id: 'p2', pondName: 'P2', cycleStatus: 'active' }];
+  const report = cycle.buildWebCycleReport({ ...base, ponds, pondId: 'p1', cycle: { ...base.cycle, status: 'active' },
+    harvestRecords: [{ id: 'h1', cycleId: 'c1', date: '2026-09-09', ponds: [{ pondId: 'p1', biomass: '100', price: '10', size: '100' }, { pondId: 'p2', biomass: '900', price: '20', size: '100' }] }],
+    feeds: [{ usageHistory: [{ cycleId: 'c1', pondId: 'p1', totalCost: 10, quantity: 1 }, { cycleId: 'c1', pondId: 'p2', totalCost: 80, quantity: 1 }, { cycleId: 'c1', totalCost: 30, quantity: 1 }] }],
+    expenses: [{ cycleId: 'c1', category: 'Salary', amount: 100, pondAllocations: [{ pondId: 'p1', cycleId: 'c1', amount: 40 }, { pondId: 'p2', cycleId: 'c1', amount: 60 }] }, { cycleId: 'c1', category: 'Salary', amount: 500 }],
+  });
+  assert.equal(report.ponds.length, 1);
+  assert.equal(report.totals.harvestRevenue, 1000);
+  assert.equal(report.totals.costs.feed, 10);
+  assert.equal(report.totals.costs.manualExpenses, 40);
+  assert.equal(report.totals.costs.total, 50);
+});

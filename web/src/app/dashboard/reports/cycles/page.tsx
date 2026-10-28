@@ -71,6 +71,7 @@ function CycleReportsContent() {
   const [assets, setAssets] = useState<CycleReportAsset[]>([]);
   const [assetsError, setAssetsError] = useState<Error | null>(null);
   const [assetsLoading, setAssetsLoading] = useState(true);
+  const [pondChoice, setPondChoice] = useState('auto');
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [exportLoading, setExportLoading] = useState(false);
 
@@ -110,8 +111,12 @@ function CycleReportsContent() {
       - (new Date(first.closedAt || first.stockingEndDate || 0).getTime() || 0)
     )), [cycles, ponds]);
   const selectedCycle = cycles.find((cycle) => cycle.id === selectedCycleId);
+  const cyclePondsForScope = ponds.filter(pond => pond.cycleId === selectedCycleId);
+  const pondScope = pondChoice === 'auto' ? (cyclePondsForScope.find(pond => pond.cycleStatus === 'ended')?.id || cyclePondsForScope[0]?.id || 'all') : (pondChoice === 'all' || cyclePondsForScope.some(pond => pond.id === pondChoice) ? pondChoice : 'all');
+  useEffect(() => { setPondChoice('auto'); }, [selectedCycleId]);
   const report = useMemo(() => selectedCycle ? buildWebCycleReport({
     cycle: selectedCycle,
+    pondId: pondScope === 'all' ? undefined : pondScope,
     cycles,
     ponds,
     harvestRecords,
@@ -130,6 +135,7 @@ function CycleReportsContent() {
     ponds,
     cycles,
     selectedCycle,
+    pondScope,
   ]);
   const loading = cyclesLoading || pondsLoading || harvestLoading || inventoryLoading || financeLoading || assetsLoading;
 
@@ -145,15 +151,15 @@ function CycleReportsContent() {
         import('@/lib/generated/mobileCycleReport'),
       ]);
       const html = generateCycleReportHtml({
-        report,
+        report: { ...report, pondScopeName: pondScope === 'all' ? undefined : report.ponds[0]?.pondName },
         companyName: company?.companyName || company?.id || 'Company',
         formatCurrency,
         language: currentLanguage,
       }, brandAssets.backgroundBase64, brandAssets.logoBase64);
       await downloadMobilePdf({
         html,
-        filename: `Cycle_Report_${report.cycle.cycleName.replace(/[^a-z0-9]+/gi, '_')}.pdf`,
-        orientation: 'portrait', preserveTemplateScale: true,
+        filename: `Cycle_Report_${report.cycle.cycleName.replace(/[^a-z0-9]+/gi, '_')}${pondScope !== 'all' ? `_${(report.ponds[0]?.pondName || 'pond').replace(/[^a-z0-9]+/gi, '_')}` : ''}.pdf`,
+        orientation: 'portrait', preserveTemplateScale: true, renderPagesSeparately: true,
       });
     } catch (error) {
       console.error('Cycle report export failed:', error);
@@ -252,6 +258,13 @@ function CycleReportsContent() {
         </div>
       </header>
 
+      <label>{t.cycleReport.pondScope}{' '}
+        <select value={pondScope} onChange={(event) => setPondChoice(event.target.value)}>
+          <option value="all">{t.cycleReport.allPonds}</option>
+          {ponds.filter(pond => pond.cycleId === selectedCycleId).map(pond => <option key={pond.id} value={pond.id}>{pond.pondName}</option>)}
+        </select>
+      </label>
+      {pondScope !== 'all' && <p role="status">{t.cycleReport.unallocatedNotice}</p>}
       {report.cycle.status !== 'closed' && <p role="status">{t.cycleReport.interimBody}</p>}
       <section className={styles.summaryCard}>
         <div className={styles.summaryTop}>

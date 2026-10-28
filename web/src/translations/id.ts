@@ -1645,6 +1645,9 @@ companySetup: {
     },
   },
   cycleReport: {
+    pondScope: 'Kolam',
+    allPonds: 'Semua kolam',
+    unallocatedNotice: 'Biaya siklus yang belum dialokasikan tidak termasuk dalam laporan kolam ini.',
     interimLabel: 'Laporan sementara',
     interimBody: 'Hasil kolam yang selesai sudah tersedia. Siklus ini masih berjalan, sehingga total dan laba dapat berubah.',
     eyebrow: 'Riwayat produksi',

@@ -137,6 +137,7 @@ let cycleGenerator = `${generatedHeader}${cyclePdfI18nImport}\n\nexport interfac
 }
 
 export interface MobileCycleReport {
+  pondScopeName?: string;
   cycle: {
     cycleName: string;
     status?: string;

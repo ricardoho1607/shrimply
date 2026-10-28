@@ -81,6 +81,7 @@ export type CycleCostBreakdown = {
 };
 
 export type CycleReport = {
+  pondScopeName?: string;
   cycle: FarmCycle;
   ponds: CycleReportPond[];
   harvestRecords: HarvestRecord[];

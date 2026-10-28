@@ -1567,6 +1567,9 @@ companySetup: {
     },
   },
   cycleReport: {
+    pondScope: '池塘',
+    allPonds: '全部池塘',
+    unallocatedNotice: '此池塘报告不包含未分配的周期费用。',
     interimLabel: '阶段报告',
     interimBody: '已结束池塘的结果可供查看。此周期尚未关闭，总计和利润仍可能变化。',
     eyebrow: '生产历史',

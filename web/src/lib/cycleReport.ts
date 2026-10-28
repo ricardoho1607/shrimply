@@ -1,7 +1,7 @@
 import { withFinalHarvestDates } from '../../../shared/harvestCalculations';
 import { getPondCurrentDoc } from '../../../shared/pondCalculations';
 import { monetaryValue } from '../../../shared/financeIntegrity';
-import { scopeExpenseRecords, type ExpenseAllocationLink } from '../../../shared/financeExpenseAllocation';
+import { scopeExpenseRecords, scopeExpenseRecordsForPond, type ExpenseAllocationLink } from '../../../shared/financeExpenseAllocation';
 import { savedUsageCost, isCycleOperatingExpense, isMaintenanceExpense } from '../../../shared/reportingIntegrity';
 import {
   calculatePondMetricsWithHarvest,
@@ -274,6 +274,7 @@ export function buildWebCycleReport({
   assets,
   timeZone,
   includeComparison = true,
+  pondId,
 }: {
   cycle: CycleReportCycle;
   cycles?: CycleReportCycle[];
@@ -285,13 +286,14 @@ export function buildWebCycleReport({
   assets: CycleReportAsset[];
   timeZone?: string;
   includeComparison?: boolean;
+  pondId?: string;
 }): WebCycleReport {
-  const cyclePonds = ponds.filter((pond) => pond.cycleId === cycle.id);
+  const cyclePonds = ponds.filter((pond) => pond.cycleId === cycle.id && (!pondId || pond.id === pondId));
   const cyclePondIds = new Set(cyclePonds.map((pond) => pond.id));
   const matchedHarvestRecords = harvestRecords.filter(record => !record.voided).map(record => ({ ...record,
-    ponds: record.ponds.filter(line => line.cycleId ? line.cycleId === cycle.id : record.cycleId ? record.cycleId === cycle.id : cyclePondIds.has(line.pondId)),
+    ponds: record.ponds.filter(line => (!pondId || line.pondId === pondId) && (line.cycleId ? line.cycleId === cycle.id : record.cycleId ? record.cycleId === cycle.id : cyclePondIds.has(line.pondId))),
   })).filter(record => record.ponds.length > 0);
-  const matchesUsage = (usage: UsageHistory) => usage.source !== 'treatmentMixProduction' && (usage.cycleId ? usage.cycleId === cycle.id : Boolean(usage.pondId && cyclePondIds.has(usage.pondId)));
+  const matchesUsage = (usage: UsageHistory) => usage.source !== 'treatmentMixProduction' && (!pondId || usage.pondId === pondId) && (usage.cycleId ? usage.cycleId === cycle.id : Boolean(usage.pondId && cyclePondIds.has(usage.pondId)));
 
   const feedCost = feeds.flatMap((item) => item.usageHistory || [])
     .filter(matchesUsage)
@@ -300,7 +302,7 @@ export function buildWebCycleReport({
     .filter(matchesUsage)
     .reduce((sum, usage) => sum + usageCost(usage), 0);
   // Finance is the posting source; asset-register entries are retained as supporting history.
-  const operatingExpenses = scopeExpenseRecords(expenses, cycle.id, ponds).filter(isCycleOperatingExpense);
+  const operatingExpenses = (pondId && cyclePonds[0] ? scopeExpenseRecordsForPond(expenses, cycle.id, cyclePonds[0], ponds) : pondId ? [] : scopeExpenseRecords(expenses, cycle.id, ponds)).filter(isCycleOperatingExpense);
   const maintenanceCost = operatingExpenses.filter(isMaintenanceExpense).reduce((sum, expense) => sum + (monetaryValue(expense.amount) ?? Number.NaN), 0);
   const manualExpenses = operatingExpenses.filter(expense => !isMaintenanceExpense(expense)).reduce((sum, expense) => sum + (monetaryValue(expense.amount) ?? Number.NaN), 0);
 
@@ -393,7 +395,7 @@ export function buildWebCycleReport({
   if (cycle.status !== 'closed') notes.push({ severity: 'info', key: 'cycleNotClosed', message: 'This cycle is not closed yet. Final profitability may still change.' });
 
   const result: WebCycleReport = {
-    cycle,
+    cycle: pondId && cyclePonds[0] ? { ...cycle, stockingStartDate: cyclePonds[0].cycleStartedAt || cyclePonds[0].docStart || cycle.stockingStartDate, stockingEndDate: undefined, closedAt: cyclePonds[0].cycleEndedAt || reportPonds[0]?.endedAt } : cycle,
     harvestRecords: matchedHarvestRecords,
     ponds: reportPonds,
     notes,
@@ -420,7 +422,7 @@ export function buildWebCycleReport({
     },
   };
 
-  if (includeComparison) {
+  if (includeComparison && !pondId) {
     const previousCycle = getPreviousEnterpriseCycleForSameBlocks(cycle, cycles, ponds);
     const previousReport = previousCycle ? buildWebCycleReport({
       cycle: previousCycle,

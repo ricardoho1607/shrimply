@@ -54,14 +54,15 @@ export const downloadMobilePdf = async ({
   orientation,
   compress = true,
   preserveTemplateScale = false,
+  renderPagesSeparately = false,
 }: {
   html: string;
   filename: string;
   orientation: PdfOrientation;
   compress?: boolean;
   preserveTemplateScale?: boolean;
+  renderPagesSeparately?: boolean;
 }) => {
-  const html2pdf = ((await import('html2pdf.js')) as { default: Html2PdfFactory }).default;
   const parsed = new DOMParser().parseFromString(html, 'text/html');
   const physicalWidth = orientation === 'landscape' ? 792 : 612;
   const pageWidth = preserveTemplateScale ? physicalWidth * 4 / 3 : physicalWidth;
@@ -101,6 +102,20 @@ export const downloadMobilePdf = async ({
   document.body.appendChild(element);
 
   try {
+    if (renderPagesSeparately) {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')]);
+      const pages = Array.from(element.querySelectorAll<HTMLElement>('.pdf-page'));
+      if (!pages.length) throw new Error('No report pages to export.');
+      const pdf = new jsPDF({ compress, unit: 'pt', format: [physicalWidth, physicalHeight], orientation });
+      for (const [index, page] of pages.entries()) {
+        const canvas = await html2canvas(page, { scale: 3, useCORS: true, backgroundColor: '#fff', width: pageWidth, height: pageHeight, windowWidth: pageWidth });
+        if (index) pdf.addPage([physicalWidth, physicalHeight], orientation);
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, physicalWidth, physicalHeight);
+      }
+      pdf.save(filename);
+      return;
+    }
+    const html2pdf = ((await import('html2pdf.js')) as { default: Html2PdfFactory }).default;
     await html2pdf().from(element).set({
       margin: [0, 0, 0, 0],
       filename,

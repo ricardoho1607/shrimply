@@ -1666,6 +1666,9 @@ common: {
     },
   },
   cycleReport: {
+    pondScope: 'Pond',
+    allPonds: 'All ponds',
+    unallocatedNotice: 'Unallocated cycle costs are excluded from this pond report.',
     interimLabel: 'Interim report',
     interimBody: 'Ended pond results are available. This cycle still has open work, so cycle totals and profit may change.',
     eyebrow: 'Production history',

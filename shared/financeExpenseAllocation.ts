@@ -150,3 +150,18 @@ export const savedAllocationPonds = (record: ExpenseAllocationFields): ExpensePo
   if (!['active_pond_area', 'pl_quantity'].includes(record.allocationMethod || '') || !record.pondAllocations?.length) return null;
   return record.pondAllocations.map(row => ({ id: row.pondId, pondName: row.pondName, pondCycleId: row.pondCycleId, cycleId: row.cycleId, cycleName: row.cycleName, blockId: row.blockId, blockName: row.blockName, pondArea: row.pondArea, initialPopulation: row.plQuantity }));
 };
+
+/** Return only recorded amounts assigned to this pond run. Shared unallocated bills are excluded. */
+export function scopeExpenseRecordsForPond<T extends AllocatedExpense>(records: T[], cycleId: string, pond: FinancePondRecord, ponds: FinancePondRecord[] = []): (T & { billAmount?: number })[] {
+  return records.filter(record => expenseMatchesCycle(record, cycleId, ponds)).flatMap(record => {
+    const rows = record.pondAllocations || [];
+    if (rows.length) {
+      const matching = rows.filter(row => allocationCycleId(row, record, ponds) === cycleId && (row.pondCycleId ? row.pondCycleId === (pond.pondCycleId || pond.id) : row.pondId === pond.id));
+      if (!matching.length) return [];
+      const amount = hasValidExpenseAllocations(record) ? Math.round(matching.reduce((sum, row) => sum + Number(row.amount), 0) * 100) / 100 : Number.NaN;
+      return [{ ...record, amount, billAmount: monetaryValue(record.amount) ?? Number.NaN }];
+    }
+    const matches = record.pondCycleId ? record.pondCycleId === (pond.pondCycleId || pond.id) : record.pondId === pond.id;
+    return matches ? [{ ...record, amount: monetaryValue(record.amount) ?? Number.NaN }] : [];
+  });
+}
