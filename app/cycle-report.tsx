@@ -15,6 +15,8 @@ import { useFeedAdditiveStore } from './store/feedAdditiveStore';
 import { usePondStore } from './store/pondStore';
 import { hasFarmPermission } from '../shared/permissions';
 
+import { getReportableCycles } from '../shared/cycleReportAvailability';
+
 type TabKey = 'overview' | 'ponds' | 'costs';
 
 const tabs: { key: TabKey; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -91,14 +93,13 @@ export default function CycleReportScreen() {
     };
   }, [cleanupAssets, company?.id, hasFinanceAccess, initializeAssets, initializeFeedInventory]);
 
-  const closedCycles = useMemo(() => {
-    return [...cycles]
-      .filter((cycle) => cycle.status === 'closed')
+  const reportableCycles = useMemo(() => {
+    return getReportableCycles(cycles, ponds)
       .sort((a, b) =>
         new Date(b.closedAt || b.stockingEndDate || 0).getTime() -
         new Date(a.closedAt || a.stockingEndDate || 0).getTime()
       );
-  }, [cycles]);
+  }, [cycles, ponds]);
 
   const resolvedCycleId = useMemo(() => {
     if (cycleId) return Array.isArray(cycleId) ? cycleId[0] : cycleId;
@@ -201,6 +202,7 @@ export default function CycleReportScreen() {
     const profitTone = report.totals.grossProfit >= 0 ? 'good' : 'danger';
     return (
       <>
+        {report.cycle.status !== 'closed' && <Text style={styles.centerText}>{t.cycleReport.interimBody}</Text>}
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeader}>
             <View style={styles.summaryCopy}>
@@ -211,7 +213,7 @@ export default function CycleReportScreen() {
               </Text>
             </View>
             <View style={[styles.statusBadge, report.cycle.status !== 'closed' && styles.statusOpen]}>
-              <Text style={styles.statusText}>{statusText(report.cycle.status)}</Text>
+              <Text style={styles.statusText}>{report.cycle.status === 'closed' ? statusText(report.cycle.status) : t.cycleReport.interimLabel}</Text>
             </View>
           </View>
           <View style={styles.summaryStats}>
@@ -386,13 +388,13 @@ export default function CycleReportScreen() {
     if (!resolvedCycleId) {
       return (
         <Section title={t.cycleReport.archiveTitle}>
-          {closedCycles.length === 0 ? (
+          {reportableCycles.length === 0 ? (
             <View style={styles.centerState}>
               <Ionicons name="file-tray-outline" size={52} color="#315f57" />
               <Text style={styles.centerTitle}>{t.cycleReport.emptyTitle}</Text>
               <Text style={styles.centerText}>{t.cycleReport.emptyBody}</Text>
             </View>
-          ) : closedCycles.map((cycle) => {
+          ) : reportableCycles.map((cycle) => {
             const cyclePonds = ponds.filter((pond) => pond.cycleId === cycle.id);
             const harvestedKg = cyclePonds.reduce((sum, pond) => sum + toNumber(pond.totalHarvestedBiomass || 0), 0);
             return (
@@ -405,10 +407,10 @@ export default function CycleReportScreen() {
                   <Ionicons name="document-text-outline" size={22} color="#315f57" />
                 </View>
                 <View style={styles.reportListBody}>
-                  <Text style={styles.reportListTitle}>{cycle.cycleName}</Text>
+                  <Text style={styles.reportListTitle}>{cycle.cycleName}{cycle.status !== 'closed' ? ` · ${t.cycleReport.interimLabel}` : ''}</Text>
                   <Text style={styles.reportListMeta}>
                     {fillTemplate(t.cycleReport.archiveMeta, {
-                      date: formatDate(cycle.closedAt || cycle.stockingEndDate),
+                      date: cycle.status === 'closed' ? formatDate(cycle.closedAt || cycle.stockingEndDate) : t.cycleReport.interimLabel,
                       pondCount: cyclePonds.length,
                       harvestedKg: formatCompact(harvestedKg),
                     })}

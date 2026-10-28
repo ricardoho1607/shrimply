@@ -26,7 +26,12 @@ const assetToBase64 = (url: string): Promise<string> => {
       reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
       reader.onerror = () => reject(reader.error || new Error(`Unable to read PDF asset: ${url}`));
       reader.readAsDataURL(blob);
-    }));
+    }))
+    .catch((error) => {
+      // A dropped connection must not poison every later export in this tab.
+      assetCache.delete(url);
+      throw error;
+    });
 
   assetCache.set(url, request);
   return request;

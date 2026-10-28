@@ -37,6 +37,8 @@ import { downloadMobilePdf, loadMobilePdfBrandAssets } from '@/lib/mobilePdfExpo
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import styles from './CycleReports.module.css';
 
+import { getReportableCycles } from '../../../../../../shared/cycleReportAvailability';
+
 type TabKey = 'overview' | 'ponds' | 'costs';
 
 const formatNumber = (value: number, digits = 1) => value.toLocaleString(undefined, {
@@ -102,12 +104,11 @@ function CycleReportsContent() {
     );
   }, [company?.id, hasFinanceAccess]);
 
-  const closedCycles = useMemo(() => [...cycles]
-    .filter((cycle) => cycle.status === 'closed')
+  const reportableCycles = useMemo(() => getReportableCycles(cycles, ponds)
     .sort((first, second) => (
       (new Date(second.closedAt || second.stockingEndDate || 0).getTime() || 0)
       - (new Date(first.closedAt || first.stockingEndDate || 0).getTime() || 0)
-    )), [cycles]);
+    )), [cycles, ponds]);
   const selectedCycle = cycles.find((cycle) => cycle.id === selectedCycleId);
   const report = useMemo(() => selectedCycle ? buildWebCycleReport({
     cycle: selectedCycle,
@@ -182,9 +183,9 @@ function CycleReportsContent() {
             <p className={styles.subtitle}>{t.cycleReport.archiveSubtitle}</p>
           </div>
         </header>
-        {cyclesLoading ? (
+        {cyclesLoading || pondsLoading ? (
           <div className={styles.empty}><Loader2 className="animate-spin" /><p>{t.cycleReport.loading}</p></div>
-        ) : closedCycles.length === 0 ? (
+        ) : reportableCycles.length === 0 ? (
           <div className={styles.empty}>
             <FileText size={42} color="#3282B8" />
             <h2>{t.cycleReport.emptyTitle}</h2>
@@ -192,16 +193,16 @@ function CycleReportsContent() {
           </div>
         ) : (
           <div className={styles.archiveList}>
-            {closedCycles.map((cycle) => {
+            {reportableCycles.map((cycle) => {
               const cyclePonds = ponds.filter((pond) => pond.cycleId === cycle.id);
               const harvestedKg = cyclePonds.reduce((sum, pond) => sum + Number(pond.totalHarvestedBiomass || 0), 0);
               return (
                 <Link key={cycle.id} href={`/dashboard/reports/cycles?cycleId=${encodeURIComponent(cycle.id)}`} className={styles.archiveCard}>
                   <span className={styles.archiveIcon}><FileText size={21} /></span>
                   <span className={styles.archiveCopy}>
-                    <strong>{cycle.cycleName}</strong>
+                    <strong>{cycle.cycleName}{cycle.status !== 'closed' ? ` · ${t.cycleReport.interimLabel}` : ''}</strong>
                     <span>{t.cycleReport.archiveMeta
-                      .replace('{{date}}', formatDate(cycle.closedAt || cycle.stockingEndDate))
+                      .replace('{{date}}', (cycle.status === 'closed' ? formatDate(cycle.closedAt || cycle.stockingEndDate) : t.cycleReport.interimLabel))
                       .replace('{{pondCount}}', String(cyclePonds.length))
                       .replace('{{harvestedKg}}', formatNumber(harvestedKg))}</span>
                   </span>
@@ -251,13 +252,14 @@ function CycleReportsContent() {
         </div>
       </header>
 
+      {report.cycle.status !== 'closed' && <p role="status">{t.cycleReport.interimBody}</p>}
       <section className={styles.summaryCard}>
         <div className={styles.summaryTop}>
           <div>
             <h2>{report.cycle.cycleName}</h2>
             <p>{formatDate(report.cycle.stockingStartDate || report.cycle.plannedStartDate)} - {formatDate(report.cycle.closedAt || report.cycle.stockingEndDate)}</p>
           </div>
-          <span className={styles.status}>{t.cycleReport.statusClosed}</span>
+          <span className={styles.status}>{report.cycle.status === 'closed' ? t.cycleReport.statusClosed : t.cycleReport.interimLabel}</span>
         </div>
         <div className={styles.summaryMeta}>
           <span>{t.cycleReport.pondsIncluded.replace('{{count}}', String(report.totals.pondCount))}</span>

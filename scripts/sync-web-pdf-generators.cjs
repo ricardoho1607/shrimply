@@ -139,6 +139,7 @@ let cycleGenerator = `${generatedHeader}${cyclePdfI18nImport}\n\nexport interfac
 export interface MobileCycleReport {
   cycle: {
     cycleName: string;
+    status?: string;
     plannedStartDate?: string;
     stockingStartDate?: string;
     stockingEndDate?: string;

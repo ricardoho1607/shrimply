@@ -16,9 +16,8 @@ import {
   Trash2,
   History
 } from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
 import { collection, query, orderBy, onSnapshot, doc, serverTimestamp, runTransaction } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -127,19 +126,11 @@ interface FarmCycle {
   stockingStartDate?: string;
 }
 
-interface DashboardUser {
-  uid: string;
-  name?: string;
-  email?: string;
-  role?: string;
-  companyId?: string;
-}
-
 type HarvestFormEntry = Omit<HarvestPond, 'pondName' | 'harvestType'> & { date: string; harvestType: HarvestType };
 
 export default function HarvestPage() {
   const copy = useDashboardCopy();
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const { t } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
   const today = useFarmDateKey(company?.timeZone);
@@ -149,8 +140,7 @@ export default function HarvestPage() {
   const [pondsResolved, setPondsResolved] = useState(false);
   const [cyclesResolved, setCyclesResolved] = useState(false);
   const [harvestRecordsResolved, setHarvestRecordsResolved] = useState(false);
-  const [user, setUser] = useState<DashboardUser | null>(null);
-  const [companyId, setCompanyId] = useState<string | null>(null);
+  const companyId = user?.companyId || null;
   const loading = !pondsResolved || !cyclesResolved || !harvestRecordsResolved;
 
   const [isModalOpen, setModalOpen] = useState(false);
@@ -251,84 +241,68 @@ export default function HarvestPage() {
   [cycles, editingRecord, selectedCycle]);
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          const userData = uDoc.data() as Omit<DashboardUser, 'uid'> | undefined;
-          setUser({ uid: firebaseUser.uid, ...userData });
-          const cid = userData?.companyId || null;
-          setCompanyId(cid);
-          if (cid) {
-            setPondsResolved(false);
-            setCyclesResolved(false);
-            setHarvestRecordsResolved(false);
-            // Load Ponds
-            onSnapshot(collection(db, 'companies', cid, 'ponds'), (snapshot) => {
-              setPonds(snapshot.docs
-                .map(doc => ({
-                  id: doc.id,
-                  pondName: doc.data().pondName,
-                  docStart: doc.data().docStart,
-                  baselineDate: doc.data().baselineDate,
-                  baselineDoc: doc.data().baselineDoc,
-                  blockId: doc.data().blockId,
-                  blockName: doc.data().blockName,
-                  initialPopulation: doc.data().initialPopulation || 0,
-                  initialWeight: doc.data().initialWeight || 0.5,
-                  samplings: Array.isArray(doc.data().samplings) ? doc.data().samplings : [],
-                  totalHarvestedBiomass: doc.data().totalHarvestedBiomass || 0,
-                  totalHarvestedPopulation: doc.data().totalHarvestedPopulation || 0,
-                  partialHarvestCount: doc.data().partialHarvestCount || 0,
-                  postHarvestBaselineDate: doc.data().postHarvestBaselineDate ?? null,
-                  postHarvestRemainingBiomass: doc.data().postHarvestRemainingBiomass ?? null,
-                  postHarvestRemainingPopulation: doc.data().postHarvestRemainingPopulation ?? null,
-                  postHarvestReferenceSamplingId: doc.data().postHarvestReferenceSamplingId ?? null,
-                  postHarvestReferenceSamplingDate: doc.data().postHarvestReferenceSamplingDate ?? null,
-                  postHarvestReferenceMbw: doc.data().postHarvestReferenceMbw ?? null,
-                  cycleId: doc.data().cycleId,
-                  cycleName: doc.data().cycleName,
-                  pondCycleId: doc.data().pondCycleId || doc.id,
-                  cycleStatus: doc.data().cycleStatus
-                } as Pond)));
-              setPondsResolved(true);
-            }, (error) => {
-              console.error('Error loading harvest ponds:', error);
-              setPondsResolved(true);
-            });
-            // Load Harvest Records
-            const q = query(collection(db, 'companies', cid, 'harvestRecords'), orderBy('date', 'desc'));
-            const unsubHarvest = onSnapshot(q, (snapshot) => {
-              setHarvestRecords(snapshot.docs.filter(doc => !doc.data().voided).map(doc => ({ id: doc.id, ...doc.data() } as HarvestRecord)));
-              setHarvestRecordsResolved(true);
-            }, (error) => {
-              console.error('Error loading harvest records:', error);
-              setHarvestRecordsResolved(true);
-            });
-            return () => unsubHarvest();
-          } else {
-            setPonds([]);
-            setCycles([]);
-            setHarvestRecords([]);
-            setPondsResolved(true);
-            setCyclesResolved(true);
-            setHarvestRecordsResolved(true);
-          }
-        });
-      } else {
-        setUser(null);
-        setCompanyId(null);
-        setPonds([]);
-        setCycles([]);
-        setHarvestRecords([]);
-        setPondsResolved(true);
-        setCyclesResolved(true);
-        setHarvestRecordsResolved(true);
-      }
+    setPonds([]);
+    setHarvestRecords([]);
+    setPondsResolved(!companyId);
+    setHarvestRecordsResolved(!companyId);
+    if (!companyId) return;
+    let active = true;
+    // Load Ponds
+    const unsubPonds = onSnapshot(collection(db, 'companies', companyId, 'ponds'), (snapshot) => {
+      if (!active) return;
+      setPonds(snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          pondName: doc.data().pondName,
+          docStart: doc.data().docStart,
+          baselineDate: doc.data().baselineDate,
+          baselineDoc: doc.data().baselineDoc,
+          blockId: doc.data().blockId,
+          blockName: doc.data().blockName,
+          initialPopulation: doc.data().initialPopulation || 0,
+          initialWeight: doc.data().initialWeight || 0.5,
+          samplings: Array.isArray(doc.data().samplings) ? doc.data().samplings : [],
+          totalHarvestedBiomass: doc.data().totalHarvestedBiomass || 0,
+          totalHarvestedPopulation: doc.data().totalHarvestedPopulation || 0,
+          partialHarvestCount: doc.data().partialHarvestCount || 0,
+          postHarvestBaselineDate: doc.data().postHarvestBaselineDate ?? null,
+          postHarvestRemainingBiomass: doc.data().postHarvestRemainingBiomass ?? null,
+          postHarvestRemainingPopulation: doc.data().postHarvestRemainingPopulation ?? null,
+          postHarvestReferenceSamplingId: doc.data().postHarvestReferenceSamplingId ?? null,
+          postHarvestReferenceSamplingDate: doc.data().postHarvestReferenceSamplingDate ?? null,
+          postHarvestReferenceMbw: doc.data().postHarvestReferenceMbw ?? null,
+          cycleId: doc.data().cycleId,
+          cycleName: doc.data().cycleName,
+          pondCycleId: doc.data().pondCycleId || doc.id,
+          cycleStatus: doc.data().cycleStatus
+        } as Pond)));
+      setPondsResolved(true);
+    }, (error) => {
+      if (!active) return;
+      console.error('Error loading harvest ponds:', error);
+      setPondsResolved(true);
     });
-    return () => unsubAuth();
-  }, []);
+    // Load Harvest Records
+    const q = query(collection(db, 'companies', companyId, 'harvestRecords'), orderBy('date', 'desc'));
+    const unsubHarvest = onSnapshot(q, (snapshot) => {
+      if (!active) return;
+      setHarvestRecords(snapshot.docs.filter(doc => !doc.data().voided).map(doc => ({ id: doc.id, ...doc.data() } as HarvestRecord)));
+      setHarvestRecordsResolved(true);
+    }, (error) => {
+      if (!active) return;
+      console.error('Error loading harvest records:', error);
+      setHarvestRecordsResolved(true);
+    });
+    return () => {
+      active = false;
+      unsubPonds();
+      unsubHarvest();
+    };
+  }, [companyId, user?.uid]);
 
   useEffect(() => {
+    setCycles([]);
+    setCyclesResolved(!companyId);
     if (!companyId) return;
 
     return onSnapshot(collection(db, 'companies', companyId, 'cycles'), (snapshot) => {

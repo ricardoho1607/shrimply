@@ -1,5 +1,5 @@
 // utils/imageUpload.ts - Firebase Storage image upload utility
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../config/firebase';
 
 /**
@@ -18,7 +18,7 @@ export const uploadImageToStorage = async (uri: string, path: string): Promise<s
     const storageRef = ref(storage, path);
 
     // Upload the blob
-    await uploadBytes(storageRef, blob);
+    await uploadBytesResumable(storageRef, blob);
 
     // Get the download URL
     const downloadURL = await getDownloadURL(storageRef);

@@ -101,3 +101,17 @@ test('new accounting labels and the maintenance basis are localized as complete 
   assert.doesNotMatch(i18n.localizePdfHtml(`<p>${note}</p>`, 'id'), /includes Finance/);
   assert.equal(i18n.localizePdfText('Recorded Income', 'id'), 'Pendapatan Tercatat');
 });
+
+test('an interim cycle report preserves ended pond results alongside active ponds', () => {
+  const report = cycle.buildWebCycleReport({ ...base,
+    cycle: { ...base.cycle, status: 'active', closedAt: undefined },
+    ponds: [{ ...pond, cycleStatus: 'ended', cycleEndedAt: '2026-09-09', cycleEndReason: 'harvested' },
+      { ...pond, id: 'p2', pondName: 'P2', cycleStatus: 'active' }],
+    harvestRecords: [{ id: 'h1', cycleId: 'c1', date: '2026-09-09', ponds: [{ pondId: 'p1', harvestType: 'final', biomass: '100', size: '100', price: '10' }] }],
+  });
+  assert.equal(report.cycle.status, 'active');
+  assert.equal(report.ponds.find(p => p.id === 'p1').status, 'ended');
+  assert.equal(report.ponds.find(p => p.id === 'p1').harvestedBiomass, 100);
+  assert.equal(report.ponds.find(p => p.id === 'p2').status, 'active');
+  assert.ok(report.notes.some(n => n.key === 'cycleNotClosed'));
+});
