@@ -16,7 +16,7 @@ import type { AgentController } from "../../orson/useAgentOperations";
 import type { OrsonOperation } from "../../shared/orsonAgentContract";
 import { agentActivityLabel } from "../../shared/orsonAgentPresentation";
 import NetInfo from "@react-native-community/netinfo";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 type SpeechModule = {
   isRecognitionAvailable(): boolean;
   requestPermissionsAsync(): Promise<{ granted: boolean }>;

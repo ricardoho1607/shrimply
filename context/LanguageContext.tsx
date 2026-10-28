@@ -1,5 +1,5 @@
 // contexts/LanguageContext.tsx
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getLocales } from 'expo-localization';
 import { translations, Language, Translations } from '../app/translations';
@@ -49,7 +49,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
     })();
   }, []);
 
-  const setLanguage = async (lang: Language) => {
+  const setLanguage = useCallback(async (lang: Language) => {
     if (!translations[lang]) return;
     setCurrentLanguage(lang);
     setT(translations[lang] as Translations);
@@ -58,10 +58,12 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error('Failed to save language to storage:', error);
     }
-  };
+  }, []);
+
+  const value = useMemo(() => ({ currentLanguage, t, setLanguage, isLanguageLoaded }), [currentLanguage, t, setLanguage, isLanguageLoaded]);
 
   return (
-    <LanguageContext.Provider value={{ currentLanguage, t, setLanguage, isLanguageLoaded }}>
+    <LanguageContext.Provider value={value}>
       {children}
     </LanguageContext.Provider>
   );

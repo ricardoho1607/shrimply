@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { getUserErrorMessage } from '../../shared/userError';
 import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { filterPondRecordsForUser } from '../../shared/pondAssignments';
@@ -162,7 +163,10 @@ export default function WaterQualityScreen() {
   const { user, company } = useAuth();
   const { t } = useLanguage();
   const cycles = usePondStore((state) => state.cycles);
-  const { ponds, addWaterQuality } = usePondStore();
+  const { ponds, addWaterQuality } = usePondStore(useShallow((state) => ({
+    ponds: state.ponds,
+    addWaterQuality: state.addWaterQuality,
+  })));
   const [sopTimes, setSopTimes] = useState<Record<string,string>>({});
   const canEditPonds = hasFarmPermission(user, 'recordPondData', company?.ownerId);
   const canManageLabReports = hasFarmPermission(user, 'manageLabReports', company?.ownerId);

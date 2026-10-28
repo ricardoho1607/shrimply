@@ -1,0 +1,49 @@
+{
+  "conditions": "Real React dashboard screens and layout, synthetic 24-pond farm with 80 records each, mocked Firebase and navigation, Chrome CPU throttled 4x; no production data or writes",
+  "results": [
+    {
+      "screen": "home",
+      "width": 390,
+      "renderMs": 68663.59999990463,
+      "overflow": false,
+      "text": "Performance Test Farm\nshrimp\nMANAGEMENT\nHome\nPonds\nWater Quality\nFeed\nHarvest\nAPP SERVICES\nMarketplace\nDisease Report\nOrson AI\nHarvest Projections\nNotifications\nBUSINESS\nFinance\nReports\nInventory\nSYSTEM\nSettings\nSign Out\nDashboard\nMANAGEMENT\nT\nCOMPLETE YOUR FARM PROFILE\n67%\nComplete your farm profile\n\nAdd the remaining company details to improve team context and reports.\n\nComplete profile\nBIOMASS\n+1.3%\n35,505 kg\nSR (%)\n+0.0%\n82.9%\nPOPULATION\n+0.0%\n2,219,070\nACTIVE PONDS\n24\nFarm Health\nCurrent averages\npH Level\n7.9\nTransparency\n30cm\nDO\n5.7mg/L\nDaily Feed\n25kg\nPonds\nPond 01\nACTIVE • DOC 88\nWARNING\nAVG WEIGHT\n16.0g\nSURVIVAL\n82.9%\nBIOMASS\n1,327kg\nADG\n0.20g/d\nWATER QUALITY\nFEED STATUS\nPond 02\nACT",
+      "inputs": 0,
+      "buttons": 7,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "financial",
+      "width": 390,
+      "renderMs": 162.80000019073486,
+      "overflow": false,
+      "text": "Performance Test Farm\nshrimp\nMANAGEMENT\nHome\nPonds\nWater Quality\nFeed\nHarvest\nAPP SERVICES\nMarketplace\nDisease Report\nOrson AI\nHarvest Projections\nNotifications\nBUSINESS\nFinance\nReports\nInventory\nSYSTEM\nSettings\nSign Out\nDashboard\nMANAGEMENT\nT\nReport Type\nCHOOSE A REPORT\nProfit & Loss\nCOGS Report\nCash Flow\nTransaction History\nIncome Statement\nSelect period\nToday\nThis Week\nThis Month\nThis Year\nCustom\nCycle 1\nAll history\nInventory adjustment\n\nFeed and additives use consumed costs. Enter only production costs carried forward, not unused feed or material stock. Zero means no adjustment entered.\n\nOpening production costs (WIP) ($)\nClosing production costs (WIP) ($)\nReport Preview\nRevenue\n$20000.0",
+      "inputs": 2,
+      "buttons": 13,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "home",
+      "width": 1440,
+      "renderMs": 68589.79999995232,
+      "overflow": false,
+      "text": "Dashboard\nMANAGEMENT\nWed, Oct 28, 2026\nTest Owner\nOWNER\nT\nCOMPLETE YOUR FARM PROFILE\n67%\nComplete your farm profile\n\nAdd the remaining company details to improve team context and reports.\n\nComplete profile\nBIOMASS\n+1.3%\n35,505 kg\nSR (%)\n+0.0%\n82.9%\nPOPULATION\n+0.0%\n2,219,070\nACTIVE PONDS\n24\nFarm Health\nCurrent averages\npH Level\n7.9\nTransparency\n30cm\nDO\n5.7mg/L\nDaily Feed\n25kg\nPonds\nPond 01\nACTIVE • DOC 88\nWARNING\nAVG WEIGHT\n16.0g\nSURVIVAL\n82.9%\nBIOMASS\n1,327kg\nADG\n0.20g/d\nWATER QUALITY\nFEED STATUS\nPond 02\nACTIVE • DOC 88\nWARNING\nAVG WEIGHT\n16.0g\nSURVIVAL\n82.9%\nBIOMASS\n1,340kg\nADG\n0.20g/d\nWATER QUALITY\nFEED STATUS\nPond 03\nACTIVE • DOC 88\nWARNING\nAVG WEIGHT\n16.0g\nSURVIVAL\n82.9%\nBIOMASS\n1,353kg",
+      "inputs": 0,
+      "buttons": 7,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "financial",
+      "width": 1440,
+      "renderMs": 184.69999980926514,
+      "overflow": false,
+      "text": "Dashboard\nMANAGEMENT\nWed, Oct 28, 2026\nTest Owner\nOWNER\nT\nReport Type\nCHOOSE A REPORT\nProfit & Loss\nCOGS Report\nCash Flow\nTransaction History\nIncome Statement\nSelect period\nToday\nThis Week\nThis Month\nThis Year\nCustom\nCycle 1\nAll history\nInventory adjustment\n\nFeed and additives use consumed costs. Enter only production costs carried forward, not unused feed or material stock. Zero means no adjustment entered.\n\nOpening production costs (WIP) ($)\nClosing production costs (WIP) ($)\nReport Preview\nRevenue\n$20000.00\nExpenses\n$6000.00\nNet Profit\n$14000.00\nDOWNLOAD STATEMENT",
+      "inputs": 2,
+      "buttons": 13,
+      "errors": [],
+      "interaction": "not checked"
+    }
+  ]
+}

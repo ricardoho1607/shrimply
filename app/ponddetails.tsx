@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { getUserErrorMessage } from '../shared/userError';
 import { AppAlert as Alert } from '../components/alerts/appAlert';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -526,7 +527,19 @@ export default function PondDetails() {
     calculatePondMetricsWithHarvest,
     ponds,
     cycles,
-  } = usePondStore();
+  } = usePondStore(useShallow((state) => ({
+    getPondById: state.getPondById,
+    addPond: state.addPond,
+    updateSampling: state.updateSampling,
+    deleteSampling: state.deleteSampling,
+    updateMortalityRecord: state.updateMortalityRecord,
+    deleteMortalityRecord: state.deleteMortalityRecord,
+    calculatePondMetricsWithHarvest: state.calculatePondMetricsWithHarvest,
+    currentTimeZone: state.currentTimeZone,
+    harvestRecords: state.harvestRecords,
+    ponds: state.ponds,
+    cycles: state.cycles,
+  })));
   const activeFarmCycle = useMemo(() => getActiveFarmCycle(cycles), [cycles]);
   
   const [pond, setPond] = useState<Pond | null>(null);

@@ -5,15 +5,41 @@ export type CompanyTimeZoneSource = {
   timeZone?: unknown;
 } | null | undefined;
 
+// Cache formatters, never dates or farm records. The same formatter handles DST
+// and rollover on every call. Bound both caches for long-running clients.
+const CACHE_LIMIT = 64;
+const validTimeZones = new Map<string, boolean>();
+const dateFormatters = new Map<string, Intl.DateTimeFormat>();
+const hourFormatters = new Map<string, Intl.DateTimeFormat>();
+
+const cacheEntry = <T,>(cache: Map<string, T>, key: string, value: T): T => {
+  if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value!);
+  cache.set(key, value);
+  return value;
+};
+
 export const isValidTimeZone = (value: unknown): value is string => {
   if (typeof value !== 'string' || !value.trim()) return false;
-
+  const timeZone = value.trim();
+  const cached = validTimeZones.get(timeZone);
+  if (cached !== undefined) return cached;
   try {
-    new Intl.DateTimeFormat('en-US', { timeZone: value.trim() }).format(new Date());
-    return true;
+    new Intl.DateTimeFormat('en-US', { timeZone });
+    return cacheEntry(validTimeZones, timeZone, true);
   } catch {
-    return false;
+    return cacheEntry(validTimeZones, timeZone, false);
   }
+};
+
+const getFormatter = (timeZone: string, hourOnly = false): Intl.DateTimeFormat => {
+  const cache = hourOnly ? hourFormatters : dateFormatters;
+  const cached = cache.get(timeZone);
+  if (cached) return cached;
+  return cacheEntry(cache, timeZone, new Intl.DateTimeFormat('en-CA', hourOnly ? {
+    timeZone, hour: '2-digit', hourCycle: 'h23',
+  } : {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }));
 };
 
 export const getSystemTimeZone = (): string => {
@@ -52,12 +78,7 @@ export const getSupportedTimeZones = (): string[] => {
 };
 
 const getDateParts = (date: Date, timeZone: string) => {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(date);
+  const parts = getFormatter(timeZone).formatToParts(date);
   return Object.fromEntries(parts.map((part) => [part.type, part.value]));
 };
 
@@ -134,11 +155,7 @@ export const getFarmDateKeyAtRollover = (
     : 0;
   if (safeRolloverHour === 0) return calendarDateKey;
 
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: resolveFarmTimeZone(timeZone),
-    hour: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(safeDate);
+  const parts = getFormatter(resolveFarmTimeZone(timeZone), true).formatToParts(safeDate);
   const localHour = Number(parts.find((part) => part.type === 'hour')?.value);
   return Number.isFinite(localHour) && localHour < safeRolloverHour
     ? shiftDateKey(calendarDateKey, -1)

@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { getUserErrorMessage } from '../shared/userError';
 import { AppAlert as Alert } from '../components/alerts/appAlert';
 import { useSaveOperation } from '../shared/useSaveOperation';
@@ -117,7 +118,10 @@ export default function FinancePage() {
   const categoryLabel = (category: string) => normalizeProductionExpenseCategory(category) === 'Utilities' ? (t.finance?.utilities || 'Utilities') : productionExpenseLabel(category, allocationCopy);
   const { formatCurrency: displayCurrency, currencyConfig } = useCurrency();
   const formatCurrency = (value: number) => Number.isFinite(value) ? displayCurrency(value) : 'N/A';
-  const { cycles, ponds } = usePondStore();
+  const { cycles, ponds } = usePondStore(useShallow((state) => ({
+    cycles: state.cycles,
+    ponds: state.ponds,
+  })));
   const activeCycles = useMemo(() => getOpenFinanceCycles(cycles), [cycles]);
   const feedAdditiveStore = useFeedAdditiveStore();
 

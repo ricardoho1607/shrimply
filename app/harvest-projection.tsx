@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { getUserErrorMessage } from '../shared/userError';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
@@ -53,7 +54,9 @@ const totalScenarioCosts = (costs: { feed: number | null; additives: number | nu
 
 export default function HarvestProjectionScreen() {
   const router = useRouter();
-  const { ponds } = usePondStore();
+  const { ponds } = usePondStore(useShallow((state) => ({
+    ponds: state.ponds,
+  })));
   const activePonds = React.useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const { sendMessage, loading: aiLoading } = useGemini();
   const { t } = useLanguage();

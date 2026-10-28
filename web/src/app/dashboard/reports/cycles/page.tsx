@@ -1,5 +1,7 @@
 "use client";
 
+import { showAppAlert } from '@/lib/appDialogs';
+
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -31,7 +33,6 @@ import {
   type CycleReportInventoryItem,
   type CycleReportPondSource,
 } from '@/lib/cycleReport';
-import { generateCycleReportHtml } from '@/lib/generated/mobileCycleReport';
 import { downloadMobilePdf, loadMobilePdfBrandAssets } from '@/lib/mobilePdfExport';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import styles from './CycleReports.module.css';
@@ -138,7 +139,10 @@ function CycleReportsContent() {
     if (!report || !canExportReports || loading || sourceError || invalidCosts) return;
     setExportLoading(true);
     try {
-      const brandAssets = await loadMobilePdfBrandAssets('portrait');
+      const [brandAssets, { generateCycleReportHtml }] = await Promise.all([
+        loadMobilePdfBrandAssets('portrait'),
+        import('@/lib/generated/mobileCycleReport'),
+      ]);
       const html = generateCycleReportHtml({
         report,
         companyName: company?.companyName || company?.id || 'Company',
@@ -152,6 +156,7 @@ function CycleReportsContent() {
       });
     } catch (error) {
       console.error('Cycle report export failed:', error);
+      showAppAlert('Unable to download the report. Check your connection and try again.');
     } finally {
       setExportLoading(false);
     }

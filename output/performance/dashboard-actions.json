@@ -1,0 +1,101 @@
+{
+  "method": "Read-only synthetic farm. Actual form components and lazy report generators. PDF download transport captured locally; no backend writes.",
+  "results": [
+    {
+      "screen": "feed",
+      "width": 390,
+      "formOpened": true,
+      "overflow": false
+    },
+    {
+      "screen": "water",
+      "width": 390,
+      "formOpened": true,
+      "overflow": false
+    },
+    {
+      "screen": "financial",
+      "report": "profit-loss",
+      "width": 390,
+      "filename": "Profit_Loss_This_Month.pdf",
+      "htmlBytes": 7831,
+      "hasNaN": false,
+      "hasCompany": true
+    },
+    {
+      "screen": "financial",
+      "report": "cogs",
+      "width": 390,
+      "filename": "COGS_This_Month.pdf",
+      "htmlBytes": 25058,
+      "hasNaN": false,
+      "hasCompany": true
+    },
+    {
+      "screen": "financial",
+      "report": "cash-flow",
+      "width": 390,
+      "filename": "Cash_Flow_This_Month.pdf",
+      "htmlBytes": 16332,
+      "hasNaN": false,
+      "hasCompany": true
+    },
+    {
+      "screen": "financial",
+      "report": "transaction-history",
+      "width": 390,
+      "filename": "Transaction_Register_This_Month.pdf",
+      "htmlBytes": 90263,
+      "hasNaN": false,
+      "hasCompany": true
+    },
+    {
+      "screen": "feed",
+      "width": 1440,
+      "formOpened": true,
+      "overflow": false
+    },
+    {
+      "screen": "water",
+      "width": 1440,
+      "formOpened": true,
+      "overflow": false
+    },
+    {
+      "screen": "financial",
+      "report": "profit-loss",
+      "width": 1440,
+      "filename": "Profit_Loss_This_Month.pdf",
+      "htmlBytes": 7831,
+      "hasNaN": false,
+      "hasCompany": true
+    },
+    {
+      "screen": "financial",
+      "report": "cogs",
+      "width": 1440,
+      "filename": "COGS_This_Month.pdf",
+      "htmlBytes": 25058,
+      "hasNaN": false,
+      "hasCompany": true
+    },
+    {
+      "screen": "financial",
+      "report": "cash-flow",
+      "width": 1440,
+      "filename": "Cash_Flow_This_Month.pdf",
+      "htmlBytes": 16332,
+      "hasNaN": false,
+      "hasCompany": true
+    },
+    {
+      "screen": "financial",
+      "report": "transaction-history",
+      "width": 1440,
+      "filename": "Transaction_Register_This_Month.pdf",
+      "htmlBytes": 90263,
+      "hasNaN": false,
+      "hasCompany": true
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { getUserErrorMessage } from '../../shared/userError';
 import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { filterPondRecordsForUser } from '../../shared/pondAssignments';
@@ -73,7 +74,17 @@ export default function HarvestScreen() {
     removeHarvestRecord,
     addSampling,
     calculatePondMetricsWithHarvest,
-  } = usePondStore();
+  } = usePondStore(useShallow((state) => ({
+    ponds: state.ponds,
+    cycles: state.cycles,
+    harvestRecords: state.harvestRecords,
+    addHarvestRecord: state.addHarvestRecord,
+    updateHarvestRecord: state.updateHarvestRecord,
+    removeHarvestRecord: state.removeHarvestRecord,
+    addSampling: state.addSampling,
+    calculatePondMetricsWithHarvest: state.calculatePondMetricsWithHarvest,
+    currentTimeZone: state.currentTimeZone,
+  })));
   const enterpriseBlocks = useEnterpriseBlocks(
     company?.businessSize === 'enterprise' ? company?.id : undefined,
     user?.uid,

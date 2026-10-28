@@ -3,7 +3,7 @@
 import "@/app/globals.css";
 import { useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import Image from "next/image";
+import Image from "@/components/ResourceImage";
 import Link from "next/link";
 import type { ResourceArticle } from "@/data/resourceLibrary";
 
@@ -151,6 +151,7 @@ export default function ResourcesHub({ articles, locale = "en" }: ResourcesHubPr
           {filteredArticles.map(article => (
             <Link
               href={`${baseHref}/${article.slug}`}
+              prefetch={false}
               key={article.slug}
               style={{
                 display: "flex",
@@ -171,6 +172,7 @@ export default function ResourcesHub({ articles, locale = "en" }: ResourcesHubPr
                   width={article.image.width}
                   height={article.image.height}
                   loading="lazy"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 400px"
                   style={{
                     width: "calc(100% + 56px)",
                     aspectRatio: "16 / 9",

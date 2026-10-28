@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { AppAlert as Alert } from '../components/alerts/appAlert';
 import { scopeExpenseRecords } from '../shared/financeExpenseAllocation';
 import { getFinanceAllocationCopy, productionExpenseLabel } from '../shared/financeAllocationCopy';
@@ -31,7 +32,6 @@ import AppDatePicker from './components/forms/AppDatePicker';
 import CycleSelector from './components/forms/CycleSelector';
 import { getOpenFinanceCycles } from '../shared/financeCycleAllocation';
 import { hasFarmPermission } from '../shared/permissions';
-import { buildCogsReport } from '../shared/cogsReport';
 
 type ReportTypeId = 'profit-loss' | 'cogs' | 'cash-flow' | 'transaction-history';
 type ReportType = { id: ReportTypeId; name: string; description: string };
@@ -44,7 +44,11 @@ export default function FinancialReportsPage() {
   const { t, currentLanguage } = useLanguage();
   const { formatCurrency: displayCurrency, currencyConfig } = useCurrency();
   const formatCurrency = (value: number) => Number.isFinite(value) ? displayCurrency(value) : 'N/A';
-  const { cycles, ponds, harvestRecords } = usePondStore();
+  const { cycles, ponds, harvestRecords } = usePondStore(useShallow((state) => ({
+    cycles: state.cycles,
+    ponds: state.ponds,
+    harvestRecords: state.harvestRecords,
+  })));
   const allocationCopy = getFinanceAllocationCopy(currentLanguage);
   const [pondHppExpanded, setPondHppExpanded] = useState(false);
   const activeCycles = useMemo(() => getOpenFinanceCycles(cycles), [cycles]);
@@ -188,22 +192,22 @@ export default function FinancialReportsPage() {
 
 
   const { startDateKey: cogsStartDateKey, endDateKey: cogsEndDateKey } = getDateRange();
-  const cogsInput = {
+  const cogsInput = useMemo(() => ({
     ponds, expenses, revenues, harvests: harvestRecords,
     feedUsage: feedAdditiveStore.feeds.flatMap(feed => feed.usageHistory || []),
     additiveUsage: feedAdditiveStore.additives.flatMap(additive => additive.usageHistory || []),
     cycleScope, scopeLabel: cycles.find(cycle => cycle.id === cycleScope)?.cycleName || 'All cycles',
     startDateKey: cogsStartDateKey, endDateKey: cogsEndDateKey, timeZone: company?.timeZone, normalizeCategory,
-  };
-  const cogs = buildCogsReport(cogsInput);
-  const pl = buildProfitLoss(cogsInput, openingInventory, closingInventory);
+  }), [ponds, expenses, revenues, harvestRecords, feedAdditiveStore.feeds, feedAdditiveStore.additives, cycleScope, cycles, cogsStartDateKey, cogsEndDateKey, company?.timeZone]);
+  const pl = useMemo(() => buildProfitLoss(cogsInput, openingInventory, closingInventory), [cogsInput, openingInventory, closingInventory]);
+  const cogs = pl;
   const { purchases, directLabor, directMaterials } = cogs;
   const totalCOGSInventory = openingInventory + cogs.totalProductionCost - closingInventory;
   const cogsGrossProfit = cogs.revenue - totalCOGSInventory;
 
   const { totalCOGS: totalCOGSPL, cogsBreakdown: cogsCategoryBreakdown, grossProfit: grossProfitPL, totalOPEX, opexBreakdown: opexCategoryBreakdown, operatingIncome, totalOtherExpenses, otherExpenseBreakdown, netProfit: netProfitPL } = pl;
   const registerOpeningBalance = transactionOpeningPosition({ expenses, revenues, cycleScope, startDateKey: cogsStartDateKey, timeZone: company?.timeZone });
-  const cash = buildConfirmedCashFlow({ expenses, revenues, startDateKey: cogsStartDateKey, endDateKey: cogsEndDateKey, timeZone: company?.timeZone, normalizeCategory });
+  const cash = useMemo(() => buildConfirmedCashFlow({ expenses, revenues, startDateKey: cogsStartDateKey, endDateKey: cogsEndDateKey, timeZone: company?.timeZone, normalizeCategory }), [expenses, revenues, cogsStartDateKey, cogsEndDateKey, company?.timeZone]);
   const { operating, investing, financing, openingBalance } = cash;
   const netOperatingCash = operating.cashFromSales + operating.cashFromCustomers - operating.paymentToSuppliers - operating.paymentForExpenses + operating.otherOperatingCash;
   const netInvestingCash = investing.saleOfAssets + investing.saleOfInvestments - investing.purchaseOfAssets - investing.purchaseOfInvestments;

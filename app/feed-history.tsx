@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { AppAlert as Alert } from '../components/alerts/appAlert';
 import { filterPondRecordsForUser } from '../shared/pondAssignments';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -28,7 +29,10 @@ type FeedAllocationInput = { inventoryFeedId: string; quantityKg: string };
 export default function FeedHistoryScreen() {
   const { pondId, pondName } = useLocalSearchParams();
   const cycles = usePondStore((state) => state.cycles);
-  const { ponds, updateSampling } = usePondStore();
+  const { ponds, updateSampling } = usePondStore(useShallow((state) => ({
+    ponds: state.ponds,
+    updateSampling: state.updateSampling,
+  })));
   const { user, company } = useAuth();
   const { setCurrentCompanyId, reconcileDailyFeedAllocations, deleteDailyFeedRecord } = useFeedAdditiveStore();
   const { t } = useLanguage();

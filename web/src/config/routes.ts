@@ -1,7 +1,3 @@
-import { resourceArticles } from "@/data/resourceLibrary";
-import { resourceArticlesID } from "@/data/resourceLibraryID";
-import { resourceArticlesTH } from "@/data/resourceLibraryTH";
-import { resourceArticlesVI } from "@/data/resourceLibraryVI";
 import { getSetupDestination, type OnboardingRole } from "../../../shared/onboarding";
 
 export const ROUTES = {
@@ -19,31 +15,6 @@ export const ROUTES = {
   dashboardPonds: "/dashboard/ponds",
   dashboardWater: "/dashboard/water",
   dashboardFeed: "/dashboard/feed",
-  publicPages: [
-    "/",
-    "/about",
-    "/how-it-works",
-    "/download",
-    "/resources",
-    "/orson",
-    "/auth",
-    "/auth/join",
-    "/shrimp-farm-management-software",
-    "/vannamei-shrimp-farming-app",
-    "/features/feed-inventory",
-    "/features/water-quality-monitoring",
-    "/features/growth-sampling",
-    "/features/shrimp-harvest-tracking",
-    "/features/shrimp-farm-finance",
-    "/features/disease-alerts",
-    ...resourceArticles.map(article => `/resources/${article.slug}`),
-    "/id/resources",
-    ...resourceArticlesID.map(article => `/id/resources/${article.slug}`),
-    "/th/resources",
-    ...resourceArticlesTH.map(article => `/th/resources/${article.slug}`),
-    "/vi/resources",
-    ...resourceArticlesVI.map(article => `/vi/resources/${article.slug}`),
-  ],
   privatePrefixes: ["/dashboard", "/roleselection", "/setup"],
 } as const;
 

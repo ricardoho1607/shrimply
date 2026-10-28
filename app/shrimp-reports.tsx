@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { getUserErrorMessage } from '../shared/userError';
 import { AppAlert as Alert } from '../components/alerts/appAlert';
 import { filterPondRecordsForUser } from '../shared/pondAssignments';
@@ -35,7 +36,12 @@ export default function ShrimpReportsScreen() {
   const farmToday = useFarmDateKey(company?.timeZone, FARM_OPERATIONAL_DAY_ROLLOVER_HOUR);
   const { t, currentLanguage } = useLanguage();
   const cycles = usePondStore((state) => state.cycles);
-  const { ponds, harvestRecords, calculatePondMetricsWithHarvest } = usePondStore();
+  const { ponds, harvestRecords, calculatePondMetricsWithHarvest } = usePondStore(useShallow((state) => ({
+    ponds: state.ponds,
+    harvestRecords: state.harvestRecords,
+    calculatePondMetricsWithHarvest: state.calculatePondMetricsWithHarvest,
+    currentTimeZone: state.currentTimeZone,
+  })));
   const enterpriseBlocks = useEnterpriseBlocks(company?.businessSize === 'enterprise' ? company.id : undefined, user?.uid);
   const [loading, setLoading] = useState(false);
   const [selectedPonds, setSelectedPonds] = useState<Set<string>>(new Set());

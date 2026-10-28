@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { translations, Language, Translations } from '../translations';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { Language, Translations } from '../translations';
+import { englishTranslations, isLanguage, loadTranslations } from '../translations/loadTranslations';
 
 type LanguageContextType = {
   currentLanguage: Language;
@@ -10,57 +11,53 @@ type LanguageContextType = {
   isLanguageLoaded: boolean;
 };
 
-const defaultLanguage: Language = 'en';
-
 const LanguageContext = createContext<LanguageContextType>({
-  currentLanguage: defaultLanguage,
-  t: translations.en,
-  isLanguageLoaded: true,
+  currentLanguage: 'en', t: englishTranslations, isLanguageLoaded: true,
   setLanguage: async () => {},
 });
 
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
-  const [currentLanguage, setCurrentLanguage] = useState<Language>(defaultLanguage);
-  const [t, setT] = useState<Translations>(translations[defaultLanguage]);
+  const [language, setLanguageState] = useState({ currentLanguage: 'en' as Language, t: englishTranslations });
   const [isLanguageLoaded, setIsLanguageLoaded] = useState(false);
+  const requestId = useRef(0);
 
   useEffect(() => {
-    queueMicrotask(() => {
-      const storedLang = localStorage.getItem('@language');
-      if (storedLang && translations[storedLang as Language]) {
-        setCurrentLanguage(storedLang as Language);
-        setT(translations[storedLang as Language] as Translations);
-      } else {
-        const deviceLocale = navigator.language.split('-')[0] as Language;
-        if (translations[deviceLocale]) {
-          setCurrentLanguage(deviceLocale);
-          setT(translations[deviceLocale] as Translations);
-        }
-      }
-      setIsLanguageLoaded(true);
+    let active = true;
+    const request = ++requestId.current;
+    let preferred: Language = 'en';
+    try {
+      const stored = localStorage.getItem('@language');
+      const device = navigator.language.split('-')[0];
+      preferred = isLanguage(stored) ? stored : isLanguage(device) ? device : 'en';
+    } catch { /* Private browsing can deny storage. English remains available. */ }
+    loadTranslations(preferred).then(t => {
+      if (active && request === requestId.current) setLanguageState({ currentLanguage: preferred, t });
+    }).catch(error => {
+      console.error('Unable to load language:', error);
+    }).finally(() => {
+      if (active && request === requestId.current) setIsLanguageLoaded(true);
     });
+    return () => { active = false; };
   }, []);
 
-  const setLanguage = async (lang: Language) => {
-    if (!translations[lang]) return;
-    setCurrentLanguage(lang);
-    setT(translations[lang] as Translations);
-    localStorage.setItem('@language', lang);
-  };
+  const setLanguage = useCallback(async (lang: Language) => {
+    if (!isLanguage(lang)) return;
+    const request = ++requestId.current;
+    try {
+      const t = await loadTranslations(lang);
+      if (request !== requestId.current) return;
+      setLanguageState({ currentLanguage: lang, t });
+      setIsLanguageLoaded(true);
+      try { localStorage.setItem('@language', lang); } catch { /* Keep the in-memory selection. */ }
+    } catch (error) {
+      if (request === requestId.current) setIsLanguageLoaded(true);
+      console.error('Unable to load language:', error);
+    }
+  }, []);
 
-  return (
-    <LanguageContext.Provider value={{ currentLanguage, t, setLanguage, isLanguageLoaded }}>
-      {children}
-    </LanguageContext.Provider>
-  );
+  const value = useMemo(() => ({ ...language, setLanguage, isLanguageLoaded }), [language, setLanguage, isLanguageLoaded]);
+  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 };
 
-export const useLanguage = (): LanguageContextType => {
-  const context = useContext(LanguageContext);
-  if (!context) {
-    throw new Error('useLanguage must be used within a LanguageProvider');
-  }
-  return context;
-};
-
+export const useLanguage = (): LanguageContextType => useContext(LanguageContext);
 export type { Language };

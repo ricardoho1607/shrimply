@@ -624,6 +624,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1, overflowY: 'auto', padding: '10px 2px 0 0' }}>
           <div className="sidebar-company-row" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <Link
+              prefetch={false}
               href="/dashboard/company"
               className={`sidebar-link ${pathname === '/dashboard/company' ? 'active' : ''}`}
               aria-current={pathname === '/dashboard/company' ? 'page' : undefined}
@@ -716,6 +717,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                             const isChildActive = pathname === child.href;
                             return (
                               <Link
+                                prefetch={false}
                                 key={child.href}
                                 href={child.href}
                                 className="sidebar-link"
@@ -753,6 +755,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                 const isActive = pathname === item.href;
                 return (
                   <Link
+                    prefetch={false}
                     key={item.href}
                     href={item.href}
                     className="sidebar-link"
@@ -864,7 +867,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
               <span>{todayLabel}</span>
             </div>
 
-            <Link href="/dashboard/settings" className="dashboard-profile-button" aria-label={copy('Open account settings')} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 8px', borderRadius: '10px', background: 'transparent', color: 'inherit', textDecoration: 'none' }}>
+            <Link prefetch={false} href="/dashboard/settings" className="dashboard-profile-button" aria-label={copy('Open account settings')} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 8px', borderRadius: '10px', background: 'transparent', color: 'inherit', textDecoration: 'none' }}>
               <div style={{ textAlign: 'right' }} className="mobile-trigger-hide">
                 <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>{user?.name || 'Captain'}</div>
                 <div style={{ fontSize: '0.62rem', fontWeight: 500, color: '#94a3b8', lineHeight: 1.2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{getString((company as Record<string, unknown> | null | undefined)?.role || (user as Record<string, unknown> | null | undefined)?.role, 'Farmer')}</div>

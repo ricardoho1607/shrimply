@@ -617,6 +617,19 @@ export default function DashboardPage() {
     [accessiblePonds, cycles],
   );
 
+  // Scope record-derived values to this mounted farm, its current snapshot and day.
+  // Summary, health indicators and cards share the same calculation.
+  const getMetrics = useMemo(() => {
+    const cache = new Map(activePonds.map(pond => [pond, calculateMetrics(pond, company?.timeZone, operationalToday)]));
+    return (pond: Pond) => {
+      const cached = cache.get(pond);
+      if (cached) return cached;
+      const metrics = calculateMetrics(pond, company?.timeZone, operationalToday);
+      cache.set(pond, metrics);
+      return metrics;
+    };
+  }, [activePonds, company?.timeZone, operationalToday]);
+
   const totalMetrics = useMemo(() => {
     let currentBiomass = 0; let currentSR = 0; let currentPop = 0;
     let prevBiomass = 0; let prevSR = 0; let prevPop = 0;
@@ -624,7 +637,7 @@ export default function DashboardPage() {
     activePonds.forEach(pond => {
       const samplings = pond.samplings || [];
       const sorted = [...samplings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      const m = calculateMetrics(pond, company?.timeZone, operationalToday);
+      const m = getMetrics(pond);
       currentBiomass += m.biomass; currentSR += m.sr; currentPop += m.population;
 
       if (sorted.length >= 2) {
@@ -654,7 +667,7 @@ export default function DashboardPage() {
     const popTrend = prevPop > 0 ? ((currentPop - prevPop) / prevPop) * 100 : 0;
 
     return { biomass: currentBiomass, population: currentPop, sr: avgSR, activeCount, biomassTrend, srTrend, popTrend };
-  }, [activePonds, company?.timeZone, operationalToday]);
+  }, [activePonds, company?.timeZone, operationalToday, getMetrics]);
 
   const averageActivePondMetric = (selector: (pond: Pond) => number | null | undefined) => {
     const values = activePonds
@@ -668,7 +681,7 @@ export default function DashboardPage() {
     {
       label: copy('pH Level'),
       value: (() => {
-        const average = averageActivePondMetric((pond) => calculateMetrics(pond, company?.timeZone).ph);
+        const average = averageActivePondMetric((pond) => getMetrics(pond).ph);
         return average === null ? '--' : average.toFixed(1);
       })(),
       icon: Activity,
@@ -676,7 +689,7 @@ export default function DashboardPage() {
     {
       label: copy('Transparency'),
       value: (() => {
-        const average = averageActivePondMetric((pond) => calculateMetrics(pond, company?.timeZone).transparency);
+        const average = averageActivePondMetric((pond) => getMetrics(pond).transparency);
         return average === null ? '--' : `${average.toFixed(0)}cm`;
       })(),
       icon: Droplets,
@@ -684,7 +697,7 @@ export default function DashboardPage() {
     {
       label: 'DO',
       value: (() => {
-        const average = averageActivePondMetric((pond) => calculateMetrics(pond, company?.timeZone).dissolvedOxygen);
+        const average = averageActivePondMetric((pond) => getMetrics(pond).dissolvedOxygen);
         return average === null ? '--' : `${average.toFixed(1)}mg/L`;
       })(),
       icon: Wind,
@@ -692,7 +705,7 @@ export default function DashboardPage() {
     {
       label: copy('Daily Feed'),
       value: (() => {
-        const average = averageActivePondMetric((pond) => calculateMetrics(pond, company?.timeZone).dailyFeed);
+        const average = averageActivePondMetric((pond) => getMetrics(pond).dailyFeed);
         return average === null ? '--' : `${average.toFixed(0)}kg`;
       })(),
       icon: Utensils,
@@ -867,9 +880,9 @@ export default function DashboardPage() {
                 gap: viewMode === 'grid' ? '16px' : '0'
               }}>
               {activePonds.map((pond, idx) => {
-                const m = calculateMetrics(pond, company?.timeZone, operationalToday);
+                const m = getMetrics(pond);
                 return viewMode === 'grid' ? (
-                  <PondCard key={pond.id} pond={pond} calculateMetrics={calculateMetrics} timeZone={company?.timeZone} />
+                  <PondCard key={pond.id} pond={pond} calculateMetrics={getMetrics} timeZone={company?.timeZone} />
                 ) : (
                   <Link key={pond.id} href={`/dashboard/ponds/detail?id=${pond.id}`} style={{ textDecoration: 'none' }}>
                     <div className="dashboard-list-row dashboard-list-data" style={{

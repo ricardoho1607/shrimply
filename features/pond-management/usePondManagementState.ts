@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useEnterpriseBlocks } from "../../app/hooks/useEnterpriseBlocks";
@@ -53,7 +54,25 @@ export function usePondManagementState() {
     updateFarmCycle,
     closeFarmCycle,
     calculatePondMetricsWithHarvest,
-  } = usePondStore();
+  } = usePondStore(useShallow((state) => ({
+    ponds: state.ponds,
+    physicalPonds: state.physicalPonds,
+    cycles: state.cycles,
+    harvestRecords: state.harvestRecords,
+    addFarmCycle: state.addFarmCycle,
+    addPhysicalPond: state.addPhysicalPond,
+    deletePhysicalPond: state.deletePhysicalPond,
+    addPond: state.addPond,
+    updatePond: state.updatePond,
+    deletePond: state.deletePond,
+    addSampling: state.addSampling,
+    addMortalityRecord: state.addMortalityRecord,
+    endPondCycle: state.endPondCycle,
+    updateFarmCycle: state.updateFarmCycle,
+    closeFarmCycle: state.closeFarmCycle,
+    calculatePondMetricsWithHarvest: state.calculatePondMetricsWithHarvest,
+    currentTimeZone: state.currentTimeZone,
+  })));
 
   const [modalVisible, setModalVisible] = useState(false);
 

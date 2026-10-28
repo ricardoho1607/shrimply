@@ -1,0 +1,14 @@
+{
+  "before": {
+    "rawJsBytes": 8973393,
+    "gzipJsBytes": 2145048,
+    "assetBytes": 6131407,
+    "assetCount": 54
+  },
+  "after": {
+    "rawJsBytes": 8543650,
+    "gzipJsBytes": 2011082,
+    "assetBytes": 2143475,
+    "assetCount": 34
+  }
+}

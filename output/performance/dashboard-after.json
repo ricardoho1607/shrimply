@@ -1,0 +1,291 @@
+{
+  "conditions": "Real React dashboard screens and layout, synthetic 24-pond farm with 80 records each, mocked Firebase and navigation, Chrome CPU throttled 4x; no production data or writes",
+  "results": [
+    {
+      "screen": "home",
+      "width": 390,
+      "renderMs": 2800,
+      "overflow": false,
+      "text": "Performance Test Farm\nshrimp\nMANAGEMENT\nHome\nPonds\nWater Quality\nFeed\nHarvest\nAPP SERVICES\nMarketplace\nDisease Report\nOrson AI\nHarvest Projections\nNotifications\nBUSINESS\nFinance\nReports\nInventory\nSYSTEM\nSettings\nSign Out\nDashboard\nMANAGEMENT\nT\nCOMPLETE YOUR FARM PROFILE\n67%\nComplete your farm profile\n\nAdd the remaining company details to improve team context and reports.\n\nComplete profile\nBIOMASS\n+1.3%\n35,505 kg\nSR (%)\n+0.0%\n82.9%\nPOPULATION\n+0.0%\n2,219,070\nACTIVE PONDS\n24\nFarm Health\nCurrent averages\npH Level\n7.9\nTransparency\n30cm\nDO\n5.7mg/L\nDaily Feed\n25kg\nPonds\nPond 01\nACTIVE • DOC 88\nWARNING\nAVG WEIGHT\n16.0g\nSURVIVAL\n82.9%\nBIOMASS\n1,327kg\nADG\n0.20g/d\nWATER QUALITY\nFEED STATUS\nPond 02\nACT",
+      "inputs": 0,
+      "buttons": 7,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "ponds",
+      "width": 390,
+      "renderMs": 335.10000014305115,
+      "overflow": false,
+      "text": "Performance Test Farm\nshrimp\nMANAGEMENT\nHome\nPonds\nWater Quality\nFeed\nHarvest\nAPP SERVICES\nMarketplace\nDisease Report\nOrson AI\nHarvest Projections\nNotifications\nBUSINESS\nFinance\nReports\nInventory\nSYSTEM\nSettings\nSign Out\nDashboard\nMANAGEMENT\nT\nCURRENT CYCLE\nACTIVE\nCycle 1\nNo start date\nActive\n24\nInactive\n0\nEnded\n0\nAdd New Pond\nPond 01\nACTIVE\n\nTest hatchery\n\nPOND AREA\n2,500 m²\nDENSITY\n40 PL/m²\nPOPULATION\n82,925\nSTARTED\nAug 1, 26\nLast sampled: Oct 19\nPond 02\nACTIVE\n\nTest hatchery\n\nPOND AREA\n2,500 m²\nDENSITY\n40 PL/m²\nPOPULATION\n83,754\nSTARTED\nAug 1, 26\nLast sampled: Oct 19\nPond 03\nACTIVE\n\nTest hatchery\n\nPOND AREA\n2,500 m²\nDENSITY\n40 PL/m²\nPOPULATION\n84,583\nSTARTED\nAug 1, 26\nLast sampled: Oct 19",
+      "inputs": 2,
+      "buttons": 37,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "feed",
+      "width": 390,
+      "renderMs": 141.40000009536743,
+      "overflow": false,
+      "text": "Performance Test Farm\nshrimp\nMANAGEMENT\nHome\nPonds\nWater Quality\nFeed\nHarvest\nAPP SERVICES\nMarketplace\nDisease Report\nOrson AI\nHarvest Projections\nNotifications\nBUSINESS\nFinance\nReports\nInventory\nSYSTEM\nSettings\nSign Out\nDashboard\nMANAGEMENT\nT\nNew Feed Log\nDaily feed used today\nNot logged yet\nPond 01\n\n10/19/2026\n\nDAILY TOTAL\n24.7 kg\nFEEDING RESPONSE\nNormal\nDaily feed record\nLog\nPond 02\n\n10/19/2026\n\nDAILY TOTAL\n24.7 kg\nFEEDING RESPONSE\nNormal\nDaily feed record\nLog\nPond 03\n\n10/19/2026\n\nDAILY TOTAL\n24.7 kg\nFEEDING RESPONSE\nNormal\nDaily feed record\nLog\nPond 04\n\n10/19/2026\n\nDAILY TOTAL\n24.7 kg\nFEEDING RESPONSE\nNormal\nDaily feed record\nLog\nPond 05\n\n10/19/2026\n\nDAILY TOTAL\n24.7 kg\nFEEDING RESPONSE\n",
+      "inputs": 1,
+      "buttons": 54,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "water",
+      "width": 390,
+      "renderMs": 149.5,
+      "overflow": false,
+      "text": "Performance Test Farm\nshrimp\nMANAGEMENT\nHome\nPonds\nWater Quality\nFeed\nHarvest\nAPP SERVICES\nMarketplace\nDisease Report\nOrson AI\nHarvest Projections\nNotifications\nBUSINESS\nFinance\nReports\nInventory\nSYSTEM\nSettings\nSign Out\nDashboard\nMANAGEMENT\nT\nDaily Log\nLab Reports\nNew Parameter Log\nPond 01\n\nDAILY LOG\n\nView history\nPH LEVEL\n7.8 / 8.0\nDO (MG/L)\n5.5 / 5.8\nTEMPERATURE\nN/A\nTRANSPARENCY\n30 CM\nSALINITY\nN/A\nWATER DEPTH\nN/A\nUPDATED 10/19/2026\nLog\nPond 02\n\nDAILY LOG\n\nView history\nPH LEVEL\n7.8 / 8.0\nDO (MG/L)\n5.5 / 5.8\nTEMPERATURE\nN/A\nTRANSPARENCY\n30 CM\nSALINITY\nN/A\nWATER DEPTH\nN/A\nUPDATED 10/19/2026\nLog\nPond 03\n\nDAILY LOG\n\nView history\nPH LEVEL\n7.8 / 8.0\nDO (MG/L)\n5.5 / 5.8\nTEMPERATURE\nN/A\nTRANSPAREN",
+      "inputs": 1,
+      "buttons": 56,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "harvest",
+      "width": 390,
+      "renderMs": 109.89999985694885,
+      "overflow": false,
+      "text": "Performance Test Farm\nshrimp\nMANAGEMENT\nHome\nPonds\nWater Quality\nFeed\nHarvest\nAPP SERVICES\nMarketplace\nDisease Report\nOrson AI\nHarvest Projections\nNotifications\nBUSINESS\nFinance\nReports\nInventory\nSYSTEM\nSettings\nSign Out\nDashboard\nMANAGEMENT\nT\nLog harvest\nTotal estimated revenue\n$0.00\nTotal harvested biomass\n0\nCurrent cycle records\n0\nCurrent cycle harvests\n\nBlock · 0 active ponds available for harvest\n\nCurrent cycle\nHistory\nPRODUCTION CYCLE\nSelect active cycle\n\nNo current cycle harvest records found.",
+      "inputs": 1,
+      "buttons": 8,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "finance",
+      "width": 390,
+      "renderMs": 150,
+      "overflow": false,
+      "text": "Performance Test Farm\nshrimp\nMANAGEMENT\nHome\nPonds\nWater Quality\nFeed\nHarvest\nAPP SERVICES\nMarketplace\nDisease Report\nOrson AI\nHarvest Projections\nNotifications\nBUSINESS\nFinance\nReports\nInventory\nSYSTEM\nSettings\nSign Out\nDashboard\nMANAGEMENT\nT\nOverview\nRevenue\nExpenses\nReports\nCycle 1\nAll history\nInput\n\nRecorded balance compares income with purchases and expenses. Use the P&L report for profit and Cash Flow for confirmed payments. New entries require a separate payment confirmation.\n\nREVENUE\n$20000.00\nEXPENSES\n$6000.00\nRECORDED BALANCE\n$14000.00\nMonthly Performance\nFinancial Health\nIncome Records\n1\nExpense Records\n120\nYou have logged 121 transactions this period. Your cash flow is positive.\n",
+      "inputs": 0,
+      "buttons": 9,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "inventory",
+      "width": 390,
+      "renderMs": 131.79999995231628,
+      "overflow": false,
+      "text": "Performance Test Farm\nshrimp\nMANAGEMENT\nHome\nPonds\nWater Quality\nFeed\nHarvest\nAPP SERVICES\nMarketplace\nDisease Report\nOrson AI\nHarvest Projections\nNotifications\nBUSINESS\nFinance\nReports\nInventory\nSYSTEM\nSettings\nSign Out\nDashboard\nMANAGEMENT\nT\nDashboard\nFeeds\nAdditives\nShow archived\nInput\nFEED STOCK\n0 kg\nFEED USED\n0 kg\nFEED VALUE\n$1500.00\nADDITIVE VALUE\n$0.00\nStock Status Alerts\n0 ALERTS\n\nNo stock alerts\n\nRecent Transactions\n\nNo transactions to show",
+      "inputs": 0,
+      "buttons": 11,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "assets",
+      "width": 390,
+      "renderMs": 120.79999995231628,
+      "overflow": false,
+      "text": "Performance Test Farm\nshrimp\nMANAGEMENT\nHome\nPonds\nWater Quality\nFeed\nHarvest\nAPP SERVICES\nMarketplace\nDisease Report\nOrson AI\nHarvest Projections\nNotifications\nBUSINESS\nFinance\nReports\nInventory\nSYSTEM\nSettings\nSign Out\nDashboard\nMANAGEMENT\nT\nDashboard\nAll Assets\nAdd Asset\nTOTAL ASSETS\n0\nNEEDS MAINTENANCE\n0\nCHECKED OUT\n0\nTOTAL MAINT. COST\n$0.00",
+      "inputs": 0,
+      "buttons": 8,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "financial",
+      "width": 390,
+      "renderMs": 175.69999980926514,
+      "overflow": false,
+      "text": "Performance Test Farm\nshrimp\nMANAGEMENT\nHome\nPonds\nWater Quality\nFeed\nHarvest\nAPP SERVICES\nMarketplace\nDisease Report\nOrson AI\nHarvest Projections\nNotifications\nBUSINESS\nFinance\nReports\nInventory\nSYSTEM\nSettings\nSign Out\nDashboard\nMANAGEMENT\nT\nReport Type\nCHOOSE A REPORT\nProfit & Loss\nCOGS Report\nCash Flow\nTransaction History\nIncome Statement\nSelect period\nToday\nThis Week\nThis Month\nThis Year\nCustom\nCycle 1\nAll history\nInventory adjustment\n\nFeed and additives use consumed costs. Enter only production costs carried forward, not unused feed or material stock. Zero means no adjustment entered.\n\nOpening production costs (WIP) ($)\nClosing production costs (WIP) ($)\nReport Preview\nRevenue\n$20000.0",
+      "inputs": 2,
+      "buttons": 13,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "sampling",
+      "width": 390,
+      "renderMs": 402.90000009536743,
+      "overflow": false,
+      "text": "Performance Test Farm\nshrimp\nMANAGEMENT\nHome\nPonds\nWater Quality\nFeed\nHarvest\nAPP SERVICES\nMarketplace\nDisease Report\nOrson AI\nHarvest Projections\nNotifications\nBUSINESS\nFinance\nReports\nInventory\nSYSTEM\nSettings\nSign Out\nDashboard\nMANAGEMENT\nT\nREPORTS\nShrimp Production Audit\n\nPerformance analytics for 24 of 24 production ponds.\n\nActive cycles\nAll cycles\nCycle 1\nSelect ponds\n24\nEXPORT AUDIT PDF\nABW\n16.00g\nFCR\n0.70\nADG\n0.20g\nT.Biomas\n35505kg\nGrowth Trajectory\n0.0\n9.2\n18.4\nDOC 0\nDOC 40\nDOC 79\nMBW (g)\nPond 01\nPond 02\nPond 03\nPond 04\nPond 05\nPond 06\nPond 07\nPond 08\nPond 09\nPond 10\nPond 11\nPond 12\nPond 13\nPond 14\nPond 15\nPond 16\nPond 17\nPond 18\nPond 19\nPond 20\nPond 21\nPond 22\nPond 23\nPond 24\nPond ",
+      "inputs": 0,
+      "buttons": 7,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "cycles",
+      "width": 390,
+      "renderMs": 105.79999995231628,
+      "overflow": false,
+      "text": "Performance Test Farm\nshrimp\nMANAGEMENT\nHome\nPonds\nWater Quality\nFeed\nHarvest\nAPP SERVICES\nMarketplace\nDisease Report\nOrson AI\nHarvest Projections\nNotifications\nBUSINESS\nFinance\nReports\nInventory\nSYSTEM\nSettings\nSign Out\nDashboard\nMANAGEMENT\nT\n\nPRODUCTION HISTORY\n\nCycle Reports\n\nReview completed farm cycles and their production results.\n\nNo closed cycles yet\n\nCompleted farm cycles will appear here after they are ended.",
+      "inputs": 0,
+      "buttons": 5,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "daily",
+      "width": 390,
+      "renderMs": 114.39999985694885,
+      "overflow": false,
+      "text": "Performance Test Farm\nshrimp\nMANAGEMENT\nHome\nPonds\nWater Quality\nFeed\nHarvest\nAPP SERVICES\nMarketplace\nDisease Report\nOrson AI\nHarvest Projections\nNotifications\nBUSINESS\nFinance\nReports\nInventory\nSYSTEM\nSettings\nSign Out\nDashboard\nMANAGEMENT\nT\nREPORTS\nDaily Operations Reports\n\nReview mortality, water quality, feed, and mineral lab results.\n\nEXPORT BOTH REPORTS AS PDF\nReport date\nMortality Report\nWater Quality & Feed\nMineral Lab Results\nPond\tDOC\tAM Siphoned\tAM Mortal\tAM Total\tPM Siphoned\tPM Mortal\tPM Total\tDaily Total\tCumulative\tEstimated Population\tDensity",
+      "inputs": 1,
+      "buttons": 9,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "projections",
+      "width": 390,
+      "renderMs": 95.59999990463257,
+      "overflow": false,
+      "text": "Performance Test Farm\nshrimp\nMANAGEMENT\nHome\nPonds\nWater Quality\nFeed\nHarvest\nAPP SERVICES\nMarketplace\nDisease Report\nOrson AI\nHarvest Projections\nNotifications\nBUSINESS\nFinance\nReports\nInventory\nSYSTEM\nSettings\nSign Out\nDashboard\nMANAGEMENT\nT",
+      "inputs": 0,
+      "buttons": 5,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "home",
+      "width": 1440,
+      "renderMs": 2728.7999999523163,
+      "overflow": false,
+      "text": "Dashboard\nMANAGEMENT\nWed, Oct 28, 2026\nTest Owner\nOWNER\nT\nCOMPLETE YOUR FARM PROFILE\n67%\nComplete your farm profile\n\nAdd the remaining company details to improve team context and reports.\n\nComplete profile\nBIOMASS\n+1.3%\n35,505 kg\nSR (%)\n+0.0%\n82.9%\nPOPULATION\n+0.0%\n2,219,070\nACTIVE PONDS\n24\nFarm Health\nCurrent averages\npH Level\n7.9\nTransparency\n30cm\nDO\n5.7mg/L\nDaily Feed\n25kg\nPonds\nPond 01\nACTIVE • DOC 88\nWARNING\nAVG WEIGHT\n16.0g\nSURVIVAL\n82.9%\nBIOMASS\n1,327kg\nADG\n0.20g/d\nWATER QUALITY\nFEED STATUS\nPond 02\nACTIVE • DOC 88\nWARNING\nAVG WEIGHT\n16.0g\nSURVIVAL\n82.9%\nBIOMASS\n1,340kg\nADG\n0.20g/d\nWATER QUALITY\nFEED STATUS\nPond 03\nACTIVE • DOC 88\nWARNING\nAVG WEIGHT\n16.0g\nSURVIVAL\n82.9%\nBIOMASS\n1,353kg",
+      "inputs": 0,
+      "buttons": 7,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "ponds",
+      "width": 1440,
+      "renderMs": 341.09999990463257,
+      "overflow": false,
+      "text": "Dashboard\nMANAGEMENT\nWed, Oct 28, 2026\nTest Owner\nOWNER\nT\nCURRENT CYCLE\nACTIVE\nCycle 1\nNo start date\nActive\n24\nInactive\n0\nEnded\n0\nAdd New Pond\nPond 01\nACTIVE\n\nTest hatchery\n\nPOND AREA\n2,500 m²\nDENSITY\n40 PL/m²\nPOPULATION\n82,925\nSTARTED\nAug 1, 26\nLast sampled: Oct 19\nPond 02\nACTIVE\n\nTest hatchery\n\nPOND AREA\n2,500 m²\nDENSITY\n40 PL/m²\nPOPULATION\n83,754\nSTARTED\nAug 1, 26\nLast sampled: Oct 19\nPond 03\nACTIVE\n\nTest hatchery\n\nPOND AREA\n2,500 m²\nDENSITY\n40 PL/m²\nPOPULATION\n84,583\nSTARTED\nAug 1, 26\nLast sampled: Oct 19\nPond 04\nACTIVE\n\nTest hatchery\n\nPOND AREA\n2,500 m²\nDENSITY\n40 PL/m²\nPOPULATION\n85,413\nSTARTED\nAug 1, 26\nLast sampled: Oct 19\nPond 05\nACTIVE\n\nTest hatchery\n\nPOND AREA\n2,500 m²\nDENSITY\n40 ",
+      "inputs": 2,
+      "buttons": 37,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "feed",
+      "width": 1440,
+      "renderMs": 161.09999990463257,
+      "overflow": false,
+      "text": "Dashboard\nMANAGEMENT\nWed, Oct 28, 2026\nTest Owner\nOWNER\nT\nNew Feed Log\nDaily feed used today\nNot logged yet\nPond 01\n\n10/19/2026\n\nDAILY TOTAL\n24.7 kg\nFEEDING RESPONSE\nNormal\nDaily feed record\nLog\nPond 02\n\n10/19/2026\n\nDAILY TOTAL\n24.7 kg\nFEEDING RESPONSE\nNormal\nDaily feed record\nLog\nPond 03\n\n10/19/2026\n\nDAILY TOTAL\n24.7 kg\nFEEDING RESPONSE\nNormal\nDaily feed record\nLog\nPond 04\n\n10/19/2026\n\nDAILY TOTAL\n24.7 kg\nFEEDING RESPONSE\nNormal\nDaily feed record\nLog\nPond 05\n\n10/19/2026\n\nDAILY TOTAL\n24.7 kg\nFEEDING RESPONSE\nNormal\nDaily feed record\nLog\nPond 06\n\n10/19/2026\n\nDAILY TOTAL\n24.7 kg\nFEEDING RESPONSE\nNormal\nDaily feed record\nLog\nPond 07\n\n10/19/2026\n\nDAILY TOTAL\n24.7 kg\nFEEDING RESPONSE\nNormal\nDaily",
+      "inputs": 1,
+      "buttons": 54,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "water",
+      "width": 1440,
+      "renderMs": 168.29999995231628,
+      "overflow": false,
+      "text": "Dashboard\nMANAGEMENT\nWed, Oct 28, 2026\nTest Owner\nOWNER\nT\nDaily Log\nLab Reports\nNew Parameter Log\nPond 01\n\nDAILY LOG\n\nView history\nPH LEVEL\n7.8 / 8.0\nDO (MG/L)\n5.5 / 5.8\nTEMPERATURE\nN/A\nTRANSPARENCY\n30 CM\nSALINITY\nN/A\nWATER DEPTH\nN/A\nUPDATED 10/19/2026\nLog\nPond 02\n\nDAILY LOG\n\nView history\nPH LEVEL\n7.8 / 8.0\nDO (MG/L)\n5.5 / 5.8\nTEMPERATURE\nN/A\nTRANSPARENCY\n30 CM\nSALINITY\nN/A\nWATER DEPTH\nN/A\nUPDATED 10/19/2026\nLog\nPond 03\n\nDAILY LOG\n\nView history\nPH LEVEL\n7.8 / 8.0\nDO (MG/L)\n5.5 / 5.8\nTEMPERATURE\nN/A\nTRANSPARENCY\n30 CM\nSALINITY\nN/A\nWATER DEPTH\nN/A\nUPDATED 10/19/2026\nLog\nPond 04\n\nDAILY LOG\n\nView history\nPH LEVEL\n7.8 / 8.0\nDO (MG/L)\n5.5 / 5.8\nTEMPERATURE\nN/A\nTRANSPARENCY\n30 CM\nSALINITY\nN/A\nWATER",
+      "inputs": 1,
+      "buttons": 56,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "harvest",
+      "width": 1440,
+      "renderMs": 92.80000019073486,
+      "overflow": false,
+      "text": "Dashboard\nMANAGEMENT\nWed, Oct 28, 2026\nTest Owner\nOWNER\nT\nLog harvest\nTotal estimated revenue\n$0.00\nTotal harvested biomass\n0\nCurrent cycle records\n0\nCurrent cycle harvests\n\nBlock · 0 active ponds available for harvest\n\nCurrent cycle\nHistory\nPRODUCTION CYCLE\nSelect active cycle\n\nNo current cycle harvest records found.",
+      "inputs": 1,
+      "buttons": 8,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "finance",
+      "width": 1440,
+      "renderMs": 131.09999990463257,
+      "overflow": false,
+      "text": "Dashboard\nMANAGEMENT\nWed, Oct 28, 2026\nTest Owner\nOWNER\nT\nOverview\nRevenue\nExpenses\nReports\nCycle\nCycle 1\nAll history\nInput\n\nRecorded balance compares income with purchases and expenses. Use the P&L report for profit and Cash Flow for confirmed payments. New entries require a separate payment confirmation.\n\nREVENUE\n$20000.00\nEXPENSES\n$6000.00\nRECORDED BALANCE\n$14000.00\nMonthly Performance\nOct\nFinancial Health\nIncome Records\n1\nExpense Records\n120\nYou have logged 121 transactions this period. Your cash flow is positive.\nRecent Transactions\nOct 1, 2026\nUtilities\nFarm expense\n-$50.00\nOct 1, 2026\nUtilities\nFarm expense\n-$50.00\nOct 1, 2026\nUtilities\nFarm expense\n-$50.00\nOct 1, 2026\nUtilities\nFarm ",
+      "inputs": 0,
+      "buttons": 9,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "inventory",
+      "width": 1440,
+      "renderMs": 132.89999985694885,
+      "overflow": false,
+      "text": "Dashboard\nMANAGEMENT\nWed, Oct 28, 2026\nTest Owner\nOWNER\nT\nDashboard\nFeeds\nAdditives\nShow archived\nInput\nFEED STOCK\n0 kg\nFEED USED\n0 kg\nFEED VALUE\n$1500.00\nADDITIVE VALUE\n$0.00\nStock Status Alerts\n0 ALERTS\n\nNo stock alerts\n\nRecent Transactions\n\nNo transactions to show",
+      "inputs": 0,
+      "buttons": 11,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "assets",
+      "width": 1440,
+      "renderMs": 113.19999980926514,
+      "overflow": false,
+      "text": "Dashboard\nMANAGEMENT\nWed, Oct 28, 2026\nTest Owner\nOWNER\nT\nDashboard\nAll Assets\nAdd Asset\nTOTAL ASSETS\n0\nNEEDS MAINTENANCE\n0\nCHECKED OUT\n0\nTOTAL MAINT. COST\n$0.00",
+      "inputs": 0,
+      "buttons": 8,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "financial",
+      "width": 1440,
+      "renderMs": 166.40000009536743,
+      "overflow": false,
+      "text": "Dashboard\nMANAGEMENT\nWed, Oct 28, 2026\nTest Owner\nOWNER\nT\nReport Type\nCHOOSE A REPORT\nProfit & Loss\nCOGS Report\nCash Flow\nTransaction History\nIncome Statement\nSelect period\nToday\nThis Week\nThis Month\nThis Year\nCustom\nCycle 1\nAll history\nInventory adjustment\n\nFeed and additives use consumed costs. Enter only production costs carried forward, not unused feed or material stock. Zero means no adjustment entered.\n\nOpening production costs (WIP) ($)\nClosing production costs (WIP) ($)\nReport Preview\nRevenue\n$20000.00\nExpenses\n$6000.00\nNet Profit\n$14000.00\nDOWNLOAD STATEMENT",
+      "inputs": 2,
+      "buttons": 13,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "sampling",
+      "width": 1440,
+      "renderMs": 350.30000019073486,
+      "overflow": false,
+      "text": "Dashboard\nMANAGEMENT\nWed, Oct 28, 2026\nTest Owner\nOWNER\nT\nREPORTS\nShrimp Production Audit\n\nPerformance analytics for 24 of 24 production ponds.\n\nActive cycles\nAll cycles\nCycle 1\nSelect ponds\n24\nEXPORT AUDIT PDF\nABW\n16.00g\nFCR\n0.70\nADG\n0.20g\nT.Biomas\n35505kg\nGrowth Trajectory\n0.0\n9.2\n18.4\nDOC 0\nDOC 40\nDOC 79\nMBW (g)\nPond 01\nPond 02\nPond 03\nPond 04\nPond 05\nPond 06\nPond 07\nPond 08\nPond 09\nPond 10\nPond 11\nPond 12\nPond 13\nPond 14\nPond 15\nPond 16\nPond 17\nPond 18\nPond 19\nPond 20\nPond 21\nPond 22\nPond 23\nPond 24\nPond Status\nPond 01\nDOC 88 days\nCRITICAL\nABW\n16.00g\nSIZE\n63\nSR\n82.9%\nPond 02\nDOC 88 days\nCRITICAL\nABW\n16.00g\nSIZE\n63\nSR\n82.9%\nPond 03\nDOC 88 days\nCRITICAL\nABW\n16.00g\nSIZE\n63\nSR\n82.9%\nPond 04\n",
+      "inputs": 0,
+      "buttons": 7,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "cycles",
+      "width": 1440,
+      "renderMs": 97.5,
+      "overflow": false,
+      "text": "Dashboard\nMANAGEMENT\nWed, Oct 28, 2026\nTest Owner\nOWNER\nT\n\nPRODUCTION HISTORY\n\nCycle Reports\n\nReview completed farm cycles and their production results.\n\nNo closed cycles yet\n\nCompleted farm cycles will appear here after they are ended.",
+      "inputs": 0,
+      "buttons": 5,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "daily",
+      "width": 1440,
+      "renderMs": 106.5,
+      "overflow": false,
+      "text": "Dashboard\nMANAGEMENT\nWed, Oct 28, 2026\nTest Owner\nOWNER\nT\nREPORTS\nDaily Operations Reports\n\nReview mortality, water quality, feed, and mineral lab results.\n\nEXPORT BOTH REPORTS AS PDF\nReport date\nMortality Report\nWater Quality & Feed\nMineral Lab Results\nPond\tDOC\tAM Siphoned\tAM Mortal\tAM Total\tPM Siphoned\tPM Mortal\tPM Total\tDaily Total\tCumulative\tEstimated Population\tDensity",
+      "inputs": 1,
+      "buttons": 9,
+      "errors": [],
+      "interaction": "not checked"
+    },
+    {
+      "screen": "projections",
+      "width": 1440,
+      "renderMs": 94.59999990463257,
+      "overflow": false,
+      "text": "Dashboard\nMANAGEMENT\nWed, Oct 28, 2026\nTest Owner\nOWNER\nT",
+      "inputs": 0,
+      "buttons": 5,
+      "errors": [],
+      "interaction": "not checked"
+    }
+  ]
+}

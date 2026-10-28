@@ -25,10 +25,9 @@ import {
   isBaselineSampling,
   toFiniteNumber,
 } from '../../../../../../shared/pondCalculations';
-import {
-  generateSamplingReportHTML,
-  type PondData as SamplingReportPondData,
-  type SamplingReportData,
+import type {
+  PondData as SamplingReportPondData,
+  SamplingReportData,
 } from '@/lib/generated/mobileSamplingReport';
 import { downloadMobilePdf, loadMobilePdfBrandAssets } from '@/lib/mobilePdfExport';
 import type { PlanktonOverwatchSnapshot } from '../../../../../../shared/planktonOverwatch';
@@ -413,7 +412,10 @@ function ShrimpReportsContent() {
         companyName: company?.companyName || 'My Company',
         ponds: pondsForReport,
       };
-      const brandAssets = await loadMobilePdfBrandAssets('landscape');
+      const [brandAssets, { generateSamplingReportHTML }] = await Promise.all([
+        loadMobilePdfBrandAssets('landscape'),
+        import('@/lib/generated/mobileSamplingReport'),
+      ]);
       const html = generateSamplingReportHTML(reportData, brandAssets, currentLanguage);
       await downloadMobilePdf({ html, filename: 'Sampling_Report.pdf', orientation: 'landscape', preserveTemplateScale: true });
     } catch (error) {

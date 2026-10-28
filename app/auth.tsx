@@ -1,7 +1,8 @@
 import { getUserErrorMessage } from '../shared/userError';
 import { AppAlert as Alert } from '../components/alerts/appAlert';
 // app/auth.tsx - Fixed for Android navigation bar spacing
-import { LibreBaskerville_400Regular, LibreBaskerville_700Bold, useFonts } from '@expo-google-fonts/libre-baskerville';
+import { LibreBaskerville_700Bold } from '@expo-google-fonts/libre-baskerville/700Bold';
+import { useFonts } from 'expo-font';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Google from 'expo-auth-session/providers/google';
 import { sendPasswordResetEmail } from 'firebase/auth';
@@ -59,7 +60,6 @@ const GoogleSignInButton = ({ loading, signInWithGoogle, inviteToken }: {
 
 export default function AuthScreen() {
   const [fontsLoaded] = useFonts({
-    LibreBaskerville_400Regular,
     LibreBaskerville_700Bold,
   });
 
@@ -180,11 +180,11 @@ export default function AuthScreen() {
         <View style={styles.inviteIconContainer}>
           <Ionicons name="mail-open" size={24} color="#0d2137" />
         </View>
-        <Text style={styles.inviteTitle}>{'You’re Invited!'}</Text>
+        <Text style={[styles.inviteTitle, !fontsLoaded && styles.fontFallback]}>{'You’re Invited!'}</Text>
         <Text style={styles.inviteMessage}>Use the invited email address to join the team.</Text>
       </View>
     );
-  }, [inviteToken]);
+  }, [inviteToken, fontsLoaded]);
 
   const formTitle = useMemo(() => {
     if (inviteToken) return isLogin ? 'Sign in to join' : 'Create your account';
@@ -195,12 +195,6 @@ export default function AuthScreen() {
     if (inviteToken) return isLogin ? 'Sign In & Join Team' : 'Create Account & Join';
     return isLogin ? 'Sign In' : 'Sign Up';
   }, [inviteToken, isLogin]);
-
-  if (!fontsLoaded) return (
-    <SafeAreaView style={[styles.container, styles.loadingContainer]}>
-      <ActivityIndicator size="large" color="#0d2137" />
-    </SafeAreaView>
-  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -224,7 +218,7 @@ export default function AuthScreen() {
           { paddingBottom: Math.max(insets.bottom, 20) + 20 }
         ]}>
           <View style={styles.authCard}>
-            <Text style={styles.formTitle}>{formTitle}</Text>
+            <Text style={[styles.formTitle, !fontsLoaded && styles.fontFallback]}>{formTitle}</Text>
 
             <View style={styles.inputContainer}>
               <Ionicons name="mail-outline" size={20} color="#315f57" style={styles.inputIcon} />
@@ -326,10 +320,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#dce8f2'
   },
-  loadingContainer: {
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
   keyboardContainer: {
     flex: 1
   },
@@ -365,6 +355,10 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
     zIndex: 10,
+  },
+  fontFallback: {
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    fontWeight: '700',
   },
   formTitle: {
     fontSize: Platform.OS === 'android' ? 28 : 32,

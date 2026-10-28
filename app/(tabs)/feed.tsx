@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { filterPondRecordsForUser } from '../../shared/pondAssignments';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -49,7 +50,10 @@ export default function FeedManagementScreen() {
   const { t } = useLanguage();
   const { user, company } = useAuth();
   const cycles = usePondStore((state) => state.cycles);
-  const { ponds, addFeedData } = usePondStore();
+  const { ponds, addFeedData } = usePondStore(useShallow((state) => ({
+    ponds: state.ponds,
+    addFeedData: state.addFeedData,
+  })));
   const { feeds: inventoryFeeds, initializeForCompany, reconcileDailyFeedAllocations } = useFeedAdditiveStore();
   const canEditPonds = hasFarmPermission(user, 'manageFeedInventory', company?.ownerId);
   const enterpriseOwnerView = isEnterpriseOwner(company?.businessSize, user?.role);

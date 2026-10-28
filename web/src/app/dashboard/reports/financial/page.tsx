@@ -25,10 +25,8 @@ import {
   useCompanyHarvestRecords,
   useFinanceRecords,
 } from '@/hooks/useDashboardData';
-import { generateCashFlowHTML, type CashFlowData } from '@/lib/generated/mobileCashFlowReport';
-import { generateCOGSHTML, prepareCOGSData } from '@/lib/generated/mobileCogsReport';
-import { generateProfitLossHTML, type FinancialData } from '@/lib/generated/mobileProfitLossReport';
-import { generateTransactionHistoryHTML, prepareTransactionHistoryData } from '@/lib/generated/mobileTransactionHistoryReport';
+import type { CashFlowData } from '@/lib/generated/mobileCashFlowReport';
+import type { FinancialData } from '@/lib/generated/mobileProfitLossReport';
 import { downloadMobilePdf, loadMobilePdfBrandAssets } from '@/lib/mobilePdfExport';
 import { normalizeCategory } from '@/utils/categoryNormalizer';
 import { getOpenFinanceCycles } from '../../../../../../shared/financeCycleAllocation';
@@ -39,7 +37,7 @@ import {
 } from '../../../../../../shared/farmDate';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
-import { buildCogsReport, type CogsPond, type CogsHarvest, type CogsUsage } from '../../../../../../shared/cogsReport';
+import type { CogsPond, CogsHarvest, CogsUsage } from '../../../../../../shared/cogsReport';
 
 interface Expense {
   allocationMethod?: string | null;
@@ -125,8 +123,8 @@ export default function FinancialReportsPage() {
   const { data: ponds, loading: pondsLoading } = useCompanyPonds<CogsPond>();
   const { data: harvests, loading: harvestsLoading } = useCompanyHarvestRecords<CogsHarvest>();
   const invalidMoneyCount = [...rawExpenses, ...rawRevenues].filter(row => monetaryValue(row.amount) === null).length;
-  const expenses = rawExpenses.map(row => ({ ...row, amount: monetaryValue(row.amount) ?? Number.NaN }));
-  const revenues = rawRevenues.map(row => ({ ...row, amount: monetaryValue(row.amount) ?? Number.NaN }));
+  const expenses = useMemo(() => rawExpenses.map(row => ({ ...row, amount: monetaryValue(row.amount) ?? Number.NaN })), [rawExpenses]);
+  const revenues = useMemo(() => rawRevenues.map(row => ({ ...row, amount: monetaryValue(row.amount) ?? Number.NaN })), [rawRevenues]);
   const activeCycles = useMemo(() => getOpenFinanceCycles(cycles), [cycles]);
   const loading = authLoading || financeLoading || cyclesLoading || feedsLoading || additivesLoading || pondsLoading || harvestsLoading;
   const reportTypes = REPORT_TYPES.map((report) => ({
@@ -215,17 +213,18 @@ export default function FinancialReportsPage() {
     !revenue.voided && (cycleScope === 'all' || revenue.cycleId === cycleScope)
     && isDateKeyInRange(revenue.date, dateRange.startDateKey, dateRange.endDateKey, company?.timeZone)
   ));
-  const cogsInput = {
+  const cogsInput = useMemo(() => ({
     ponds, expenses, revenues, harvests,
     feedUsage: feeds.flatMap(feed => feed.usageHistory || []),
     additiveUsage: additives.flatMap(additive => additive.usageHistory || []),
     cycleScope, scopeLabel: cycles.find(cycle => cycle.id === cycleScope)?.cycleName || copy('All cycles'),
     startDateKey: dateRange.startDateKey, endDateKey: dateRange.endDateKey,
     timeZone: company?.timeZone, normalizeCategory,
-  };
-  const cogs = buildCogsReport(cogsInput);
-  const pl = buildProfitLoss(cogsInput, openingInventory, closingInventory);
-  const cash = buildConfirmedCashFlow({ expenses, revenues, startDateKey: dateRange.startDateKey, endDateKey: dateRange.endDateKey, timeZone: company?.timeZone, normalizeCategory });
+  }), [ponds, expenses, revenues, harvests, feeds, additives, cycleScope, cycles, copy, dateRange.startDateKey, dateRange.endDateKey, company?.timeZone]);
+  const pl = useMemo(() => buildProfitLoss(cogsInput, openingInventory, closingInventory), [cogsInput, openingInventory, closingInventory]);
+  // P&L already includes the complete COGS result. Reuse it for the COGS view.
+  const cogs = pl;
+  const cash = useMemo(() => buildConfirmedCashFlow({ expenses, revenues, startDateKey: dateRange.startDateKey, endDateKey: dateRange.endDateKey, timeZone: company?.timeZone, normalizeCategory }), [expenses, revenues, dateRange.startDateKey, dateRange.endDateKey, company?.timeZone]);
   const cogsTotal = cogs.totalProductionCost + openingInventory - closingInventory;
   const cogsGrossProfit = cogs.revenue - cogsTotal;
 
@@ -250,6 +249,7 @@ export default function FinancialReportsPage() {
       let filename: string;
 
       if (selectedReport === 'profit-loss') {
+        const { generateProfitLossHTML } = await import('@/lib/generated/mobileProfitLossReport');
         const { totalCOGS, cogsBreakdown, totalOPEX, opexBreakdown, totalOtherExpenses, otherExpenseBreakdown, grossProfit, operatingIncome } = pl;
         const data: FinancialData = {
           period: selectedPeriod,
@@ -273,6 +273,7 @@ export default function FinancialReportsPage() {
         html = generateProfitLossHTML(data, brandAssets, currentLanguage);
         filename = `Profit_Loss_${selectedPeriod.replace(/\s+/g, '_')}.pdf`;
       } else if (selectedReport === 'cash-flow') {
+        const { generateCashFlowHTML } = await import('@/lib/generated/mobileCashFlowReport');
         const { operating: operatingActivities, investing: investingActivities, financing: financingActivities } = cash;
         const data: CashFlowData = {
           period: selectedPeriod,
@@ -290,6 +291,7 @@ export default function FinancialReportsPage() {
         html = generateCashFlowHTML(data, brandAssets, currentLanguage);
         filename = `Cash_Flow_${selectedPeriod.replace(/\s+/g, '_')}.pdf`;
       } else if (selectedReport === 'cogs') {
+        const { generateCOGSHTML, prepareCOGSData } = await import('@/lib/generated/mobileCogsReport');
         const data = prepareCOGSData(
           selectedPeriod, dateRange.startDateKey || startDate, dateRange.endDateKey || endDate,
           companyName, openingInventory, cogs.purchases, cogs.directLabor, cogs.directMaterials,
@@ -299,6 +301,7 @@ export default function FinancialReportsPage() {
         html = generateCOGSHTML(data, brandAssets, currentLanguage);
         filename = `COGS_${selectedPeriod.replace(/\s+/g, '_')}.pdf`;
       } else {
+        const { generateTransactionHistoryHTML, prepareTransactionHistoryData } = await import('@/lib/generated/mobileTransactionHistoryReport');
         const data = prepareTransactionHistoryData(
           selectedPeriod,
           startDate,
@@ -317,6 +320,7 @@ export default function FinancialReportsPage() {
       await downloadMobilePdf({ html, filename, orientation: 'portrait', compress: true });
     } catch (error) {
       console.error('Export failed:', error);
+      showAppAlert(copy('Unable to download the report. Check your connection and try again.'));
     } finally {
       setExportLoading(false);
     }

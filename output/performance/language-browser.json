@@ -1,0 +1,88 @@
+[
+  {
+    "language": "en",
+    "expected": "Portal Login",
+    "text": "Portal Login",
+    "loaded": {
+      "id": false,
+      "th": false,
+      "zh": false,
+      "vi": false
+    },
+    "errors": []
+  },
+  {
+    "language": "id",
+    "expected": "Masuk Portal",
+    "text": "Masuk Portal",
+    "loaded": {
+      "id": true,
+      "th": false,
+      "zh": false,
+      "vi": false
+    },
+    "errors": []
+  },
+  {
+    "language": "th",
+    "expected": "เข้าสู่ระบบพอร์ทัล",
+    "text": "เข้าสู่ระบบพอร์ทัล",
+    "loaded": {
+      "id": false,
+      "th": true,
+      "zh": false,
+      "vi": false
+    },
+    "errors": []
+  },
+  {
+    "language": "zh",
+    "expected": "门户登录",
+    "text": "门户登录",
+    "loaded": {
+      "id": false,
+      "th": false,
+      "zh": true,
+      "vi": false
+    },
+    "errors": []
+  },
+  {
+    "language": "vi",
+    "expected": "Đăng nhập Cổng thông tin",
+    "text": "Đăng nhập Cổng thông tin",
+    "loaded": {
+      "id": false,
+      "th": false,
+      "zh": false,
+      "vi": true
+    },
+    "errors": []
+  },
+  {
+    "language": "th-failed",
+    "expected": "Portal Login",
+    "text": "Portal Login",
+    "loaded": {
+      "id": false,
+      "th": true,
+      "zh": false,
+      "vi": false
+    },
+    "errors": []
+  },
+  {
+    "language": "storage-denied",
+    "expected": "Portal Login",
+    "text": "Portal Login",
+    "loaded": {
+      "id": false,
+      "th": false,
+      "zh": false,
+      "vi": false
+    },
+    "errors": [
+      "Storage denied"
+    ]
+  }
+]
