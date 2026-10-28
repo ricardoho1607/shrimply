@@ -1,7 +1,7 @@
 import { withFinalHarvestDates } from '../../../shared/harvestCalculations';
 import { getPondCurrentDoc } from '../../../shared/pondCalculations';
 import { monetaryValue } from '../../../shared/financeIntegrity';
-import { scopeExpenseRecords, scopeExpenseRecordsForPond, type ExpenseAllocationLink } from '../../../shared/financeExpenseAllocation';
+import { scopeExpenseRecords, scopeExpenseRecordsForPonds, type ExpenseAllocationLink } from '../../../shared/financeExpenseAllocation';
 import { savedUsageCost, isCycleOperatingExpense, isMaintenanceExpense } from '../../../shared/reportingIntegrity';
 import {
   calculatePondMetricsWithHarvest,
@@ -275,6 +275,7 @@ export function buildWebCycleReport({
   timeZone,
   includeComparison = true,
   pondId,
+  pondIds,
 }: {
   cycle: CycleReportCycle;
   cycles?: CycleReportCycle[];
@@ -287,13 +288,15 @@ export function buildWebCycleReport({
   timeZone?: string;
   includeComparison?: boolean;
   pondId?: string;
+  pondIds?: string[];
 }): WebCycleReport {
-  const cyclePonds = ponds.filter((pond) => pond.cycleId === cycle.id && (!pondId || pond.id === pondId));
+  const selectedIds = pondIds !== undefined ? new Set(pondIds) : pondId ? new Set([pondId]) : null;
+  const cyclePonds = ponds.filter((pond) => pond.cycleId === cycle.id && (!selectedIds || selectedIds.has(pond.id)));
   const cyclePondIds = new Set(cyclePonds.map((pond) => pond.id));
   const matchedHarvestRecords = harvestRecords.filter(record => !record.voided).map(record => ({ ...record,
-    ponds: record.ponds.filter(line => (!pondId || line.pondId === pondId) && (line.cycleId ? line.cycleId === cycle.id : record.cycleId ? record.cycleId === cycle.id : cyclePondIds.has(line.pondId))),
+    ponds: record.ponds.filter(line => (!selectedIds || selectedIds.has(line.pondId)) && (line.cycleId ? line.cycleId === cycle.id : record.cycleId ? record.cycleId === cycle.id : cyclePondIds.has(line.pondId))),
   })).filter(record => record.ponds.length > 0);
-  const matchesUsage = (usage: UsageHistory) => usage.source !== 'treatmentMixProduction' && (!pondId || usage.pondId === pondId) && (usage.cycleId ? usage.cycleId === cycle.id : Boolean(usage.pondId && cyclePondIds.has(usage.pondId)));
+  const matchesUsage = (usage: UsageHistory) => usage.source !== 'treatmentMixProduction' && (!selectedIds || Boolean(usage.pondId && selectedIds.has(usage.pondId))) && (usage.cycleId ? usage.cycleId === cycle.id : Boolean(usage.pondId && cyclePondIds.has(usage.pondId)));
 
   const feedCost = feeds.flatMap((item) => item.usageHistory || [])
     .filter(matchesUsage)
@@ -302,7 +305,7 @@ export function buildWebCycleReport({
     .filter(matchesUsage)
     .reduce((sum, usage) => sum + usageCost(usage), 0);
   // Finance is the posting source; asset-register entries are retained as supporting history.
-  const operatingExpenses = (pondId && cyclePonds[0] ? scopeExpenseRecordsForPond(expenses, cycle.id, cyclePonds[0], ponds) : pondId ? [] : scopeExpenseRecords(expenses, cycle.id, ponds)).filter(isCycleOperatingExpense);
+  const operatingExpenses = (selectedIds ? scopeExpenseRecordsForPonds(expenses, cycle.id, cyclePonds, ponds) : scopeExpenseRecords(expenses, cycle.id, ponds)).filter(isCycleOperatingExpense);
   const maintenanceCost = operatingExpenses.filter(isMaintenanceExpense).reduce((sum, expense) => sum + (monetaryValue(expense.amount) ?? Number.NaN), 0);
   const manualExpenses = operatingExpenses.filter(expense => !isMaintenanceExpense(expense)).reduce((sum, expense) => sum + (monetaryValue(expense.amount) ?? Number.NaN), 0);
 
@@ -395,7 +398,7 @@ export function buildWebCycleReport({
   if (cycle.status !== 'closed') notes.push({ severity: 'info', key: 'cycleNotClosed', message: 'This cycle is not closed yet. Final profitability may still change.' });
 
   const result: WebCycleReport = {
-    cycle: pondId && cyclePonds[0] ? { ...cycle, stockingStartDate: cyclePonds[0].cycleStartedAt || cyclePonds[0].docStart || cycle.stockingStartDate, stockingEndDate: undefined, closedAt: cyclePonds[0].cycleEndedAt || reportPonds[0]?.endedAt } : cycle,
+    cycle: selectedIds ? { ...cycle, stockingStartDate: cyclePonds.map(pond => pond.cycleStartedAt || pond.docStart).filter(Boolean).sort()[0] || cycle.stockingStartDate, stockingEndDate: undefined, closedAt: cyclePonds.length && cyclePonds.every(pond => pond.cycleStatus === 'ended') ? reportPonds.map(pond => pond.endedAt).filter(Boolean).sort().at(-1) : undefined } : cycle,
     harvestRecords: matchedHarvestRecords,
     ponds: reportPonds,
     notes,
@@ -422,7 +425,7 @@ export function buildWebCycleReport({
     },
   };
 
-  if (includeComparison && !pondId) {
+  if (includeComparison && !selectedIds) {
     const previousCycle = getPreviousEnterpriseCycleForSameBlocks(cycle, cycles, ponds);
     const previousReport = previousCycle ? buildWebCycleReport({
       cycle: previousCycle,

@@ -1666,6 +1666,10 @@ common: {
     },
   },
   cycleReport: {
+    statusActive: 'Active',
+    selectPonds: 'Select ponds',
+    endedPonds: 'Ended ponds',
+    statusEnded: 'Ended',
     pondScope: 'Pond',
     allPonds: 'All ponds',
     unallocatedNotice: 'Unallocated cycle costs are excluded from this pond report.',

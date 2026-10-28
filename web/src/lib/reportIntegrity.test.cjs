@@ -129,3 +129,65 @@ test('pond report includes only its own harvest, feed and saved expense allocati
   assert.equal(report.totals.costs.manualExpenses, 40);
   assert.equal(report.totals.costs.total, 50);
 });
+
+test('multiple selected ponds combine their shares once and exclude other ponds and unallocated bills', () => {
+  const ponds = ['p1','p2','p3'].map(id => ({ ...pond, id, pondName: id }));
+  const input = { ...base, ponds, pondIds: ['p1','p2','p2'],
+    harvestRecords: [{ id: 'h', cycleId: 'c1', date: '2026-09-01', ponds: ponds.map((p, i) => ({ pondId: p.id, biomass: String((i + 1) * 100), price: '10', size: '100' })) }],
+    feeds: [{ usageHistory: ponds.map((p, i) => ({ cycleId: 'c1', pondId: p.id, quantity: 1, totalCost: (i + 1) * 10 })) }],
+    expenses: [{ cycleId:'c1', category:'Salary', amount:600, pondAllocations: [{pondId:'p1',cycleId:'c1',amount:100},{pondId:'p2',cycleId:'c1',amount:200},{pondId:'p3',cycleId:'c1',amount:300}] }, {cycleId:'c1',category:'Salary',amount:999}],
+  };
+  const report = cycle.buildWebCycleReport(input);
+  assert.deepEqual(report.ponds.map(p => p.id), ['p1','p2']);
+  assert.equal(report.totals.harvestRevenue,3000);
+  assert.equal(report.totals.costs.feed,30);
+  assert.equal(report.totals.costs.manualExpenses,300);
+  assert.equal(report.totals.costs.total,330);
+  const empty = cycle.buildWebCycleReport({...input,pondIds:[]});
+  assert.equal(empty.ponds.length,0);
+  assert.equal(empty.totals.harvestRevenue,0);
+  assert.equal(empty.totals.costs.total,0);
+});
+
+test('large cycle PDFs keep every pond and move long reviews to a complete extra page', () => {
+  const { generateCycleReportHtml } = load(root + '/web/src/lib/generated/mobileCycleReport.ts');
+  const ponds = Array.from({ length: 24 }, (_, index) => ({
+    ...pond, id: `p${index}`, pondName: `North Block Grow-out ${index + 1}`,
+    supplier: 'Long hatchery supplier name', cycleStatus: 'ended',
+    ...(index >= 18 ? { cycleEndReason: 'disease' } : {}),
+  }));
+  const harvestRecords = ponds.slice(0, 18).map((item, index) => ({
+    id: `h${index}`, date: '2026-09-09', cycleId: 'c1',
+    ponds: [{ pondId: item.id, harvestType: 'final', biomass: 400, size: 50, price: 65000 }],
+  }));
+  const report = cycle.buildWebCycleReport({ ...base, ponds, harvestRecords });
+  const html = generateCycleReportHtml({
+    report: { ...report, pondScopeName: ponds.map(item => item.pondName).join(', ') },
+    companyName: 'Test & Farm', language: 'en', formatCurrency: value => `Rp ${value}`,
+  }, '', '');
+  const pages = html.split('<div class="pdf-page">').slice(1);
+  assert.equal(pages.length, 8);
+  assert.doesNotMatch(pages[0], /<div class="overview-columns">/);
+  assert.match(pages[1], /Closure review/);
+  assert.match(pages[1], /Survival review/);
+  ponds.forEach(item => assert.ok(html.includes(`<td>${item.pondName}</td>`), item.pondName));
+  assert.equal((html.match(/24 Ponds<\/p>/g) || []).length, pages.length);
+  assert.ok(!html.includes(report.ponds.map(item => item.pondName).join(', ')));
+  assert.match(html, /Test &amp; Farm/);
+  assert.match(html, /Page 8 of 8/);
+  const localized = generateCycleReportHtml({ report: { ...report, pondScopeName: 'Selection' }, companyName: 'Test', language: 'id', formatCurrency: String }, '', '');
+  assert.match(localized, /24 Kolam/);
+});
+
+
+test('cycle PDF distinguishes recorded losses and break-even margins from missing revenue', () => {
+  const { generateCycleReportHtml } = load(root + '/web/src/lib/generated/mobileCycleReport.ts');
+  const report = cycle.buildWebCycleReport(base);
+  for (const [revenue, profit, status] of [[100, -20, 'Review'], [100, 0, 'Watch'], [0, -20, 'No data']]) {
+    const html = generateCycleReportHtml({
+      report: { ...report, totals: { ...report.totals, harvestRevenue: revenue, grossProfit: profit } },
+      companyName: 'Test', language: 'en', formatCurrency: String,
+    }, '', '');
+    assert.match(html, new RegExp(`<label>Gross margin</label><b>[^<]+</b><span class="signal [^"]+">${status}</span>`));
+  }
+});

@@ -71,7 +71,7 @@ function CycleReportsContent() {
   const [assets, setAssets] = useState<CycleReportAsset[]>([]);
   const [assetsError, setAssetsError] = useState<Error | null>(null);
   const [assetsLoading, setAssetsLoading] = useState(true);
-  const [pondChoice, setPondChoice] = useState('auto');
+  const [pondChoice, setPondChoice] = useState<{ cycleId: string; ids: string[] } | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [exportLoading, setExportLoading] = useState(false);
 
@@ -111,12 +111,19 @@ function CycleReportsContent() {
       - (new Date(first.closedAt || first.stockingEndDate || 0).getTime() || 0)
     )), [cycles, ponds]);
   const selectedCycle = cycles.find((cycle) => cycle.id === selectedCycleId);
-  const cyclePondsForScope = ponds.filter(pond => pond.cycleId === selectedCycleId);
-  const pondScope = pondChoice === 'auto' ? (cyclePondsForScope.find(pond => pond.cycleStatus === 'ended')?.id || cyclePondsForScope[0]?.id || 'all') : (pondChoice === 'all' || cyclePondsForScope.some(pond => pond.id === pondChoice) ? pondChoice : 'all');
-  useEffect(() => { setPondChoice('auto'); }, [selectedCycleId]);
+  const cyclePondsForScope = useMemo(() => ponds.filter(pond => pond.cycleId === selectedCycleId), [ponds, selectedCycleId]);
+  const defaultPondId = cyclePondsForScope.find(pond => pond.cycleStatus === 'ended')?.id || cyclePondsForScope[0]?.id;
+  const selectedPondIds = useMemo(() => pondChoice?.cycleId === selectedCycleId
+    ? pondChoice.ids.filter(id => cyclePondsForScope.some(pond => pond.id === id))
+    : defaultPondId ? [defaultPondId] : [], [pondChoice, selectedCycleId, cyclePondsForScope, defaultPondId]);
+  const selectedPonds = useMemo(() => cyclePondsForScope.filter(pond => !selectedPondIds || selectedPondIds.includes(pond.id)), [cyclePondsForScope, selectedPondIds]);
+  const togglePond = (id: string) => {
+    const current = selectedPonds.map(pond => pond.id);
+    setPondChoice({ cycleId: selectedCycleId, ids: current.includes(id) ? current.filter(value => value !== id) : [...current, id] });
+  };
   const report = useMemo(() => selectedCycle ? buildWebCycleReport({
     cycle: selectedCycle,
-    pondId: pondScope === 'all' ? undefined : pondScope,
+    pondIds: selectedPondIds,
     cycles,
     ponds,
     harvestRecords,
@@ -135,7 +142,7 @@ function CycleReportsContent() {
     ponds,
     cycles,
     selectedCycle,
-    pondScope,
+    selectedPondIds,
   ]);
   const loading = cyclesLoading || pondsLoading || harvestLoading || inventoryLoading || financeLoading || assetsLoading;
 
@@ -143,7 +150,7 @@ function CycleReportsContent() {
   const invalidCosts = report ? !Object.values(report.totals.costs).every(Number.isFinite) : false;
 
   const handleExport = async () => {
-    if (!report || !canExportReports || loading || sourceError || invalidCosts) return;
+    if (!report || !report.ponds.length || !canExportReports || loading || sourceError || invalidCosts) return;
     setExportLoading(true);
     try {
       const [brandAssets, { generateCycleReportHtml }] = await Promise.all([
@@ -151,14 +158,14 @@ function CycleReportsContent() {
         import('@/lib/generated/mobileCycleReport'),
       ]);
       const html = generateCycleReportHtml({
-        report: { ...report, pondScopeName: pondScope === 'all' ? undefined : report.ponds[0]?.pondName },
+        report: { ...report, pondScopeName: selectedPondIds === undefined ? undefined : report.ponds.map(pond => pond.pondName).join(', ') },
         companyName: company?.companyName || company?.id || 'Company',
         formatCurrency,
         language: currentLanguage,
       }, brandAssets.backgroundBase64, brandAssets.logoBase64);
       await downloadMobilePdf({
         html,
-        filename: `Cycle_Report_${report.cycle.cycleName.replace(/[^a-z0-9]+/gi, '_')}${pondScope !== 'all' ? `_${(report.ponds[0]?.pondName || 'pond').replace(/[^a-z0-9]+/gi, '_')}` : ''}.pdf`,
+        filename: `Cycle_Report_${report.cycle.cycleName.replace(/[^a-z0-9]+/gi, '_').slice(0, 80)}${selectedPondIds !== undefined ? `_${report.ponds.length > 1 ? `${report.ponds.length}_Ponds` : report.ponds[0].pondName.replace(/[^a-z0-9]+/gi, '_').slice(0, 80)}` : ''}.pdf`,
         orientation: 'portrait', preserveTemplateScale: true, renderPagesSeparately: true,
       });
     } catch (error) {
@@ -252,20 +259,29 @@ function CycleReportsContent() {
         </div>
         <div className={styles.headerActions}>
           <Link href="/dashboard/reports/cycles" className={styles.backButton}>{t.cycleReport.backToArchive}</Link>
-          <button type="button" className={styles.actionButton} onClick={handleExport} disabled={loading || Boolean(sourceError) || invalidCosts || exportLoading || !canExportReports}>
+          <button type="button" className={styles.actionButton} onClick={handleExport} disabled={loading || Boolean(sourceError) || invalidCosts || exportLoading || !canExportReports || !report.ponds.length}>
             {exportLoading ? <Loader2 className="animate-spin" size={17} /> : <FileDown size={17} />} {t.cycleReport.exportPdf}
           </button>
         </div>
       </header>
 
-      <label>{t.cycleReport.pondScope}{' '}
-        <select value={pondScope} onChange={(event) => setPondChoice(event.target.value)}>
-          <option value="all">{t.cycleReport.allPonds}</option>
-          {ponds.filter(pond => pond.cycleId === selectedCycleId).map(pond => <option key={pond.id} value={pond.id}>{pond.pondName}</option>)}
-        </select>
-      </label>
-      {pondScope !== 'all' && <p role="status">{t.cycleReport.unallocatedNotice}</p>}
-      {report.cycle.status !== 'closed' && <p role="status">{t.cycleReport.interimBody}</p>}
+      <section className={styles.scopePanel} aria-label={t.cycleReport.pondScope}>
+        <div className={styles.scopeHeading}>
+          <div><h2>{t.cycleReport.selectPonds}</h2><p>{t.cycleReport.pondsIncluded.replace('{{count}}', String(selectedPonds.length))}</p></div>
+          <div className={styles.scopeActions}>
+            <button type="button" onClick={() => setPondChoice({ cycleId: selectedCycleId, ids: cyclePondsForScope.map(pond => pond.id) })}>{t.cycleReport.allPonds}</button>
+            <button type="button" disabled={!cyclePondsForScope.some(pond => pond.cycleStatus === 'ended')} onClick={() => setPondChoice({ cycleId: selectedCycleId, ids: cyclePondsForScope.filter(pond => pond.cycleStatus === 'ended').map(pond => pond.id) })}>{t.cycleReport.endedPonds}</button>
+          </div>
+        </div>
+        <div className={styles.pondChoices}>
+          {cyclePondsForScope.map(pond => <label key={pond.id} className={styles.pondChoice}>
+            <input type="checkbox" checked={selectedPonds.some(item => item.id === pond.id)} onChange={() => togglePond(pond.id)} />
+            <span><strong>{pond.pondName}</strong><small>{pond.cycleStatus === 'ended' ? t.cycleReport.statusEnded : t.cycleReport.statusActive}</small></span>
+          </label>)}
+        </div>
+        {selectedPondIds !== undefined && <p className={styles.scopeNotice}>{t.cycleReport.unallocatedNotice}</p>}
+        {!selectedPonds.length && <p role="status" className={styles.scopeNotice}>{t.cycleReport.selectPonds}</p>}
+      </section>
       <section className={styles.summaryCard}>
         <div className={styles.summaryTop}>
           <div>
@@ -278,9 +294,10 @@ function CycleReportsContent() {
           <span>{t.cycleReport.pondsIncluded.replace('{{count}}', String(report.totals.pondCount))}</span>
           <span>{t.cycleReport.totalArea}: {formatNumber(report.totals.totalArea, 0)} m²</span>
         </div>
+        {report.cycle.status !== 'closed' && <p className={styles.interimNotice}>{t.cycleReport.interimBody}</p>}
       </section>
 
-      <nav className={styles.tabs} aria-label={t.cycleReport.title}>
+      <div className={styles.tabs} role="group" aria-label={t.cycleReport.title}>
         {(['overview', 'ponds', 'costs'] as const).map((tab) => (
           <button
             key={tab}
@@ -292,7 +309,7 @@ function CycleReportsContent() {
             {t.cycleReport.tabs[tab]}
           </button>
         ))}
-      </nav>
+      </div>
 
       {activeTab === 'overview' ? (
         <div className={styles.metricGrid}>

@@ -1567,6 +1567,10 @@ companySetup: {
     },
   },
   cycleReport: {
+    statusActive: '进行中',
+    selectPonds: '选择池塘',
+    endedPonds: '已结束的池塘',
+    statusEnded: '已结束',
     pondScope: '池塘',
     allPonds: '全部池塘',
     unallocatedNotice: '此池塘报告不包含未分配的周期费用。',

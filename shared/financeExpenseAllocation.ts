@@ -165,3 +165,12 @@ export function scopeExpenseRecordsForPond<T extends AllocatedExpense>(records: 
     return matches ? [{ ...record, amount: monetaryValue(record.amount) ?? Number.NaN }] : [];
   });
 }
+
+/** Combine each bill's recorded shares once across the selected pond runs. */
+export function scopeExpenseRecordsForPonds<T extends AllocatedExpense>(records: T[], cycleId: string, selectedPonds: FinancePondRecord[], ponds: FinancePondRecord[] = []): (T & { billAmount?: number })[] {
+  const uniquePonds = [...new Map(selectedPonds.map(pond => [pond.id, pond])).values()];
+  return records.flatMap(record => {
+    const shares = uniquePonds.flatMap(pond => scopeExpenseRecordsForPond([record], cycleId, pond, ponds));
+    return shares.length ? [{ ...record, amount: shares.reduce((sum, share) => sum + Number(share.amount), 0), billAmount: monetaryValue(record.amount) ?? Number.NaN }] : [];
+  });
+}

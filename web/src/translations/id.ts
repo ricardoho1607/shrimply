@@ -1645,6 +1645,10 @@ companySetup: {
     },
   },
   cycleReport: {
+    statusActive: 'Aktif',
+    selectPonds: 'Pilih kolam',
+    endedPonds: 'Kolam selesai',
+    statusEnded: 'Selesai',
     pondScope: 'Kolam',
     allPonds: 'Semua kolam',
     unallocatedNotice: 'Biaya siklus yang belum dialokasikan tidak termasuk dalam laporan kolam ini.',

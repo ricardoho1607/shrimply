@@ -1411,6 +1411,10 @@ companySetup: {
     },
   },
   cycleReport: {
+    statusActive: 'กำลังเลี้ยง',
+    selectPonds: 'เลือกบ่อ',
+    endedPonds: 'บ่อที่สิ้นสุดแล้ว',
+    statusEnded: 'สิ้นสุดแล้ว',
     pondScope: 'บ่อ',
     allPonds: 'ทุกบ่อ',
     unallocatedNotice: 'รายงานบ่อนี้ไม่รวมค่าใช้จ่ายรอบที่ยังไม่ได้จัดสรร',

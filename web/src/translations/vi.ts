@@ -1404,6 +1404,10 @@ companySetup: {
     },
   },
   cycleReport: {
+    statusActive: 'Đang hoạt động',
+    selectPonds: 'Chọn ao',
+    endedPonds: 'Ao đã kết thúc',
+    statusEnded: 'Đã kết thúc',
     pondScope: 'Ao',
     allPonds: 'Tất cả ao',
     unallocatedNotice: 'Chi phí chu kỳ chưa phân bổ không được tính trong báo cáo ao này.',

@@ -13,7 +13,7 @@ export const getFunctions=()=>({});
 export const httpsCallable=()=>async()=>{throw new Error('Network writes are disabled in this fixture')};
 export const getDocs=async()=>({docs:[],empty:true});
 export const getDoc=async()=>({exists:()=>false,data:()=>({})});
-export const onSnapshot=(_ref:unknown,...args:any[])=>{const next=args.find(arg=>typeof arg==='function')||args.find(arg=>arg?.next)?.next;next?.({docs:[],size:0,empty:true,metadata:{fromCache:true},exists:()=>false,data:()=>({}),docChanges:()=>[]});return()=>{}};
+export const onSnapshot=(_ref:unknown,...args:any[])=>{const next=args.find(arg=>typeof arg==='function')||args.find(arg=>arg?.next)?.next;let active=true;queueMicrotask(()=>{if(active)next?.({docs:[],size:0,empty:true,metadata:{fromCache:true},exists:()=>false,data:()=>({}),docChanges:()=>[]})});return()=>{active=false}};
 export const serverTimestamp=()=>null;
 export const Timestamp={fromDate:(date:Date)=>date,now:()=>new Date()};
 export const arrayUnion=(...args:unknown[])=>args;

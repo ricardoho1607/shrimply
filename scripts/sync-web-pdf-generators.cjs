@@ -28,6 +28,7 @@ const cyclePdfI18nImport = `import {
   formatPdfDate,
   formatPdfNumber,
   localizePdfHtml,
+  localizePdfText,
   type PdfLanguage,
 } from '../../../../shared/pdfReportI18n';`;
 

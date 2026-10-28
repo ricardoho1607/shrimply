@@ -1,4 +1,5 @@
 // Build real dashboard screens against a synthetic farm. No production access.
+// Set PERF_REAL_PDF=1 for an interactive preview with real PDF downloads.
 // Usage: PERF_ESBUILD=/path/to/esbuild node scripts/performance/dashboard-fixture.cjs SOURCE OUTPUT
 const path=require('node:path'),fs=require('node:fs');
 const esbuild=require(process.env.PERF_ESBUILD || 'esbuild');
@@ -17,14 +18,15 @@ esbuild.build({stdin:{contents:entry,resolveDir:source,loader:'tsx'},bundle:true
  build.onResolve({filter:/^\//},args=>args.kind==='url-token'?{path:args.path,external:true}:undefined);
  build.onResolve({filter:/^(?:@\/|next\/|firebase\/)/},args=>{
   if(['@/contexts/AuthContext','@/hooks/useDashboardData','@/hooks/useFarmDateKey'].includes(args.path))return {path:path.join(fixtures,'data.ts')};
-  if(args.path==='@/lib/mobilePdfExport')return {path:path.join(fixtures,'pdf.ts')};
+  if(args.path==='@/lib/mobilePdfExport' && process.env.PERF_REAL_PDF !== '1')return {path:path.join(fixtures,'pdf.ts')};
   if(args.path==='@/contexts/CurrencyContext')return {path:'currency',namespace:'fixture'};
   if(args.path==='@/lib/firebase'||args.path.startsWith('firebase/'))return {path:path.join(fixtures,'firebase.ts')};
   if(args.path==='next/link'||args.path==='next/navigation')return {path:path.join(fixtures,'next.tsx')};
   if(args.path==='next/image')return {path:'image',namespace:'fixture'};
   if(args.path.startsWith('@/')) return {path:path.join(source,'web/src',args.path.slice(2))+(/\.[a-z]+$/.test(args.path)?'':fs.existsSync(path.join(source,'web/src',args.path.slice(2)+'.tsx'))?'.tsx':'.ts')};
  });
- build.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:args.path==='currency'?`export const useCurrency=()=>({currentCurrency:'USD',currencyConfig:{code:'USD',symbol:'$',decimalPlaces:2},formatCurrency:value=>'$'+Number(value).toFixed(2)});`:`export {Image as default} from ${JSON.stringify(path.join(fixtures,'next.tsx'))};`,loader:'tsx',resolveDir:source}));
+ build.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:args.path==='currency'?`export const useCurrency=()=>({currentCurrency:'USD',currencyConfig:{code:'USD',symbol:'$',decimalPlaces:2},formatCurrency:value=>new URLSearchParams(location.search).has('reportStress') ? 'Rp '+Number(value).toLocaleString('id-ID',{maximumFractionDigits:0}) : '$'+Number(value).toFixed(2)});`:`export {Image as default} from ${JSON.stringify(path.join(fixtures,'next.tsx'))};`,loader:'tsx',resolveDir:source}));
 }}],logLevel:'warning'}).then(()=>{
+if (process.env.PERF_REAL_PDF === '1') fs.cpSync(path.join(source,'web/public/pdf'), path.join(out,'pdf'), { recursive: true });
 fs.writeFileSync(path.join(out,'index.html'),'<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"></head><body><div id="root"></div><script type="module" src="/app.js"></script></body></html>');
 }).catch(e=>{console.error(e);process.exit(1)});

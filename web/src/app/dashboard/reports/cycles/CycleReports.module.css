@@ -388,3 +388,36 @@
     break-inside: avoid;
   }
 }
+
+.scopePanel { padding: 20px; border: 1px solid var(--border); border-radius: 16px; background: #fff; }
+.scopeHeading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.scopeHeading h2 { margin: 0; font-size: 16px; font-weight: 650; }
+.scopeHeading p { margin: 4px 0 0; color: var(--text-muted); font-size: 13px; }
+.scopeActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.scopeActions button { min-height: 36px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--primary); font: inherit; font-size: 13px; cursor: pointer; }
+.scopeActions button:hover { background: var(--primary-dim); }
+.scopeActions button:disabled { opacity: .45; cursor: default; }
+.pondChoices { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.pondChoice { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; background: #fafcfd; }
+.pondChoice:has(input:checked) { border-color: #3282b8; background: #edf6fb; }
+.pondChoice:focus-within { outline: 2px solid #3282b8; outline-offset: 2px; }
+.pondChoice input { width: 16px; height: 16px; margin: 0; flex-shrink: 0; accent-color: #0f4c75; }
+.pondChoice strong { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.pondChoice small { display: block; margin-top: 3px; font-size: 11px; color: var(--text-muted); }
+.scopeNotice { margin: 14px 0 0; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.interimNotice { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.page .tabs { position: static; width: auto; padding: 4px; background: #eaf0f5; border-radius: 12px; }
+.page .tabs button { min-height: 40px; background: transparent; }
+.page .tabs .tabActive { background: #fff; color: var(--primary); box-shadow: 0 1px 4px #0f4c7514; }
+.actionButton { background: var(--primary); color: #fff; border-color: var(--primary); }
+.actionButton:hover { background: #163e5a; color: #fff; }
+.actionButton:disabled { opacity: .5; cursor: default; }
+@media (max-width: 640px) {
+  .scopePanel, .summaryCard { padding: 16px; border-radius: 14px; }
+  .scopeHeading { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .pondChoices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .summaryTop { flex-wrap: wrap; }
+  .page .metricGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .metric { padding: 14px; min-width: 0; }
+  .metric strong { font-size: 16px; }
+}
