@@ -761,6 +761,9 @@ companySetup: {
     },
   },
   cycleReport: {
+    pondScope: 'Ao',
+    allPonds: 'Tất cả ao',
+    unallocatedNotice: 'Chi phí chu kỳ chưa phân bổ không được tính trong báo cáo ao này.',
     interimLabel: 'Báo cáo tạm thời',
     interimBody: 'Đã có kết quả ao kết thúc. Chu kỳ chưa đóng nên tổng số và lợi nhuận có thể thay đổi.',
     title: 'Báo cáo vụ nuôi',

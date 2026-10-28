@@ -14,7 +14,7 @@ import {
   isPondCycleActive,
 } from '../store/pondStore';
 import type { Expense } from './financeService';
-import { scopeExpenseRecords } from '../../shared/financeExpenseAllocation';
+import { scopeExpenseRecords, scopeExpenseRecordsForPond } from '../../shared/financeExpenseAllocation';
 import { getPreviousEnterpriseCycleForSameBlocks } from '../../shared/enterpriseCycles';
 
 export type CycleReportNote = {
@@ -117,6 +117,7 @@ export type CycleReport = {
 
 type BuildCycleReportInput = {
   cycleId: string;
+  pondId?: string;
   cycles: FarmCycle[];
   ponds: Pond[];
   harvestRecords: HarvestRecord[];
@@ -324,6 +325,7 @@ const inferCycle = (cycleId: string, cycles: FarmCycle[], ponds: Pond[]): FarmCy
 
 export const buildCycleReport = ({
   cycleId,
+  pondId,
   cycles,
   ponds,
   harvestRecords,
@@ -338,21 +340,21 @@ export const buildCycleReport = ({
   if (!cycle) return null;
 
   const cyclePonds = ponds.filter((pond) =>
-    pond.cycleId === cycleId ||
-    (cycleId === LEGACY_CYCLE_ID && !pond.cycleId)
+    (!pondId || pond.id === pondId) && (pond.cycleId === cycleId ||
+    (cycleId === LEGACY_CYCLE_ID && !pond.cycleId))
   );
   const cyclePondIds = new Set(cyclePonds.map((pond) => pond.id));
-  const matchedHarvestRecords = harvestRecords.filter((harvest) => harvestMatchesCycle(harvest, cycleId, cyclePondIds));
+  const matchedHarvestRecords = harvestRecords.filter((harvest) => harvestMatchesCycle(harvest, cycleId, cyclePondIds)).map(harvest => pondId ? { ...harvest, ponds: harvest.ponds.filter(line => line.pondId === pondId) } : harvest).filter(harvest => harvest.ponds.length > 0);
   const harvestTotals = calculateHarvestTotals(matchedHarvestRecords, cycleId, cyclePondIds);
 
   const feedUsages = feeds.flatMap((feed) =>
     (feed.usageHistory || [])
-      .filter((usage) => usageMatchesCycle(usage, cycleId, cyclePondIds))
+      .filter((usage) => (!pondId || usage.pondId === pondId) && usageMatchesCycle(usage, cycleId, cyclePondIds))
       .map((usage) => ({ usage, feed }))
   );
   const additiveUsages = additives.flatMap((additive) =>
     (additive.usageHistory || [])
-      .filter((usage) => usageMatchesCycle(usage, cycleId, cyclePondIds))
+      .filter((usage) => (!pondId || usage.pondId === pondId) && usageMatchesCycle(usage, cycleId, cyclePondIds))
       .map((usage) => ({ usage, additive }))
   );
 
@@ -361,7 +363,7 @@ export const buildCycleReport = ({
   const feedUsageQty = feedUsages.reduce((sum, item) => sum + toNumber(item.usage.quantity), 0);
   const additiveUsageQty = additiveUsages.reduce((sum, item) => sum + toNumber(item.usage.quantity), 0);
 
-  const operatingExpenses = scopeExpenseRecords(expenses, cycleId, ponds).filter(isCycleOperatingExpense);
+  const operatingExpenses = (pondId && cyclePonds[0] ? scopeExpenseRecordsForPond(expenses, cycleId, cyclePonds[0], ponds) : pondId ? [] : scopeExpenseRecords(expenses, cycleId, ponds)).filter(isCycleOperatingExpense);
   const maintenanceCost = operatingExpenses.filter(isMaintenanceExpense).reduce((sum, expense) => sum + (monetaryValue(expense.amount) ?? Number.NaN), 0);
   const manualExpenses = operatingExpenses.filter(expense => !isMaintenanceExpense(expense)).reduce((sum, expense) => sum + (monetaryValue(expense.amount) ?? Number.NaN), 0);
 
@@ -453,7 +455,7 @@ export const buildCycleReport = ({
   ), 0);
 
   const result: CycleReport = {
-    cycle,
+    cycle: pondId && cyclePonds[0] ? { ...cycle, stockingStartDate: cyclePonds[0].cycleStartedAt || cyclePonds[0].docStart || cycle.stockingStartDate, stockingEndDate: undefined, closedAt: cyclePonds[0].cycleEndedAt || reportPonds[0]?.endedAt } : cycle,
     ponds: reportPonds,
     harvestRecords: matchedHarvestRecords,
     notes,
@@ -485,7 +487,7 @@ export const buildCycleReport = ({
     },
   };
 
-  if (includeComparison) {
+  if (includeComparison && !pondId) {
     const previousCycle = getPreviousEnterpriseCycleForSameBlocks(cycle, cycles, ponds);
     const previousReport = previousCycle ? buildCycleReport({
       cycleId: previousCycle.id,

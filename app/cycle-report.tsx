@@ -44,6 +44,7 @@ export default function CycleReportScreen() {
   const { user, company } = useAuth();
   const { formatCurrency } = useCurrency();
   const { t, currentLanguage } = useLanguage();
+  const [pondChoice, setPondChoice] = useState('auto');
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loadingFinance, setLoadingFinance] = useState(true);
@@ -106,10 +107,15 @@ export default function CycleReportScreen() {
     return undefined;
   }, [cycleId]);
 
+  const cyclePondsForScope = ponds.filter(pond => pond.cycleId === resolvedCycleId);
+  const pondScope = pondChoice === 'auto' ? (cyclePondsForScope.find(pond => pond.cycleStatus === 'ended')?.id || cyclePondsForScope[0]?.id || 'all') : (pondChoice === 'all' || cyclePondsForScope.some(pond => pond.id === pondChoice) ? pondChoice : 'all');
+  useEffect(() => { setPondChoice('auto'); }, [resolvedCycleId]);
+
   const report: CycleReport | null = useMemo(() => {
     if (!resolvedCycleId) return null;
     return buildCycleReport({
       cycleId: resolvedCycleId,
+      pondId: pondScope === 'all' ? undefined : pondScope,
       cycles,
       ponds,
       harvestRecords,
@@ -121,6 +127,7 @@ export default function CycleReportScreen() {
     });
   }, [
     resolvedCycleId,
+    pondScope,
     cycles,
     ponds,
     harvestRecords,
@@ -150,7 +157,7 @@ export default function CycleReportScreen() {
     try {
       setExportingPdf(true);
       await exportCycleReportPDF({
-        report,
+        report: { ...report, pondScopeName: pondScope === 'all' ? undefined : report.ponds[0]?.pondName },
         companyName: company?.companyName || 'Shrimply Farm',
         formatCurrency,
         language: currentLanguage,
@@ -202,6 +209,13 @@ export default function CycleReportScreen() {
     const profitTone = report.totals.grossProfit >= 0 ? 'good' : 'danger';
     return (
       <>
+        <Text style={styles.centerText}>{t.cycleReport.pondScope}</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {[{ id: 'all', pondName: t.cycleReport.allPonds }, ...ponds.filter(pond => pond.cycleId === resolvedCycleId)].map(pond => (
+            <TouchableOpacity key={pond.id} accessibilityRole="button" accessibilityState={{ selected: pondScope === pond.id }} onPress={() => setPondChoice(pond.id)} style={{ padding: 10, marginRight: 6, backgroundColor: pondScope === pond.id ? '#dce8f2' : '#fff', borderRadius: 8 }}><Text>{pond.pondName}</Text></TouchableOpacity>
+          ))}
+        </ScrollView>
+        {pondScope !== 'all' && <Text style={styles.centerText}>{t.cycleReport.unallocatedNotice}</Text>}
         {report.cycle.status !== 'closed' && <Text style={styles.centerText}>{t.cycleReport.interimBody}</Text>}
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeader}>
