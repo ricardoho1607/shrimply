@@ -1,3 +1,4 @@
+import { HarvestOperationError } from '../../../../../shared/commitHarvestOperation';
 import { removeUndefinedFields } from '../../../lib/firestoreData';
 
 /** Messages raised by harvest validation are safe to show directly. */
@@ -30,7 +31,7 @@ export const getHarvestSaveError = (
   fallback: string,
   copy: (message: string) => string,
 ): string => {
-  if (error instanceof HarvestSaveError) return copy(error.message);
+  if (error instanceof HarvestSaveError || error instanceof HarvestOperationError) return copy(error.message);
   const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
   switch (code.replace(/^firestore\//, '')) {
     case 'permission-denied':

@@ -1,3 +1,5 @@
+import { isHarvestOperation } from '../../../shared/harvestOperation';
+import { commitHarvestOperation } from '../../../shared/commitHarvestOperation';
 import { db } from '@/config/firebase';
 import {
   collection,
@@ -20,6 +22,10 @@ import { HarvestRecord, Pond } from '../../store/pondStore';
 import { isHarvestPayloadMatch, removeUndefinedFields } from './syncPayload';
 import type { CommitContext, PendingChange } from './syncTypes';
 export async function commitHarvestChange({ activeCompanyId, user, company }: CommitContext, change: PendingChange): Promise<Record<string, Record<string, any>>> {
+  if (isHarvestOperation(change.data)) {
+    const result = await commitHarvestOperation(db, change.data, { companyId: activeCompanyId, user, timeZone: company?.timeZone }, { doc, runTransaction, serverTimestamp });
+    return result.ponds;
+  }
   const changeLegacyPonds: Record<string, Record<string, any>> = {};
   const harvestRef = change.data.id
     ? doc(db, 'companies', activeCompanyId, 'harvestRecords', change.data.id)

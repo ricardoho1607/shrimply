@@ -1,3 +1,4 @@
+import { type HarvestOperation } from '../../../shared/harvestOperation';
 import { useCallback } from 'react';
 import {
   createOfflineOperationId
@@ -46,6 +47,11 @@ export function useSyncMethods({ addPendingChange, addPendingChanges, pendingCha
     });
   }, [addPendingChange]);
 
+  const syncHarvestOperation = useCallback((operation: HarvestOperation<HarvestRecord>): Promise<DurableOutcome> => {
+    return addPendingChange({ id: operation.id, type: 'harvest',
+      action: operation.previousRecord ? 'update' : 'create', data: operation });
+  }, [addPendingChange]);
+
   const syncMortality = useCallback((action: 'create' | 'update' | 'delete', pondId: string, record: MortalityRecord, recordId?: string, operationId?: string) => {
     return addPendingChange({
       id: operationId || createOfflineOperationId(`mortality-${record.id}-${action}`),
@@ -86,6 +92,7 @@ export function useSyncMethods({ addPendingChange, addPendingChanges, pendingCha
     syncSampling,
     syncMortality,
     syncHarvestRecord,
+    syncHarvestOperation,
     syncCycle,
     triggerManualSync,
     hasPendingChanges: pendingChanges.length > 0

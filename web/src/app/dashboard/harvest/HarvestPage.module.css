@@ -34,7 +34,7 @@
   outline-offset: 2px;
 }
 
-.harvestForm {
+.harvestOverlay .harvestModal .harvestForm {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -75,6 +75,17 @@
   border-color: #0c3f62 !important;
   background: #0c3f62 !important;
 }
+
+/* Keep the selected pond beside its date; short fields share one row. */
+.harvestGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  grid-template-areas: "pond date" "type size" "metrics metrics";
+}
+.pondField { grid-area: pond !important; }
+.dateField { grid-area: date !important; }
+.typeField { grid-area: type !important; }
+.sizeField { grid-area: size !important; }
+.metricsPanel { grid-area: metrics !important; }
 
 @media (max-width: 640px) {
   .harvestOverlay {
@@ -181,4 +192,13 @@
     font-size: 12px;
     white-space: nowrap;
   }
+}
+
+.queuedPond { display: flex; gap: 8px; align-items: center; padding: 9px 12px; border-radius: 10px; background: #eaf6fd; min-width: 0; }
+.queuedPondCopy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; font-size: 12px; overflow-wrap: anywhere; }
+.queuedPondCopy span { color: var(--text-muted); font-size: 11px; }
+.queuedEdit { flex-shrink: 0; padding: 8px; border: 0; border-radius: 7px; background: #fff; color: #0f4c75; font-size: 12px; font-weight: 600; cursor: pointer; }
+
+@media (max-width: 360px) {
+  .harvestGrid input[type="date"] { font-size: 13px; }
 }
