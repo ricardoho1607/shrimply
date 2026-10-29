@@ -1,3 +1,4 @@
+import { harvestChangePondIds } from '../../../shared/harvestOperation';
 import { useCallback, useEffect, useRef } from 'react';
 import {
   getOfflineRetryDelay,
@@ -66,7 +67,7 @@ export function useSyncRetry(runtime: SyncRuntime, queue: SyncQueue, commitChang
       for (const pendingChange of changesToSync) {
         if (usePondStore.getState().currentCompanyId !== activeCompanyId || usePondStore.getState().farmCacheUserId !== user.uid) break;
         const keys = [pendingChange.pondId || (pendingChange.type === 'pond' ? pendingChange.data?.id || pendingChange.recordId || pendingChange.id : `${pendingChange.type}:${pendingChange.data?.id || pendingChange.recordId || pendingChange.id}`),
-        ...(pendingChange.type === 'harvest' ? (pendingChange.data?.ponds || []).map((pond: { pondId: string }) => pond.pondId) : [])];
+        ...(pendingChange.type === 'harvest' ? harvestChangePondIds(pendingChange) : [])];
         if (keys.some(key => blocked.has(key))) continue;
         try {
           const processed = await commitChanges([pendingChange]);

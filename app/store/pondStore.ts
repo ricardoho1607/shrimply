@@ -1,3 +1,4 @@
+import { createHarvestOperation, groupHarvestEntriesByDate, expandHarvestOperationChange, isHarvestPayloadMatch, type HarvestOperation } from '../../shared/harvestOperation';
 import { create } from "zustand";
 import { resolvePhysicalPond } from '../../shared/physicalPondIdentity';
 import {
@@ -13,6 +14,7 @@ import { getFarmDateKey, resolveFarmTimeZone } from '../../shared/farmDate';
 import {
   applyHarvestImpactToPond,
   getHarvestDateSampling,
+  getInvalidHarvestDraftLine,
   getNextPartialHarvestNumber,
   reverseHarvestImpactOnPond,
   withHarvestReference,
@@ -21,6 +23,8 @@ import {
 } from '../../shared/harvestCalculations';
 import { harvestPondsBelongToCycle } from '../../shared/harvestCycleScope';
 import {
+  applyPendingPondChanges,
+  applyPendingHarvestChanges,
   createOfflineOperationId,
   isSameOfflineFarmIdentity,
   rollbackPendingHarvestCreate,
@@ -287,7 +291,7 @@ async function persistLifecycleChanges(state: PondStore, get: () => PondStore, c
 
 interface PondStore {
   ponds: Pond[]; physicalPonds: PhysicalPond[]; cycles: FarmCycle[]; harvestRecords: HarvestRecord[]; currentCompanyId?: string; currentTimeZone?: string; farmCacheUserId?: string; farmCacheStatus: FarmCacheStatus; lastFarmCacheUpdate?: number; isBackingUp: boolean; isRestoring: boolean; lastBackupTime?: number;
-  firebaseSync?: { syncLifecycleChanges?: (changes: LifecycleChange[]) => Promise<DurableOutcome>; syncPond: (action: 'create' | 'update' | 'delete', pond: Pond) => Promise<DurableOutcome> | void; syncPhysicalPond?: (action: 'create' | 'update' | 'delete', pond: PhysicalPond) => Promise<DurableOutcome> | void; syncSampling: (action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => Promise<DurableOutcome> | void; syncMortality?: (action: 'create' | 'update' | 'delete', pondId: string, record: MortalityRecord, recordId?: string) => Promise<DurableOutcome> | void; syncHarvestRecord: (action: 'create' | 'update' | 'delete', harvestRecord: HarvestRecord, previousRecord?: HarvestRecord, operationId?: string) => Promise<DurableOutcome> | void; syncCycle?: (action: 'create' | 'update' | 'delete', cycle: FarmCycle) => Promise<DurableOutcome> | void; };
+  firebaseSync?: { syncHarvestOperation?: (operation: HarvestOperation<HarvestRecord>) => Promise<DurableOutcome>; syncLifecycleChanges?: (changes: LifecycleChange[]) => Promise<DurableOutcome>; syncPond: (action: 'create' | 'update' | 'delete', pond: Pond) => Promise<DurableOutcome> | void; syncPhysicalPond?: (action: 'create' | 'update' | 'delete', pond: PhysicalPond) => Promise<DurableOutcome> | void; syncSampling: (action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => Promise<DurableOutcome> | void; syncMortality?: (action: 'create' | 'update' | 'delete', pondId: string, record: MortalityRecord, recordId?: string) => Promise<DurableOutcome> | void; syncHarvestRecord: (action: 'create' | 'update' | 'delete', harvestRecord: HarvestRecord, previousRecord?: HarvestRecord, operationId?: string) => Promise<DurableOutcome> | void; syncCycle?: (action: 'create' | 'update' | 'delete', cycle: FarmCycle) => Promise<DurableOutcome> | void; };
   
   addFarmCycle: (cycle?: Partial<FarmCycle>) => Promise<FarmCycle>;
   updateFarmCycle: (cycleId: string, updates: Partial<FarmCycle>) => Promise<void>;
@@ -296,6 +300,7 @@ interface PondStore {
   updatePhysicalPond: (pondId: string, updates: Partial<PhysicalPond>) => Promise<void>;
   deletePhysicalPond: (pondId: string) => Promise<void>;
   addPond: (pond: Pond, options?: { cycle?: FarmCycle }) => Promise<boolean>; updatePond: (pondId: string, updates: Partial<Pond>) => Promise<void>; deletePond: (pondId: string) => Promise<void>; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => Promise<void>; addSampling: (pondId: string, sampling: Sampling) => Promise<DurableOutcome>; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void; addMortalityRecord: (pondId: string, record: MortalityRecord) => Promise<DurableOutcome>; updateMortalityRecord: (pondId: string, recordId: string, updates: Partial<MortalityRecord>) => void; deleteMortalityRecord: (pondId: string, recordId: string) => void;
+  saveHarvestOperation: (operation: HarvestOperation<HarvestRecord>) => Promise<DurableOutcome>;
   addHarvestRecord: (record: HarvestRecord, operationId?: string) => Promise<DurableOutcome>; updateHarvestRecord: (harvestId: string, record: HarvestRecord, operationId?: string) => Promise<DurableOutcome>; removeHarvestRecord: (harvestId: string, operationId?: string) => Promise<DurableOutcome>; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
   
   addWaterQuality: (pondId: string, record: { observedAtByField?: Record<string, string>; ammoniaBasis?: string; nitriteBasis?: string; phMorning: string; phEvening: string; doMorning: string; doEvening: string; transparency: string; salinity: string; temperature?: string; waterAppearance?: string; waterDepthCm?: string; alkalinity?: string; waterQualityRecordedByName?: string; ammonia?: string; operationalNotes?: string; weatherEvent?: Sampling['weatherEvent']; waterExchangePercent?: string; sludgeLoad?: Sampling['sludgeLoad']; surfaceScum?: boolean | null; shrimpBehaviour?: Sampling['shrimpBehaviour']; }) => void;
@@ -628,6 +633,74 @@ export const usePondStore = create<PondStore>()(
             : state.physicalPonds,
         }));
 
+      },
+
+      saveHarvestOperation: async (draft) => {
+        const before = get();
+        const scope = { companyId: before.currentCompanyId, userId: before.farmCacheUserId };
+        const reject = (error: string): DurableOutcome => ({ success: false, status: 'rejected', error });
+        if (!before.firebaseSync?.syncHarvestOperation || !scope.companyId || !scope.userId) return reject('Sync provider, authentication, or scope is unavailable.');
+        let operation: HarvestOperation<HarvestRecord>;
+        try {
+          if (!draft.records.length) throw new Error('No ponds specified for harvest.');
+          if (new Set(draft.records.map(record => record.id)).size !== draft.records.length || draft.records.some(record => record.id === draft.previousRecord?.id)) throw new Error('Invalid harvest record IDs. Reopen the harvest form.');
+          groupHarvestEntriesByDate(draft.records.flatMap(record => record.ponds.map(pond => ({ ...pond, date: record.date }))), getFarmDateKey(new Date(), before.currentTimeZone));
+          const source = draft.previousRecord;
+          if (source && !draft.records.every(record => isHarvestPayloadMatch(before.harvestRecords.find(item => item.id === record.id), record)) && !isHarvestPayloadMatch(before.harvestRecords.find(record => record.id === source.id), source)) throw new Error('The original harvest has changed. Reopen the harvest form.');
+          const records = draft.records.map(record => {
+            if (!record.ponds.length) throw new Error('No ponds specified for harvest.');
+            if (record.ponds.some(line => !line.biomass || !line.size || !line.price || getInvalidHarvestDraftLine(line))) throw new Error('Enter a positive biomass, size, and price for every harvest grade.');
+            const cached = before.harvestRecords.find(item => item.id === record.id);
+            if (cached) {
+              if (!isHarvestPayloadMatch(cached, record)) throw new Error('This harvest conflicts with an earlier save.');
+              return cached;
+            }
+            const cycle = before.cycles.find(cycle => cycle.id === record.cycleId);
+            if (cycle && !isFarmCycleOpen(cycle)) throw new Error('This production cycle is closed.');
+            return { ...record, ponds: record.ponds.map(line => {
+              const pond = before.ponds.find(pond => pond.id === line.pondId);
+              if (!pond || pond.cycleStatus === 'ended' || ((line.cycleId || record.cycleId) && (line.cycleId || record.cycleId) !== pond.cycleId)
+                || (line.pondCycleId && line.pondCycleId !== (pond.pondCycleId || pond.id))) throw new Error('A pond has moved to another cycle. Reopen the harvest form.');
+              if (!getHarvestDateSampling(pond, record.date)) throw new Error(`${pond.pondName} requires a positive-MBW sampling on ${record.date}.`);
+              const old = source?.ponds.find(item => item.pondId === line.pondId);
+              const partialHarvestNumber = line.harvestType === 'partial'
+                ? line.partialHarvestNumber || (old?.harvestType === 'partial' ? old.partialHarvestNumber : undefined) || getNextPartialHarvestNumber(pond) : undefined;
+              return withHarvestReference(pond, { ...line, partialHarvestNumber }, record.date, before.currentTimeZone);
+            }) };
+          });
+          if (new Set(records.map(record => record.cycleId).filter(Boolean)).size > 1) throw new Error('All ponds must belong to the same production cycle.');
+          operation = createHarvestOperation(draft.id, records, source);
+        } catch (error) { return reject(error instanceof Error ? error.message : 'Invalid harvest.'); }
+        const change = { id: operation.id, type: 'harvest' as const, action: operation.previousRecord ? 'update' as const : 'create' as const, data: operation, timestamp: Date.now() };
+        const children = expandHarvestOperationChange(change);
+        set(state => ({ ponds: applyPendingPondChanges(state.ponds, [change]),
+          harvestRecords: applyPendingHarvestChanges(state.harvestRecords, [change]) }));
+        const rollback = () => {
+          if (!isSameOfflineFarmIdentity(get(), scope)) return;
+          const ids = new Set(operation.records.map(record => record.id));
+          set(state => ({
+            harvestRecords: [...(operation.previousRecord ? [operation.previousRecord] : []),
+              ...state.harvestRecords.filter(record => !ids.has(record.id) && record.id !== operation.previousRecord?.id)],
+            ponds: state.ponds.map(pond => {
+              const child = children.find(item => item.data.ponds.some((line: any) => line.pondId === pond.id)
+                || (item as any).previousData?.ponds.some((line: any) => line.pondId === pond.id));
+              if (!child) return pond;
+              const previous = before.ponds.find(item => item.id === pond.id);
+              const oldRecord = (child as any).previousData;
+              const next = child.data.ponds.find((line: any) => line.pondId === pond.id);
+              if (child.action === 'delete') return rollbackPendingHarvestDelete(pond, previous, next, child.data, child.id);
+              if (child.action === 'update') return rollbackPendingHarvestEdit(pond, previous,
+                oldRecord?.ponds.find((line: any) => line.pondId === pond.id), next, child.data, oldRecord, child.data.id, child.id);
+              return rollbackPendingHarvestCreate(pond, previous, next, child.data, child.id);
+            }),
+          }));
+        };
+        try {
+          const outcome = await before.firebaseSync.syncHarvestOperation(operation);
+          if (!outcome?.success) { rollback(); return reject(outcome?.error || 'Failed to save harvest locally.'); }
+          if (!isSameOfflineFarmIdentity(get(), scope)) return reject('Saved to the previous account queue. Return to that account to continue.');
+          return outcome;
+        } catch (error) { rollback(); return reject(error instanceof Error ? error.message : 'Failed to save harvest locally.'); }
       },
 
       addHarvestRecord: async (record, operationId?: string) => {

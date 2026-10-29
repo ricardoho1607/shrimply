@@ -1,3 +1,4 @@
+import { expandHarvestOperationChange, harvestChangePondIds, isHarvestOperation } from './harvestOperation';
 import { reconcileDailyFeedStock, type DailyFeedIntent, type DailyFeedStock } from './dailyFeedTransaction';
 import { removeAdditiveUsage } from './additiveUsageRemoval';
 import { toCacheSafeValue } from './farmCache.ts';
@@ -494,30 +495,36 @@ export const backfillCommittedHarvestReceipts = <T extends Record<string, any>>(
   change: PendingFarmChange,
   committedRecord: any,
   previousRecord?: any,
-): T[] => ponds.map((pond) => {
-  const nextLine = committedRecord?.ponds?.find((line: any) => line.pondId === pond.id);
-  const oldLine = previousRecord?.ponds?.find((line: any) => line.pondId === pond.id);
-  if (!nextLine && !oldLine) return pond;
-  const applied = change.action !== 'delete' && Boolean(nextLine);
-  const appliedIds: string[] = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
-  const operationIds: string[] = Array.isArray(pond.appliedHarvestOperationIds) ? pond.appliedHarvestOperationIds : [];
-  const reversedIds: string[] = Array.isArray(pond.reversedHarvestOperationIds) ? pond.reversedHarvestOperationIds : [];
-  const affectedId = applied ? committedRecord.id : previousRecord?.id || committedRecord?.id;
-  const baseIds = change.action === 'update' && previousRecord?.id !== committedRecord?.id
-    ? appliedIds.filter((id) => id !== previousRecord?.id)
-    : appliedIds;
-  const ids = applied
-    ? (baseIds.includes(affectedId) ? baseIds : [...baseIds, affectedId])
-    : appliedIds.filter((id) => id !== affectedId);
-  return {
-    ...pond,
-    appliedHarvestOperationId: applied ? (pond.appliedHarvestOperationId || change.id) : pond.appliedHarvestOperationId,
-    appliedHarvestOperationIds: applied ? [...new Set([...operationIds, change.id])] : operationIds,
-    reversedHarvestOperationIds: applied ? reversedIds : [...new Set([...reversedIds, change.id])],
-    appliedHarvestIds: ids,
-    lastAppliedHarvestId: applied ? affectedId : (pond.lastAppliedHarvestId === affectedId ? (ids[ids.length - 1] || null) : pond.lastAppliedHarvestId),
-  };
-});
+): T[] => {
+  if (isHarvestOperation(change.data)) {
+    return expandHarvestOperationChange(change).reduce((current, item) =>
+      backfillCommittedHarvestReceipts(current, item, item.data, item.previousData), ponds);
+  }
+  return ponds.map((pond) => {
+    const nextLine = committedRecord?.ponds?.find((line: any) => line.pondId === pond.id);
+    const oldLine = previousRecord?.ponds?.find((line: any) => line.pondId === pond.id);
+    if (!nextLine && !oldLine) return pond;
+    const applied = change.action !== 'delete' && Boolean(nextLine);
+    const appliedIds: string[] = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
+    const operationIds: string[] = Array.isArray(pond.appliedHarvestOperationIds) ? pond.appliedHarvestOperationIds : [];
+    const reversedIds: string[] = Array.isArray(pond.reversedHarvestOperationIds) ? pond.reversedHarvestOperationIds : [];
+    const affectedId = applied ? committedRecord.id : previousRecord?.id || committedRecord?.id;
+    const baseIds = change.action === 'update' && previousRecord?.id !== committedRecord?.id
+      ? appliedIds.filter((id) => id !== previousRecord?.id)
+      : appliedIds;
+    const ids = applied
+      ? (baseIds.includes(affectedId) ? baseIds : [...baseIds, affectedId])
+      : appliedIds.filter((id) => id !== affectedId);
+    return {
+      ...pond,
+      appliedHarvestOperationId: applied ? (pond.appliedHarvestOperationId || change.id) : pond.appliedHarvestOperationId,
+      appliedHarvestOperationIds: applied ? [...new Set([...operationIds, change.id])] : operationIds,
+      reversedHarvestOperationIds: applied ? reversedIds : [...new Set([...reversedIds, change.id])],
+      appliedHarvestIds: ids,
+      lastAppliedHarvestId: applied ? affectedId : (pond.lastAppliedHarvestId === affectedId ? (ids[ids.length - 1] || null) : pond.lastAppliedHarvestId),
+    };
+  });
+};
 
 export const reconcileCommittedHarvestPonds = <T extends Record<string, any>>(
   ponds: T[],
@@ -553,10 +560,7 @@ export const sortPendingChanges = (changes: PendingFarmChange[]): PendingFarmCha
 
   for (const item of adjusted) {
     if (item.change.type === 'harvest') {
-      const harvestRecord = item.change.data;
-      const pondIds = new Set(
-        (harvestRecord?.ponds || []).map((p: any) => p.pondId).filter(Boolean)
-      );
+      const pondIds = new Set(harvestChangePondIds(item.change));
       if (item.change.pondId) pondIds.add(item.change.pondId);
 
       for (const other of adjusted) {
@@ -611,7 +615,7 @@ export const applyPendingHarvestChanges = <T extends { id: string }>(
   pendingChanges: PendingFarmChange[],
 ): T[] => {
   const merged = new Map(serverRecords.map((record) => [record.id, record]));
-  pendingChanges
+  pendingChanges.flatMap(expandHarvestOperationChange)
     .filter((change) => change.type === 'harvest')
     .slice()
     .sort(comparePendingChanges)
@@ -635,7 +639,7 @@ export const applyPendingPondChanges = (
   changes: PendingFarmChange[],
 ): any[] => {
   let ponds = [...serverPonds];
-  sortPendingChanges(changes).forEach((change) => {
+  sortPendingChanges(changes.flatMap(expandHarvestOperationChange)).forEach((change) => {
     if (change.type === 'pond') {
       const pond = change.data;
       if (!pond?.id) return;
@@ -784,7 +788,7 @@ export const replayPendingFarmState = (
   let cycles = [...state.cycles];
   let harvestRecords = [...state.harvestRecords];
 
-  sortPendingChanges(changes).forEach((change) => {
+  sortPendingChanges(changes.flatMap(expandHarvestOperationChange)).forEach((change) => {
     if (change.type === 'pond') {
       const pond = change.data;
       if (!pond?.id) return;
