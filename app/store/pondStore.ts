@@ -497,7 +497,7 @@ export const usePondStore = create<PondStore>()(
           getPhysicalPondKey(existingPond.pondName) === pondKey
         );
 
-        if (activeDuplicate) {
+        if (activeDuplicate || physicalPond.status === 'active' || physicalPond.activePondId) {
           console.warn(`Skipped starting ${pond.pondName}: this physical pond already has an active cycle.`);
           return false;
         }
@@ -512,6 +512,9 @@ export const usePondStore = create<PondStore>()(
             plannedStartDate: pond.docStart,
           };
 
+        }
+        if (Array.isArray(cycle.plannedPondIds) && !cycle.plannedPondIds.includes(physicalPond.id)) {
+          return false;
         }
         const newPond = normalizePondLifecycle({
           ...pond,

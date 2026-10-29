@@ -21,6 +21,9 @@ import {
 } from '../../../shared/enterpriseBlocks';
 import {
   getEnterpriseCycleAvailableBlocks,
+  getEnterpriseCycleAvailablePonds,
+  getEnterpriseCycleUnstartedPonds,
+  getEnterpriseBlockStockingCycle,
   getEnterpriseCycleBlockIds,
   getEnterpriseCyclePonds,
   isEnterpriseCycleOpen,
@@ -163,22 +166,22 @@ export default function EnterpriseCycleDashboard({
     .map((pond) => pond.pondName.trim().toLowerCase())), [ponds]);
   const selectedStatus = selectedPond ? statusByPond.get(selectedPond.id) : undefined;
   const cycleBlockOptions = useMemo(
-    () => getEnterpriseCycleAvailableBlocks(
-      sortedBlocks,
-      openCycles.filter((cycle) => cycle.id !== editingCycle?.id),
-      ponds,
-    ),
-    [editingCycle?.id, openCycles, ponds, sortedBlocks],
+    () => {
+      const available = getEnterpriseCycleAvailableBlocks(sortedBlocks, openCycles, ponds, physicalPonds);
+      const currentBlockIds = editingCycle ? getEnterpriseCycleBlockIds(editingCycle, ponds) : [];
+      return sortedBlocks.filter((block) => currentBlockIds.includes(block.id) || available.some((item) => item.id === block.id));
+    },
+    [editingCycle, openCycles, physicalPonds, ponds, sortedBlocks],
   );
   const openCycleByBlockId = useMemo(() => {
     const result = new Map<string, FarmCycle>();
-    openCycles.forEach((cycle) => {
-      getEnterpriseCycleBlockIds(cycle, ponds).forEach((blockId) => {
-        if (!result.has(blockId)) result.set(blockId, cycle);
-      });
+    sortedBlocks.forEach((block) => {
+      if (getEnterpriseCycleAvailablePonds(block.id, physicalPonds, openCycles, ponds).length > 0) return;
+      const cycle = getEnterpriseBlockStockingCycle(block.id, openCycles, physicalPonds, ponds);
+      if (cycle) result.set(block.id, cycle);
     });
     return result;
-  }, [openCycles, ponds]);
+  }, [openCycles, physicalPonds, ponds, sortedBlocks]);
   const inactiveBlockRows = useMemo(() => sortedBlocks.map((block) => ({
     block,
     inactivePonds: physicalPonds
@@ -187,11 +190,13 @@ export default function EnterpriseCycleDashboard({
   })), [activePhysicalPondIds, activePondNames, physicalPonds, sortedBlocks]);
   const lockedEditingBlockIds = useMemo(() => new Set(
     editingCycle
-      ? getEnterpriseCyclePonds(editingCycle.id, ponds)
+      ? [...getEnterpriseCyclePonds(editingCycle.id, ponds),
+        ...(Array.isArray(editingCycle.plannedPondIds)
+          ? physicalPonds.filter((pond) => editingCycle.plannedPondIds?.includes(pond.id)) : [])]
         .map((pond) => pond.blockId)
         .filter((blockId): blockId is string => Boolean(blockId))
       : [],
-  ), [editingCycle, ponds]);
+  ), [editingCycle, physicalPonds, ponds]);
   const editingCycleSummary = useMemo(
     () => editingCycle ? summarizeEnterpriseCycle(editingCycle, ponds, physicalPonds) : null,
     [editingCycle, physicalPonds, ponds],
@@ -204,9 +209,11 @@ export default function EnterpriseCycleDashboard({
     return { cycle, visiblePonds };
   }).filter((row) => pondFilter !== 'inactive' && row.visiblePonds.length > 0), [pondFilter, ponds, sortedCycles]);
   const selectedSetupBlock = sortedBlocks.find((block) => selectedBlockIds.includes(block.id));
-  const setupPonds = useMemo(() => physicalPonds
+  const setupPonds = useMemo(() => (stockingCycle
+    ? getEnterpriseCycleUnstartedPonds(stockingCycle, physicalPonds, ponds)
+    : getEnterpriseCycleAvailablePonds(selectedSetupBlock?.id || '', physicalPonds, openCycles, ponds))
     .filter((pond) => pond.blockId === selectedSetupBlock?.id && pond.status !== 'active' && !pond.activePondId && !activePhysicalPondIds.has(pond.id) && !activePondNames.has(pond.pondName.trim().toLowerCase()))
-    .sort((first, second) => first.pondName.localeCompare(second.pondName, undefined, { numeric: true })), [activePhysicalPondIds, activePondNames, physicalPonds, selectedSetupBlock?.id]);
+    .sort((first, second) => first.pondName.localeCompare(second.pondName, undefined, { numeric: true })), [activePhysicalPondIds, activePondNames, physicalPonds, selectedSetupBlock?.id, openCycles, ponds, stockingCycle]);
   const completedSetupCount = countCompletedEnterprisePondSetups(
     setupPonds.map((pond) => pond.id),
     pondSetupValues,
@@ -246,7 +253,9 @@ export default function EnterpriseCycleDashboard({
     }
     const existingCycle = openCycleByBlockId.get(blockId) || null;
     const defaultStockingDate = getFarmDateKey(new Date(), timeZone);
-    const blockPonds = physicalPonds
+    const blockPonds = (existingCycle
+      ? getEnterpriseCycleUnstartedPonds(existingCycle, physicalPonds, ponds)
+      : getEnterpriseCycleAvailablePonds(blockId, physicalPonds, openCycles, ponds))
       .filter((pond) => pond.blockId === blockId && pond.status !== 'active' && !pond.activePondId && !activePhysicalPondIds.has(pond.id) && !activePondNames.has(pond.pondName.trim().toLowerCase()))
       .sort((first, second) => first.pondName.localeCompare(second.pondName, undefined, { numeric: true }));
     setEditingCycle(null);

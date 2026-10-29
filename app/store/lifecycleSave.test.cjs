@@ -78,3 +78,23 @@ test('a newly named cycle and its first pond are accepted or rejected together',
   assert.equal(writes[0][0].data, cycle);
   assert.equal(store.getState().cycles.length, 0);
 });
+
+test('explicit cycle membership is enforced even when the cycle has a block', async () => {
+  for (const plannedPondIds of [[], ['other-physical']]) {
+    const { store, writes } = fixture();
+    store.setState({ cycles: [{ id: 'cycle', cycleName: 'Subgroup', status: 'active', blockIds: ['C'], plannedPondIds }] });
+    assert.equal(await store.getState().addPond({ ...pond, cycleId: 'cycle' }), false);
+    assert.equal(writes.length, 0);
+  }
+  const { store, writes } = fixture();
+  store.setState({ cycles: [{ id: 'cycle', cycleName: 'Subgroup', status: 'active', blockIds: ['C'], plannedPondIds: ['physical'] }] });
+  assert.equal(await store.getState().addPond({ ...pond, cycleId: 'cycle' }), true);
+  assert.equal(writes.length, 1);
+});
+
+test('an active physical pointer blocks starts even before its run reaches the local cache', async () => {
+  const { store, writes } = fixture();
+  store.setState({ physicalPonds: [{ ...physical, activePondId: 'other-run' }] });
+  assert.equal(await store.getState().addPond(pond), false);
+  assert.equal(writes.length, 0);
+});

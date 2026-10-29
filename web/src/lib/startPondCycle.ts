@@ -139,7 +139,7 @@ export async function startPondCycle({
   if (assignedBlockIds.length > 0 && (!pond.blockId || !assignedBlockIds.includes(pond.blockId))) {
     throw new StartPondCycleError('blockMismatch');
   }
-  if (!isCreatingNewCycle && !activeCycle?.blockIds?.length && activeCycle?.plannedPondIds?.length && !activeCycle.plannedPondIds.includes(physicalPond.id)) {
+  if (!isCreatingNewCycle && Array.isArray(activeCycle?.plannedPondIds) && !activeCycle.plannedPondIds.includes(physicalPond.id)) {
     throw new StartPondCycleError('cycleMismatch');
   }
 
@@ -192,6 +192,9 @@ export async function startPondCycle({
       ? await batch.get(doc(db, 'companies', companyId, 'cycles', activeCycle.id)) : null;
     if (existingCycle && (!existingCycle.exists() || existingCycle.data().status === 'closed')) throw new StartPondCycleError('cycleMismatch');
     const currentCycle = existingCycle?.data();
+    if (Array.isArray(currentCycle?.plannedPondIds) && !currentCycle.plannedPondIds.includes(physicalPond.id)) {
+      throw new StartPondCycleError('cycleMismatch');
+    }
   
   let targetCycleId = activeCycle?.id || '';
   let targetCycleName = activeCycle?.cycleName || '';

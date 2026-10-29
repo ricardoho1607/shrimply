@@ -19,16 +19,19 @@ export interface EnterpriseCycleRecord {
 
 export interface EnterpriseCyclePondRecord {
   id: string;
+  pondName?: string;
   blockId?: string | null;
   cycleId?: string | null;
   cycleStatus?: 'active' | 'ended';
   previousCyclePondId?: string | null;
+  physicalPondId?: string | null;
   docStart?: string | null;
   cycleStartedAt?: string | null;
 }
 
 export interface EnterprisePhysicalPondRecord {
   id: string;
+  pondName?: string;
   blockId?: string | null;
   status?: 'idle' | 'active';
   activePondId?: string | null;
@@ -118,23 +121,66 @@ export const getEnterpriseCyclePlannedPonds = <T extends EnterprisePhysicalPondR
   ponds: EnterpriseCyclePondRecord[] = [],
 ): T[] => {
   const cycleBlockIds = new Set(getEnterpriseCycleBlockIds(cycle, ponds));
+  if (Array.isArray(cycle.plannedPondIds)) {
+    const plannedPondIds = new Set(cycle.plannedPondIds);
+    return physicalPonds.filter((pond) => plannedPondIds.has(pond.id)
+      && (cycleBlockIds.size === 0 || Boolean(pond.blockId && cycleBlockIds.has(pond.blockId))));
+  }
   if (cycleBlockIds.size > 0) {
     return physicalPonds.filter((pond) => Boolean(pond.blockId && cycleBlockIds.has(pond.blockId)));
   }
 
-  const plannedPondIds = new Set(cycle.plannedPondIds || []);
-  if (plannedPondIds.size === 0) return [];
-  return physicalPonds.filter((pond) => (
-    plannedPondIds.has(pond.id)
-    && (cycleBlockIds.size === 0 || Boolean(pond.blockId && cycleBlockIds.has(pond.blockId)))
-  ));
+  return [];
+};
+
+const isRunForPhysicalPond = (
+  run: EnterpriseCyclePondRecord,
+  pond: EnterprisePhysicalPondRecord,
+): boolean => run.physicalPondId === pond.id
+  || run.previousCyclePondId === pond.id
+  || pond.activePondId === run.id
+  || Boolean(run.pondName && pond.pondName
+    && run.pondName.trim().toLowerCase() === pond.pondName.trim().toLowerCase()
+    && (run.blockId || null) === (pond.blockId || null));
+
+const isPhysicalPondIdle = (
+  pond: EnterprisePhysicalPondRecord,
+  ponds: EnterpriseCyclePondRecord[],
+): boolean => pond.status !== 'active' && !pond.activePondId
+  && !ponds.some((run) => run.cycleStatus !== 'ended' && isRunForPhysicalPond(run, pond));
+
+// A completed run is history, not a reservation for another run in the same cycle.
+export const getEnterpriseCycleUnstartedPonds = <T extends EnterprisePhysicalPondRecord>(
+  cycle: EnterpriseCycleRecord,
+  physicalPonds: T[],
+  ponds: EnterpriseCyclePondRecord[] = [],
+): T[] => getEnterpriseCyclePlannedPonds(cycle, physicalPonds, ponds).filter((pond) => (
+  isPhysicalPondIdle(pond, ponds)
+  && !ponds.some((run) => run.cycleId === cycle.id && isRunForPhysicalPond(run, pond))
+));
+
+export const getEnterpriseBlockStockingCycle = <T extends EnterpriseCycleRecord>(
+  blockId: string,
+  cycles: T[],
+  physicalPonds: EnterprisePhysicalPondRecord[],
+  ponds: EnterpriseCyclePondRecord[] = [],
+): T | undefined => {
+  const candidates = cycles.filter((cycle) => isEnterpriseCycleOpen(cycle)
+    && getEnterpriseCycleUnstartedPonds(cycle, physicalPonds, ponds).some((pond) => pond.blockId === blockId));
+  // Never choose an arbitrary cycle when legacy plans overlap.
+  return candidates.length === 1 ? candidates[0] : undefined;
 };
 
 export const getEnterpriseCycleAvailableBlocks = <T extends { id: string }>(
   blocks: T[],
   openCycles: EnterpriseCycleRecord[],
   ponds: EnterpriseCyclePondRecord[] = [],
+  physicalPonds?: EnterprisePhysicalPondRecord[],
 ): T[] => {
+  if (physicalPonds) {
+    const available = getEnterpriseUnassignedInactivePonds(physicalPonds, openCycles, ponds);
+    return blocks.filter((block) => available.some((pond) => pond.blockId === block.id));
+  }
   const reservedBlockIds = new Set(openCycles.flatMap((cycle) => getEnterpriseCycleBlockIds(cycle, ponds)));
   return blocks.filter((block) => !reservedBlockIds.has(block.id));
 };
@@ -144,16 +190,15 @@ export const getEnterpriseUnassignedInactivePonds = <T extends EnterprisePhysica
   cycles: EnterpriseCycleRecord[],
   ponds: EnterpriseCyclePondRecord[] = [],
 ): T[] => {
-  const reservedBlockIds = new Set(
+  const reservedPondIds = new Set(
     cycles
       .filter(isEnterpriseCycleOpen)
-      .flatMap((cycle) => getEnterpriseCycleBlockIds(cycle, ponds)),
+      .flatMap((cycle) => getEnterpriseCycleUnstartedPonds(cycle, physicalPonds, ponds).map((pond) => pond.id)),
   );
 
   return physicalPonds.filter((pond) => (
-    pond.status !== 'active'
-    && !pond.activePondId
-    && (!pond.blockId || !reservedBlockIds.has(pond.blockId))
+    isPhysicalPondIdle(pond, ponds)
+    && !reservedPondIds.has(pond.id)
   ));
 };
 
@@ -161,17 +206,10 @@ export const getEnterpriseCycleAvailablePonds = <T extends EnterprisePhysicalPon
   blockId: string,
   physicalPonds: T[],
   openCycles: EnterpriseCycleRecord[],
+  ponds: EnterpriseCyclePondRecord[] = [],
 ): T[] => {
-  const reservedPondIds = new Set(
-    openCycles.flatMap((cycle) => cycle.plannedPondIds || []),
-  );
-
-  return physicalPonds.filter((pond) => (
-    pond.blockId === blockId
-    && pond.status !== 'active'
-    && !pond.activePondId
-    && !reservedPondIds.has(pond.id)
-  ));
+  return getEnterpriseUnassignedInactivePonds(physicalPonds, openCycles, ponds)
+    .filter((pond) => pond.blockId === blockId);
 };
 
 export const summarizeEnterpriseCycle = (

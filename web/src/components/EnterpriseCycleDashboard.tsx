@@ -22,7 +22,7 @@ import {
   Waves,
   X,
 } from 'lucide-react';
-import { addDoc, collection, doc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { addDoc, collection, doc, serverTimestamp, updateDoc, writeBatch, runTransaction } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
@@ -44,6 +44,9 @@ import {
 } from '../../../shared/enterpriseBlocks';
 import {
   getEnterpriseCycleAvailableBlocks,
+  getEnterpriseCycleAvailablePonds,
+  getEnterpriseCycleUnstartedPonds,
+  getEnterpriseBlockStockingCycle,
   getEnterpriseCycleBlockIds,
   getEnterpriseCyclePonds,
   isEnterpriseCycleOpen,
@@ -208,22 +211,22 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
     .map((pond) => pond.pondName.trim().toLowerCase())), [ponds]);
   const selectedStatus = selectedPond ? statusByPond.get(selectedPond.id) : undefined;
   const cycleBlockOptions = useMemo(
-    () => getEnterpriseCycleAvailableBlocks(
-      sortedBlocks,
-      openCycles.filter((cycle) => cycle.id !== editingCycle?.id),
-      ponds,
-    ),
-    [editingCycle?.id, openCycles, ponds, sortedBlocks],
+    () => {
+      const available = getEnterpriseCycleAvailableBlocks(sortedBlocks, openCycles, ponds, physicalPonds);
+      const currentBlockIds = editingCycle ? getEnterpriseCycleBlockIds(editingCycle, ponds) : [];
+      return sortedBlocks.filter((block) => currentBlockIds.includes(block.id) || available.some((item) => item.id === block.id));
+    },
+    [editingCycle, openCycles, physicalPonds, ponds, sortedBlocks],
   );
   const openCycleByBlockId = useMemo(() => {
     const result = new Map<string, EnterpriseCycleRecord>();
-    openCycles.forEach((cycle) => {
-      getEnterpriseCycleBlockIds(cycle, ponds).forEach((blockId) => {
-        if (!result.has(blockId)) result.set(blockId, cycle);
-      });
+    sortedBlocks.forEach((block) => {
+      if (getEnterpriseCycleAvailablePonds(block.id, physicalPonds, openCycles, ponds).length > 0) return;
+      const cycle = getEnterpriseBlockStockingCycle(block.id, openCycles, physicalPonds, ponds);
+      if (cycle) result.set(block.id, cycle);
     });
     return result;
-  }, [openCycles, ponds]);
+  }, [openCycles, physicalPonds, ponds, sortedBlocks]);
   const inactiveBlockRows = useMemo(() => sortedBlocks.map((block) => ({
     block,
     inactivePonds: physicalPonds
@@ -232,11 +235,13 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
   })).filter((row) => row.inactivePonds.length > 0), [activePhysicalPondIds, activePondNames, physicalPonds, sortedBlocks]);
   const lockedEditingBlockIds = useMemo(() => new Set(
     editingCycle
-      ? getEnterpriseCyclePonds(editingCycle.id, ponds)
+      ? [...getEnterpriseCyclePonds(editingCycle.id, ponds),
+        ...(Array.isArray(editingCycle.plannedPondIds)
+          ? physicalPonds.filter((pond) => editingCycle.plannedPondIds?.includes(pond.id)) : [])]
         .map((pond) => pond.blockId)
         .filter((blockId): blockId is string => Boolean(blockId))
       : [],
-  ), [editingCycle, ponds]);
+  ), [editingCycle, physicalPonds, ponds]);
   const filteredCycleRows = useMemo(() => sortedCycles.map((cycle) => {
     const cyclePonds = getEnterpriseCyclePonds(cycle.id, ponds);
     const visiblePonds = cyclePonds.filter((pond) => pondFilter === 'ended'
@@ -245,9 +250,11 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
     return { cycle, visiblePonds };
   }).filter((row) => pondFilter !== 'inactive' && row.visiblePonds.length > 0), [pondFilter, ponds, sortedCycles]);
   const selectedSetupBlock = sortedBlocks.find((block) => selectedBlockIds.includes(block.id));
-  const setupPonds = useMemo(() => physicalPonds
+  const setupPonds = useMemo(() => (stockingCycle
+    ? getEnterpriseCycleUnstartedPonds(stockingCycle, physicalPonds, ponds)
+    : getEnterpriseCycleAvailablePonds(selectedSetupBlock?.id || '', physicalPonds, openCycles, ponds))
     .filter((pond) => pond.blockId === selectedSetupBlock?.id && pond.status !== 'active' && !pond.activePondId && !activePhysicalPondIds.has(pond.id) && !activePondNames.has(pond.pondName.trim().toLowerCase()))
-    .sort((first, second) => first.pondName.localeCompare(second.pondName, undefined, { numeric: true })), [activePhysicalPondIds, activePondNames, physicalPonds, selectedSetupBlock?.id]);
+    .sort((first, second) => first.pondName.localeCompare(second.pondName, undefined, { numeric: true })), [activePhysicalPondIds, activePondNames, physicalPonds, selectedSetupBlock?.id, openCycles, ponds, stockingCycle]);
   const completedSetupCount = countCompletedEnterprisePondSetups(setupPonds.map((pond) => pond.id), pondSetupValues, cycleStartMode);
 
   const resetCycleForm = () => {
@@ -285,7 +292,9 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
     }
     const existingCycle = openCycleByBlockId.get(blockId) || null;
     const defaultStockingDate = getFarmDateKey(new Date(), timeZone);
-    const blockPonds = physicalPonds
+    const blockPonds = (existingCycle
+      ? getEnterpriseCycleUnstartedPonds(existingCycle, physicalPonds, ponds)
+      : getEnterpriseCycleAvailablePonds(blockId, physicalPonds, openCycles, ponds))
       .filter((pond) => pond.blockId === blockId && pond.status !== 'active' && !pond.activePondId && !activePhysicalPondIds.has(pond.id) && !activePondNames.has(pond.pondName.trim().toLowerCase()))
       .sort((first, second) => first.pondName.localeCompare(second.pondName, undefined, { numeric: true }));
     setEditingCycle(null);
@@ -357,94 +366,105 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
         await updateDoc(doc(db, 'companies', company.id, 'cycles', editingCycle.id), cycleData);
       } else {
         if (!selectedSetupBlock || setupPonds.length === 0 || completedSetupCount !== setupPonds.length) return;
-        const stockingRange = getEnterpriseStockingDateRange([
-          stockingCycle?.stockingStartDate,
-          stockingCycle?.stockingEndDate,
-          ...setupPonds.map((pond) => pondSetupValues[pond.id].stockingDate),
-        ]);
-        const batch = writeBatch(db);
         const cycleRef = stockingCycle
           ? doc(db, 'companies', company.id, 'cycles', stockingCycle.id)
           : doc(collection(db, 'companies', company.id, 'cycles'));
-        batch.set(cycleRef, {
-          ...cycleData,
-          status: 'active',
-          plannedStartDate,
-          stockingStartDate: stockingRange.stockingStartDate,
-          stockingEndDate: stockingRange.stockingEndDate,
-          ...(!stockingCycle ? { createdAt: serverTimestamp(), createdBy: user.uid } : {}),
-        }, { merge: Boolean(stockingCycle) });
-        setupPonds.forEach((pond) => {
-          const value = pondSetupValues[pond.id];
-          const stockingDate = value.stockingDate;
-          const baselineDoc = differenceInFarmCalendarDays(baselineDate, stockingDate);
-          const density = parseEnterprisePondDensity(value.density);
-          const supplier = value.supplier.trim();
-          const baselineMbw = parseOptionalEnterprisePondNumber(value.baselineMbw);
-          const baselineEstimatedPopulation = parseOptionalEnterprisePondNumber(value.baselineEstimatedPopulation);
-          const baselineSurvivalRate = parseOptionalEnterprisePondNumber(value.baselineSurvivalRate);
-          const baselineCumulativeFeed = parseOptionalEnterprisePondNumber(value.baselineCumulativeFeed);
-          const pondRef = doc(collection(db, 'companies', company.id, 'ponds'));
-          batch.set(pondRef, {
-            pondName: pond.pondName,
-            pondArea: pond.pondArea,
-            blockId: selectedSetupBlock.id,
-            blockName: selectedSetupBlock.name,
-            density,
-            initialPopulation: pond.pondArea * density,
-            docStart: stockingDate,
-            supplier,
-            plSupplier: supplier,
-            initialWeight: 0.5,
-            samplings: cycleStartMode === 'midcycle' && baselineMbw ? [{
-              id: `baseline-${pondRef.id}`,
-              date: baselineDate,
-              mbw: baselineMbw,
-              mortality: 0,
-              feed: baselineCumulativeFeed ?? 0,
-              isBaselineEstimate: true,
-              source: 'midcycle_onboarding',
-              ...(baselineEstimatedPopulation === undefined ? {} : { estimatedPopulation: baselineEstimatedPopulation }),
-              ...(baselineSurvivalRate === undefined ? {} : { estimatedSurvivalRate: baselineSurvivalRate }),
-              ...(baselineCumulativeFeed === undefined ? {} : { cumulativeFeedToDate: baselineCumulativeFeed }),
+        await runTransaction(db, async (batch) => {
+          const snapshots = await Promise.all(setupPonds.map((pond) => batch.get(doc(db, 'companies', company.id, 'physicalPonds', pond.id))));
+          const cycleSnapshot = stockingCycle ? await batch.get(cycleRef) : null;
+          const currentCycle = cycleSnapshot?.data();
+          if (snapshots.some((snapshot, index) => !snapshot.exists()
+            || snapshot.data().status === 'active' || snapshot.data().activePondId
+            || snapshot.data().blockId !== selectedSetupBlock.id
+            || (Array.isArray(currentCycle?.plannedPondIds)
+              && !currentCycle.plannedPondIds.includes(setupPonds[index].id)))
+            || (cycleSnapshot && (!cycleSnapshot.exists() || !isEnterpriseCycleOpen(currentCycle as EnterpriseCycleRecord)))) {
+            throw new Error('The selected ponds or cycle are no longer available.');
+          }
+          const stockingRange = getEnterpriseStockingDateRange([
+            currentCycle?.stockingStartDate,
+            currentCycle?.stockingEndDate,
+            ...setupPonds.map((pond) => pondSetupValues[pond.id].stockingDate),
+          ]);
+          batch.set(cycleRef, {
+            ...cycleData,
+            status: 'active',
+            plannedStartDate,
+            stockingStartDate: stockingRange.stockingStartDate,
+            stockingEndDate: stockingRange.stockingEndDate,
+            ...(!stockingCycle ? { plannedPondIds: setupPonds.map((pond) => pond.id), createdAt: serverTimestamp(), createdBy: user.uid } : {}),
+          }, { merge: Boolean(stockingCycle) });
+          setupPonds.forEach((pond) => {
+            const value = pondSetupValues[pond.id];
+            const stockingDate = value.stockingDate;
+            const baselineDoc = differenceInFarmCalendarDays(baselineDate, stockingDate);
+            const density = parseEnterprisePondDensity(value.density);
+            const supplier = value.supplier.trim();
+            const baselineMbw = parseOptionalEnterprisePondNumber(value.baselineMbw);
+            const baselineEstimatedPopulation = parseOptionalEnterprisePondNumber(value.baselineEstimatedPopulation);
+            const baselineSurvivalRate = parseOptionalEnterprisePondNumber(value.baselineSurvivalRate);
+            const baselineCumulativeFeed = parseOptionalEnterprisePondNumber(value.baselineCumulativeFeed);
+            const pondRef = doc(collection(db, 'companies', company.id, 'ponds'));
+            batch.set(pondRef, {
+              pondName: pond.pondName,
+              pondArea: pond.pondArea,
+              blockId: selectedSetupBlock.id,
+              blockName: selectedSetupBlock.name,
+              density,
+              initialPopulation: pond.pondArea * density,
+              docStart: stockingDate,
+              supplier,
+              plSupplier: supplier,
+              initialWeight: 0.5,
+              samplings: cycleStartMode === 'midcycle' && baselineMbw ? [{
+                id: `baseline-${pondRef.id}`,
+                date: baselineDate,
+                mbw: baselineMbw,
+                mortality: 0,
+                feed: baselineCumulativeFeed ?? 0,
+                isBaselineEstimate: true,
+                source: 'midcycle_onboarding',
+                ...(baselineEstimatedPopulation === undefined ? {} : { estimatedPopulation: baselineEstimatedPopulation }),
+                ...(baselineSurvivalRate === undefined ? {} : { estimatedSurvivalRate: baselineSurvivalRate }),
+                ...(baselineCumulativeFeed === undefined ? {} : { cumulativeFeedToDate: baselineCumulativeFeed }),
+                cycleId: cycleRef.id,
+                cycleName: cycleName.trim(),
+                pondCycleId: pondRef.id,
+              }] : [],
+              mortalityRecords: [],
+              totalHarvestedBiomass: 0,
+              totalHarvestedPopulation: 0,
+              totalHarvestedFeed: 0,
+              physicalPondId: pond.id,
+              previousCyclePondId: pond.id,
               cycleId: cycleRef.id,
               cycleName: cycleName.trim(),
               pondCycleId: pondRef.id,
-            }] : [],
-            mortalityRecords: [],
-            totalHarvestedBiomass: 0,
-            totalHarvestedPopulation: 0,
-            totalHarvestedFeed: 0,
-            physicalPondId: pond.id,
-            previousCyclePondId: pond.id,
-            cycleId: cycleRef.id,
-            cycleName: cycleName.trim(),
-            pondCycleId: pondRef.id,
-            cycleStatus: 'active',
-            cycleStartedAt: stockingDate,
-            cycleStartMode,
-            ...(cycleStartMode === 'midcycle' && baselineMbw ? {
-              baselineDate,
-              baselineDoc,
-              baselineMbw,
-              ...(baselineEstimatedPopulation === undefined ? {} : { baselineEstimatedPopulation }),
-              ...(baselineSurvivalRate === undefined ? {} : { baselineSurvivalRate }),
-              ...(baselineCumulativeFeed === undefined ? {} : { baselineCumulativeFeed }),
-              baselineSource: 'user_midcycle_estimate',
-            } : {}),
-            createdAt: serverTimestamp(),
-            createdBy: user.uid,
-            updatedAt: serverTimestamp(),
-            updatedBy: user.uid,
-          });
-          batch.update(doc(db, 'companies', company.id, 'physicalPonds', pond.id), {
-            status: 'active',
-            activePondId: pondRef.id,
-            updatedAt: serverTimestamp(),
-            updatedBy: user.uid,
+              cycleStatus: 'active',
+              cycleStartedAt: stockingDate,
+              cycleStartMode,
+              ...(cycleStartMode === 'midcycle' && baselineMbw ? {
+                baselineDate,
+                baselineDoc,
+                baselineMbw,
+                ...(baselineEstimatedPopulation === undefined ? {} : { baselineEstimatedPopulation }),
+                ...(baselineSurvivalRate === undefined ? {} : { baselineSurvivalRate }),
+                ...(baselineCumulativeFeed === undefined ? {} : { baselineCumulativeFeed }),
+                baselineSource: 'user_midcycle_estimate',
+              } : {}),
+              createdAt: serverTimestamp(),
+              createdBy: user.uid,
+              updatedAt: serverTimestamp(),
+              updatedBy: user.uid,
+            });
+            batch.update(doc(db, 'companies', company.id, 'physicalPonds', pond.id), {
+              status: 'active',
+              activePondId: pondRef.id,
+              updatedAt: serverTimestamp(),
+              updatedBy: user.uid,
+            });
           });
         });
-        await batch.commit();
         setPondFilter('active');
       }
       resetCycleForm();

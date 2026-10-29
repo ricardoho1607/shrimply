@@ -3,12 +3,17 @@ import assert from 'node:assert/strict';
 import {
   getEnterpriseBlockCycles,
   getEnterpriseCycleAvailableBlocks,
+  getEnterpriseCycleAvailablePonds,
+  getEnterpriseCycleUnstartedPonds,
+  getEnterpriseBlockStockingCycle,
   getEnterpriseCycleBlockIds,
   getEnterpriseCyclePlannedPonds,
   getPreviousEnterpriseCycleForSameBlocks,
   getEnterpriseUnassignedInactivePonds,
   summarizeEnterpriseCycle,
   type EnterpriseCycleRecord,
+  type EnterpriseCyclePondRecord,
+  type EnterprisePhysicalPondRecord,
 } from './enterpriseCycles.ts';
 
 const cycles: EnterpriseCycleRecord[] = [
@@ -165,4 +170,68 @@ test('derives stocking progress for the cycle block', () => {
   assert.equal(summary.startedCount, 1);
   assert.equal(summary.plannedCount, 2);
   assert.equal(summary.stockingStartDate, '2026-08-03');
+});
+
+// Cahaya Samudera Bangka: C1-C4 still growing; C5-C8 harvested in the same old cycle.
+const blockC = { id: 'C' };
+const oldCycle: EnterpriseCycleRecord = { id: 'old', cycleName: 'Siklus 15', status: 'active', blockIds: ['C'] };
+const physicalC: EnterprisePhysicalPondRecord[] = Array.from({ length: 8 }, (_, index) => ({
+  id: `c${index + 1}`, pondName: `C${index + 1}`, blockId: 'C',
+  status: index < 4 ? 'active' : 'idle', activePondId: index < 4 ? `run-c${index + 1}` : null,
+}));
+const runsC: EnterpriseCyclePondRecord[] = physicalC.map((pond, index) => ({
+  id: `run-${pond.id}`, pondName: pond.pondName, physicalPondId: pond.id, previousCyclePondId: pond.id,
+  blockId: 'C', cycleId: oldCycle.id, cycleStatus: index < 4 ? 'active' : 'ended',
+}));
+
+test('C5-C8 can start a separate cycle while C1-C4 stay active in the same block', () => {
+  assert.deepEqual(getEnterpriseCycleAvailableBlocks([blockC], [oldCycle], runsC, physicalC), [blockC]);
+  assert.deepEqual(getEnterpriseCycleAvailablePonds('C', physicalC, [oldCycle], runsC).map((pond) => pond.id), ['c5', 'c6', 'c7', 'c8']);
+  assert.deepEqual(getEnterpriseCycleUnstartedPonds(oldCycle, physicalC, runsC), []);
+  assert.equal(getEnterpriseBlockStockingCycle('C', [oldCycle], physicalC, runsC), undefined);
+});
+
+test('an explicit subgroup counts only its ponds and preserves old cycle history', () => {
+  const subgroup: EnterpriseCycleRecord = { ...oldCycle, id: 'new', plannedPondIds: ['c5', 'c6', 'c7', 'c8'] };
+  const newRuns = runsC.slice(4).map((pond) => ({ ...pond, id: `new-${pond.id}`, cycleId: subgroup.id, cycleStatus: 'active' as const }));
+  const allRuns = [...runsC, ...newRuns];
+  const original = JSON.stringify(allRuns);
+  const summary = summarizeEnterpriseCycle(subgroup, allRuns, physicalC);
+  assert.equal(summary.plannedCount, 4);
+  assert.equal(summary.startedCount, 4);
+  assert.equal(summary.activeCount, 4);
+  const previous = summarizeEnterpriseCycle(oldCycle, allRuns, physicalC);
+  assert.equal(previous.activeCount, 4);
+  assert.equal(previous.endedCount, 4);
+  assert.equal(previous.startedCount, 8);
+  assert.equal(JSON.stringify(allRuns), original);
+  assert.deepEqual(getEnterpriseCyclePlannedPonds({ ...subgroup, plannedPondIds: [] }, physicalC, allRuns), []);
+});
+
+test('only unstarted planned ponds are reserved and continued; ended members are reusable', () => {
+  const planned: EnterpriseCycleRecord = { ...oldCycle, id: 'planned', status: 'stocking', plannedPondIds: ['c5', 'c6'] };
+  assert.deepEqual(getEnterpriseCycleAvailablePonds('C', physicalC, [oldCycle, planned], runsC).map((pond) => pond.id), ['c7', 'c8']);
+  assert.deepEqual(getEnterpriseCycleUnstartedPonds(planned, physicalC, runsC).map((pond) => pond.id), ['c5', 'c6']);
+  assert.equal(getEnterpriseBlockStockingCycle('C', [oldCycle, planned], physicalC, runsC)?.id, 'planned');
+  const ended = [...runsC, { ...runsC[4], id: 'planned-c5', cycleId: planned.id }];
+  assert.deepEqual(getEnterpriseCycleAvailablePonds('C', physicalC, [oldCycle, planned], ended).map((pond) => pond.id), ['c5', 'c7', 'c8']);
+  assert.deepEqual(getEnterpriseCycleUnstartedPonds(planned, physicalC, ended).map((pond) => pond.id), ['c6']);
+  assert.deepEqual(getEnterpriseCycleAvailablePonds('C', physicalC, [{ ...planned, status: 'closed' }], runsC).map((pond) => pond.id), ['c5', 'c6', 'c7', 'c8']);
+});
+
+test('legacy unstarted block ponds still continue their cycle without choosing ambiguous plans', () => {
+  const legacy: EnterpriseCycleRecord = { ...oldCycle, id: 'legacy', status: 'planning' };
+  assert.equal(getEnterpriseBlockStockingCycle('C', [legacy], physicalC, runsC)?.id, legacy.id);
+  assert.deepEqual(getEnterpriseCycleAvailableBlocks([blockC], [legacy], runsC, physicalC), []);
+  assert.deepEqual(getEnterpriseCycleUnstartedPonds(legacy, physicalC, runsC).map((pond) => pond.id), ['c5', 'c6', 'c7', 'c8']);
+  assert.equal(getEnterpriseBlockStockingCycle('C', [legacy, { ...legacy, id: 'overlap' }], physicalC, runsC), undefined);
+});
+
+test('active status, pointer, or a linked run each prevents another start', () => {
+  for (const pond of [{ id: 'p', status: 'active' as const }, { id: 'p', activePondId: 'run' }]) {
+    assert.deepEqual(getEnterpriseCycleAvailablePonds('C', [{ ...pond, blockId: 'C' }], []), []);
+  }
+  for (const link of [{ physicalPondId: 'p' }, { previousCyclePondId: 'p' }, { pondName: ' P ', blockId: 'C' }]) {
+    assert.deepEqual(getEnterpriseCycleAvailablePonds('C', [{ id: 'p', pondName: 'P', blockId: 'C', status: 'idle' }], [], [{ id: 'run', ...link }]), []);
+  }
 });

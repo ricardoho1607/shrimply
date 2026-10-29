@@ -74,6 +74,24 @@ test('invalid calendar day cannot start a pond cycle', async () => {
   await assert.rejects(h.startPondCycle(h.args), /invalidStartDate/); assert.equal(h.writes.length, 0);
 });
 
+test('explicit plans reject out-of-scope ponds with blockIds, including a fresh server plan', async () => {
+  for (const plannedPondIds of [[], ['other-physical']]) {
+    const local = harness();
+    local.args.activeCycle = { ...local.args.activeCycle, blockIds: ['C'], plannedPondIds };
+    local.args.pond.blockId = 'C';
+    await assert.rejects(local.startPondCycle(local.args), /cycleMismatch/);
+    assert.equal(local.writes.length, 0);
+    const fresh = harness({ cycle: { blockIds: ['C'], plannedPondIds } });
+    await assert.rejects(fresh.startPondCycle(fresh.args), /cycleMismatch/);
+    assert.equal(fresh.writes.length, 0);
+  }
+  const allowed = harness({ cycle: { blockIds: ['C'], plannedPondIds: ['physical'] } });
+  allowed.args.pond.blockId = 'C';
+  allowed.args.activeCycle = { ...allowed.args.activeCycle, blockIds: ['C'], plannedPondIds: ['physical'] };
+  await allowed.startPondCycle(allowed.args);
+  assert.equal(allowed.writes.length, 3);
+});
+
 test('unmet SOP stage requirements stop a planned stocking before operational writes', async () => { const h = harness({gateBlocked:true}); await assert.rejects(h.startPondCycle(h.args), /SOP prerequisites/); assert.equal(h.writes.length,0); });
 
 for (const implicit of [false, true]) {

@@ -2,7 +2,8 @@ import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { assertSopStageGate } from "../../app/services/sopGuards";
 import { useCallback } from 'react';
 
-import { getPhysicalPondKey, isPondCycleActive, type FarmCycle, type PhysicalPond } from "../../app/store/pondStore";
+import { getPhysicalPondKey, isPondCycleActive, usePondStore, type FarmCycle, type PhysicalPond } from "../../app/store/pondStore";
+import { getEnterpriseCycleAvailablePonds, getEnterpriseCycleUnstartedPonds, isEnterpriseCycleOpen } from '../../shared/enterpriseCycles';
 import {
   type FarmBlock
 } from "../../shared/enterpriseBlocks";
@@ -145,21 +146,34 @@ export function usePondManagementEnterpriseActions(context: Context) {
   }) => {
     if (company?.id && input.cycleStartMode !== "midcycle")
       for (const entry of input.ponds) await assertSopStageGate(company.id, entry.pond.id, "stocking");
+    const state = usePondStore.getState();
+    const currentCycle = input.cycle ? state.cycles.find((cycle) => cycle.id === input.cycle?.id) : undefined;
+    if (input.cycle && (!currentCycle || !isEnterpriseCycleOpen(currentCycle))) {
+      throw new Error('This cycle is no longer open. Sync the farm and try again.');
+    }
+    const availablePonds = currentCycle
+      ? getEnterpriseCycleUnstartedPonds(currentCycle, state.physicalPonds, state.ponds)
+      : getEnterpriseCycleAvailablePonds(input.block.id, state.physicalPonds, state.cycles, state.ponds);
+    if (input.ponds.length === 0 || input.ponds.some(({ pond }) => pond.blockId !== input.block.id
+      || !availablePonds.some((available) => available.id === pond.id))) {
+      throw new Error('One or more ponds are no longer available. Sync the farm and try again.');
+    }
     const stockingRange = getEnterpriseStockingDateRange([
-      input.cycle?.stockingStartDate,
-      input.cycle?.stockingEndDate,
+      currentCycle?.stockingStartDate,
+      currentCycle?.stockingEndDate,
       ...input.ponds.map((pond) => pond.stockingDate),
     ]);
-    const cycle = input.cycle || await addFarmCycle({
+    const cycle = currentCycle || await addFarmCycle({
       cycleName: input.cycleName,
       status: 'active',
       blockIds: [input.block.id],
       blockNames: [input.block.name],
+      plannedPondIds: input.ponds.map(({ pond }) => pond.id),
       plannedStartDate: input.plannedStartDate,
       stockingStartDate: stockingRange.stockingStartDate,
       stockingEndDate: stockingRange.stockingEndDate,
     });
-    if (input.cycle) {
+    if (currentCycle) {
       await updateFarmCycle(cycle.id, {
         status: 'active',
         stockingStartDate: stockingRange.stockingStartDate,
