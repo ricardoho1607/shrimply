@@ -9,6 +9,8 @@ const calculations = require('../../../../../shared/harvestCalculations.ts');
 const finance = require('../../../../../shared/financeSync.ts');
 const { calculatePondMetricsWithHarvest } = require('../../../../../shared/pondCalculations.ts');
 const persistence = require('./harvestPersistence.ts');
+const operations = require('../../../../../shared/harvestOperation.ts');
+const { commitHarvestOperation } = require('../../../../../shared/commitHarvestOperation.ts');
 const { removeUndefinedFields } = require('../../../lib/firestoreData.ts');
 const { initializeApp, deleteApp } = require('firebase/app');
 const { getFirestore, doc, collection, writeBatch, serverTimestamp } = require('firebase/firestore');
@@ -32,7 +34,7 @@ const samplingHandler = ts.transpileModule(samplingSource + '\nreturn saveRequir
 async function save({ harvestType = 'final', metadata = true, editing = false, deleting = false, sampling = true,
   formOverrides = {}, batch = [], extraPonds = [], serverPondOverrides = {}, missingPond = false, previousVoided = false,
   transactionError, commitThenFail = false, retry = false, retryOverrides = {}, concurrent = false,
-  samplingOnly = false, samplingMbw = '13.04', samplingBusy = false, confirm = true } = {}) {
+  samplingOnly = false, samplingMbw = '13.04', samplingBusy = false, confirm = true, previousOverrides = {}, staleSource = false } = {}) {
   const cycle = metadata ? { cycleId: 'cycle-15', cycleName: 'Siklus 15', blockId: 'block-c', blockName: 'Block C' } : {};
   const pond = { id: 'c6', pondName: 'C6', initialPopulation: 310000, initialWeight: 0.5,
     docStart: '2026-07-01', ...cycle, totalHarvestedBiomass: editing ? 100 : 0,
@@ -42,7 +44,7 @@ async function save({ harvestType = 'final', metadata = true, editing = false, d
     biomass: '3489.29', size: '76.71', price: '56987', subBiomass: '437.44', subSize: '104.76', subPrice: '52571.98', ...formOverrides };
   const previous = editing || deleting ? { id: 'previous-harvest', date: formData.date, ...cycle,
     ponds: [{ pondId: 'c6', pondName: 'C6', harvestType: 'partial', partialHarvestNumber: 1,
-      biomass: '100', size: '100', price: '50000', ...cycle }] } : null;
+      biomass: '100', size: '100', price: '50000', ...cycle }], ...previousOverrides } : null;
   const alerts = [];
   const errors = [];
   const committed = [];
@@ -53,7 +55,7 @@ async function save({ harvestType = 'final', metadata = true, editing = false, d
   let saving = false;
   let cleared = false;
   let closed = false;
-  const dependencies = { ...calculations, ...finance, calculatePondMetricsWithHarvest,
+  const dependencies = { ...calculations, ...finance, ...operations, commitHarvestOperation, calculatePondMetricsWithHarvest,
     ...persistence, removeUndefinedFields, db, doc, collection, serverTimestamp,
     harvestSubmitLock, pendingHarvest, samplingSavingPondId: samplingBusy ? 'c6' : null,
     samplingMbwDrafts: { c6: samplingMbw }, samplingFeedStatuses: {},
@@ -78,7 +80,7 @@ async function save({ harvestType = 'final', metadata = true, editing = false, d
           assert.equal(writing, false, 'all reads must precede writes');
           const extra = extraPonds.find(pond => pond.id === ref.id);
           const data = ref.path.includes('/ponds/') ? (missingPond ? undefined : { ...pond, ...extra, ...serverPondOverrides })
-            : ref.id === 'previous-harvest' ? { ...previous, voided: previousVoided } : documents.get(ref.path);
+            : documents.get(ref.path) || (ref.id === 'previous-harvest' ? { ...previous, voided: previousVoided, ...(staleSource ? {date:'2026-09-01'} : {}) } : undefined);
           return { id: ref.id, ref, exists: () => Boolean(data), data: () => data };
         },
         update: (ref, data) => { writing = true; batch.update(ref, data); pending.push({ path: ref.path, data }); },
@@ -277,4 +279,48 @@ test('sampling rejects invalid MBW and preserves its draft after a failed transa
   assert.equal(failed.committed.length, 0);
   assert.equal(failed.cleared, false);
   assert.match(failed.alerts[0], /connection and retry/);
+});
+
+test('different final dates save own sampling, revenue dates, and DOC atomically', async () => {
+  const result = await save({ extraPonds: [{ id: 'c7', pondName: 'C7', samplings: [{ id: 'c7-sample', date: '2026-09-16', mbw: 20, feed: 0 }] }],
+    batch: [{ date: '2026-09-16', pondId: 'c7', harvestType: 'final', biomass: '100', size: '50', price: '10' }] });
+  assert.deepEqual(result.alerts, []);
+  assert.equal(result.transactions, 1);
+  const records = result.committed.filter(w => w.path.includes('/harvestRecords/')).map(w => w.data);
+  assert.equal(records.length, 2);
+  assert.equal(records.find(r => r.ponds[0].pondId === 'c7').date, '2026-09-16');
+  assert.equal(records.find(r => r.ponds[0].pondId === 'c7').ponds[0].harvestReferenceSamplingId, 'c7-sample');
+  const revenues = result.committed.filter(w => w.path.includes('/revenues/')).map(w => w.data);
+  assert.deepEqual(revenues.map(r => r.date).sort(), ['2026-09-16','2026-09-17']);
+  const { getPondCurrentDoc } = require('../../../../../shared/pondCalculations.ts');
+  for (const [id, doc] of [['c6',78],['c7',77]]) {
+    const fields = result.committed.find(w => w.path.endsWith(`/ponds/${id}`)).data;
+    assert.equal(getPondCurrentDoc({docStart:'2026-07-01',...fields}, 'UTC', '2026-10-20'), doc);
+  }
+});
+test('mixed-date lost-response retry preserves all IDs and counts every harvest once', async () => {
+  const result = await save({ commitThenFail: true, retry: true, retryOverrides: { date:'2026-09-18',price:'9999' },
+    extraPonds: [{id:'c7',pondName:'C7',samplings:[{date:'2026-09-16',mbw:20,feed:0}]}],
+    batch:[{date:'2026-09-16',pondId:'c7',harvestType:'final',biomass:'100',size:'50',price:'10'}] });
+  assert.equal(result.committed.length, 6);
+  assert.equal(result.closed, true);
+  assert.match(result.alerts.at(-1), /already saved/);
+});
+
+test('splitting an existing final harvest reverses the original date once for each pond', async () => {
+  const old = id => ({pondId:id,pondName:id,harvestType:'final',biomass:'100',size:'50',price:'10'});
+  const result = await save({editing:true, previousOverrides:{date:'2026-09-15',ponds:[old('c6'),old('c7')]},
+    serverPondOverrides:{finalHarvestDates:['2026-09-15']},
+    extraPonds:[{id:'c7',pondName:'C7',samplings:[{date:'2026-09-16',mbw:20,feed:0}]}],
+    batch:[{date:'2026-09-16',pondId:'c7',harvestType:'final',biomass:'100',size:'50',price:'10'}]});
+  assert.deepEqual(result.alerts, []);
+  assert.equal(result.committed.filter(w=>w.data.voided === true).length,2);
+  assert.equal(result.committed.filter(w=>w.data.correctedFromHarvestId).length,2);
+  assert.deepEqual(result.committed.find(w=>w.path.endsWith('/ponds/c6')).data.finalHarvestDates,['2026-09-17']);
+  assert.deepEqual(result.committed.find(w=>w.path.endsWith('/ponds/c7')).data.finalHarvestDates,['2026-09-16']);
+});
+test('a changed original harvest rejects every replacement before any writes', async () => {
+  const result = await save({editing:true,staleSource:true});
+  assert.equal(result.committed.length,0);
+  assert.match(result.alerts[0],/original harvest has changed/);
 });

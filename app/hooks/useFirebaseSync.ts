@@ -40,6 +40,7 @@ const ScopedFirebaseSyncProvider = ({ children }: { children?: ReactNode }) => {
       syncSampling: firebaseSync.syncSampling,
       syncMortality: firebaseSync.syncMortality,
       syncHarvestRecord: firebaseSync.syncHarvestRecord,
+      syncHarvestOperation: firebaseSync.syncHarvestOperation,
       syncCycle: firebaseSync.syncCycle,
     });
 
@@ -55,6 +56,7 @@ const ScopedFirebaseSyncProvider = ({ children }: { children?: ReactNode }) => {
     firebaseSync.syncLifecycleChanges,
     firebaseSync.syncCycle,
     firebaseSync.syncHarvestRecord,
+    firebaseSync.syncHarvestOperation,
     firebaseSync.syncPhysicalPond,
     firebaseSync.syncPond,
     firebaseSync.syncSampling,

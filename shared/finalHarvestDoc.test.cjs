@@ -28,6 +28,42 @@ test('editing or voiding final harvest updates DOC and preserves other finals', 
   assert.equal(getPondCurrentDoc(reverseHarvestImpactOnPond(twice, final, '2026-08-02'), 'UTC', '2026-08-15'), 30);
 });
 
+test('ponds in the same cycle stop DOC on their own final harvest dates', () => {
+  const secondPond = { ...pond, id: 'p2', pondName: 'Pond 2', pondCycleId: 'pc2' };
+  const secondFinal = { ...final, pondId: 'p2', pondCycleId: 'pc2' };
+  const firstHarvested = applyHarvestImpactToPond(pond, final, '2026-07-31');
+  const secondHarvested = applyHarvestImpactToPond(secondPond, secondFinal, '2026-08-02');
+  assert.equal(getPondCurrentDoc(firstHarvested, 'UTC', '2026-08-20'), 30);
+  assert.equal(getPondCurrentDoc(secondHarvested, 'UTC', '2026-08-20'), 32);
+
+  const correctedFirst = applyHarvestImpactToPond(
+    reverseHarvestImpactOnPond(firstHarvested, final, '2026-07-31'), final, '2026-08-01',
+  );
+  assert.equal(getPondCurrentDoc(correctedFirst, 'UTC', '2026-08-20'), 31);
+  assert.equal(getPondCurrentDoc(secondHarvested, 'UTC', '2026-08-20'), 32);
+
+  const report = buildWebCycleReport({
+    cycle: { id: 'c1', cycleName: 'Cycle 1', status: 'closed', closedAt: '2026-08-20' },
+    ponds: [pond, secondPond],
+    harvestRecords: [
+      { id: 'h1', date: '2026-08-01', cycleId: 'c1', ponds: [final] },
+      { id: 'h2', date: '2026-08-02', cycleId: 'c1', ponds: [secondFinal] },
+    ],
+    feeds: [], additives: [], expenses: [], assets: [], timeZone: 'UTC', includeComparison: false,
+  });
+  assert.equal(report.ponds.find((entry) => entry.id === 'p1').doc, 31);
+  assert.equal(report.ponds.find((entry) => entry.id === 'p2').doc, 32);
+  const { buildCycleReport } = require('../app/services/cycleReportService.ts');
+  const { calculatePondMetricsWithHarvest } = require('./pondCalculations.ts');
+  const mobileReport = buildCycleReport({
+    cycleId: 'c1', cycles: [report.cycle], ponds: [pond, secondPond],
+    harvestRecords: report.harvestRecords, feeds: [], additives: [], expenses: [], assets: [],
+    calculatePondMetricsWithHarvest, includeComparison: false,
+  });
+  assert.equal(mobileReport.ponds.find((entry) => entry.id === 'p1').doc, 31);
+  assert.equal(mobileReport.ponds.find((entry) => entry.id === 'p2').doc, 32);
+});
+
 test('legacy final harvest resolution ignores voided records and other cycles', () => {
   const records = [
     { date: '2026-07-31', cycleId: 'c1', ponds: [final] },

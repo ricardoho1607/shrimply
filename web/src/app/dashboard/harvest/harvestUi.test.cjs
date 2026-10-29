@@ -6,6 +6,7 @@ const test = require('node:test');
 const ts = require('typescript');
 const source = fs.readFileSync(path.join(__dirname, 'page.tsx'), 'utf8');
 const mobileSource = fs.readFileSync(path.join(__dirname, '../../../../../app/(tabs)/harvest.tsx'), 'utf8');
+const commitSource = fs.readFileSync(path.join(__dirname, '../../../../../shared/commitHarvestOperation.ts'), 'utf8');
 const finance = fs.readFileSync(path.join(__dirname, '../../../../../shared/financeSync.ts'), 'utf8');
 const loaded = { exports: {} };
 new Function('module', 'exports', ts.transpileModule(finance, {
@@ -73,7 +74,7 @@ test('close control is square and highlights only on hover', () => {
 
 test('harvest requires a positive-MBW sampling on the selected date', () => {
   assert.match(source, /getHarvestDateSampling\(selectedPond, formData\.date\)/);
-  assert.match(source, /disabled={!ready}/);
+  assert.match(source, /pond.id === formData.pondId && !getHarvestDateSampling/);
   assert.match(source, /saveRequiredSampling\(pond\)/);
   assert.match(source, /harvestSizeDiffersFromSampling/);
 });
@@ -97,8 +98,27 @@ test('saved harvest ponds can open a prefilled editor on web and mobile', () => 
 });
 
 test('editing uses an auditable void and replacement correction', () => {
-  assert.match(source, /correctedFromHarvestId: previousRecord\.id/);
-  assert.match(source, /transaction\.update\(previousHarvestRef/);
+  assert.match(commitSource, /correctedFromHarvestId: original\.id/);
+  assert.match(commitSource, /transaction\.update\(sourceRef/);
   assert.match(source, /voided:\s*true/);
-  assert.match(mobileSource, /updateHarvestRecord\(editingHarvest\.id, newHarvest\)/);
+  assert.match(mobileSource, /createHarvestOperation\(id, records, editingHarvest \|\| undefined\)/);
+});
+
+test('changing the current pond date preserves queued ponds and manual harvest values', () => {
+  const handler = source.slice(source.indexOf('  const changePondDate ='), source.indexOf('  const editQueuedPond ='));
+  const compiled = ts.transpileModule(handler + '\nreturn changePondDate;', {compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText;
+  require('../../../../../scripts/register-typescript.cjs');
+  const calculations = require('../../../../../shared/harvestCalculations.ts');
+  for (const manual of [false,true]) {
+    let formData = {pondId:'p1',date:'2026-09-16',size:manual?'55':'50',biomass:'100',price:'10'};
+    const queued = [{pondId:'p2',date:'2026-09-15',biomass:'200'}];
+    const deps = {...calculations,formData,autoFilledSizes:{current:manual?{}:{p1:'50'}},
+      formPonds:[{id:'p1',samplings:[{date:'2026-09-17',mbw:25}]}],
+      setFormData:update=>{formData=update(formData);},setSamplingMbwDrafts:()=>{},setSamplingFeedStatuses:()=>{}};
+    new Function(...Object.keys(deps),compiled)(...Object.values(deps))('2026-09-17');
+    assert.equal(formData.date,'2026-09-17');
+    assert.equal(formData.size,manual?'55':'40');
+    assert.equal(formData.biomass,'100');assert.equal(formData.price,'10');
+    assert.deepEqual(queued,[{pondId:'p2',date:'2026-09-15',biomass:'200'}]);
+  }
 });

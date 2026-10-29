@@ -1,4 +1,6 @@
 import { useShallow } from 'zustand/react/shallow';
+import { createHarvestOperation, groupHarvestEntriesByDate, type HarvestOperation } from '../../shared/harvestOperation';
+import { createOfflineOperationId } from '../../shared/offlineWorkspace';
 import { getUserErrorMessage } from '../../shared/userError';
 import { AppAlert as Alert } from '../../components/alerts/appAlert';
 import { filterPondRecordsForUser } from '../../shared/pondAssignments';
@@ -69,8 +71,7 @@ export default function HarvestScreen() {
     ponds,
     cycles,
     harvestRecords,
-    addHarvestRecord,
-    updateHarvestRecord,
+    saveHarvestOperation,
     removeHarvestRecord,
     addSampling,
     calculatePondMetricsWithHarvest,
@@ -78,8 +79,7 @@ export default function HarvestScreen() {
     ponds: state.ponds,
     cycles: state.cycles,
     harvestRecords: state.harvestRecords,
-    addHarvestRecord: state.addHarvestRecord,
-    updateHarvestRecord: state.updateHarvestRecord,
+    saveHarvestOperation: state.saveHarvestOperation,
     removeHarvestRecord: state.removeHarvestRecord,
     addSampling: state.addSampling,
     calculatePondMetricsWithHarvest: state.calculatePondMetricsWithHarvest,
@@ -129,7 +129,7 @@ export default function HarvestScreen() {
   const [harvestFilter, setHarvestFilter] = useState<'current' | 'history'>('current');
   const [selectedCycleId, setSelectedCycleId] = useState('');
   const [historyCycleId, setHistoryCycleId] = useState('all');
-  const [harvestDate, setHarvestDate] = useState(getFarmDateKey(new Date(), company?.timeZone));
+  const today = getFarmDateKey(new Date(), company?.timeZone);
   
   const canEditHarvest = hasFarmPermission(user, 'manageHarvests', company?.ownerId);
   const canModifyHarvestRecord = useCallback((harvestId: string) => {
@@ -141,7 +141,6 @@ export default function HarvestScreen() {
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingHarvest, setEditingHarvest] = useState<HarvestRecord | null>(null);
-  const editReplacementIdRef = useRef<string | null>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [harvestToDelete, setHarvestToDelete] = useState<string | null>(null);
 
@@ -174,11 +173,12 @@ export default function HarvestScreen() {
     pondCycleId: pond.pondCycleId || pond.id,
     blockId: pond.blockId,
     blockName: pond.blockName,
+    date: today,
     harvestType: 'partial' as HarvestType,
     biomass: "", size: "", price: "", subBiomass: "", subSize: "", subPrice: "",
-  })), [selectedCycle?.cycleName, selectedCycleId, selectedCyclePonds]);
+  })), [selectedCycle?.cycleName, selectedCycleId, selectedCyclePonds, today]);
 
-  const [pondData, setPondData] = useState<HarvestRecord['ponds']>(initializePondData());
+  const [pondData, setPondData] = useState<(HarvestRecord['ponds'][number] & { date: string })[]>(initializePondData());
   const [expandedPondId, setExpandedPondId] = useState<string | null>(selectedCyclePonds[0]?.id ?? null);
   const [secondaryPondIds, setSecondaryPondIds] = useState<string[]>([]);
   const [samplingMbwDrafts, setSamplingMbwDrafts] = useState<Record<string, string>>({});
@@ -186,6 +186,7 @@ export default function HarvestScreen() {
   const [autoFilledSizes, setAutoFilledSizes] = useState<Record<string, { value: string; date: string }>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
+  const pendingHarvestOperation = useRef<HarvestOperation<HarvestRecord> | null>(null);
 
   const visibleHarvestRecords = React.useMemo(
     () => accessibleHarvestRecords.filter((harvest) =>
@@ -230,16 +231,13 @@ export default function HarvestScreen() {
     setPondData(prev => prev.map(pond => pond.pondId === pondId ? { ...pond, [field]: value } : pond));
   };
 
-  const changeHarvestDate = (nextDate: string) => {
-    if (nextDate === harvestDate) return;
-    const previousAutoFilledSizes = autoFilledSizes;
-    setAutoFilledSizes({});
-    setPondData((current) => current.map((entry) => {
-      const provenance = previousAutoFilledSizes[entry.pondId];
-      const size = clearUntouchedAutoFilledHarvestSize(entry.size, provenance);
-      return size === entry.size ? entry : { ...entry, size };
-    }));
-    setHarvestDate(nextDate);
+  const changeHarvestDate = (pondId: string, nextDate: string) => {
+    const provenance = autoFilledSizes[pondId];
+    setPondData(current => current.map(entry => entry.pondId === pondId
+      ? { ...entry, date: nextDate, size: clearUntouchedAutoFilledHarvestSize(entry.size, provenance) } : entry));
+    setAutoFilledSizes(current => { const next = { ...current }; delete next[pondId]; return next; });
+    setSamplingMbwDrafts(current => ({ ...current, [pondId]: '' }));
+    setSamplingFeedStatuses(current => ({ ...current, [pondId]: 'not_recorded' }));
   };
 
   const parsePositiveNumber = (value: string) => {
@@ -257,7 +255,7 @@ export default function HarvestScreen() {
 
   const completedPondCount = pondData.filter((entry) => {
     const pond = formPonds.find((item) => item.id === entry.pondId);
-    return Boolean(pond && getHarvestDateSampling(pond, harvestDate) && isPondEntryComplete(entry));
+    return Boolean(pond && getHarvestDateSampling(pond, entry.date) && isPondEntryComplete(entry));
   }).length;
   const enteredPondCount = pondData.filter(hasAnyHarvestData).length;
 
@@ -278,6 +276,7 @@ export default function HarvestScreen() {
     (parseFloat(pond.biomass) || 0) + (parseFloat(pond.subBiomass) || 0);
 
   const saveRequiredSampling = async (pond: typeof selectedCyclePonds[number]) => {
+    const harvestDate = pondData.find(entry => entry.pondId === pond.id)?.date || today;
     const mbw = parsePositiveNumber(samplingMbwDrafts[pond.id] || '');
     if (!mbw) {
       Alert.alert(t.messages.error, t.harvest.samplingMbwRequired);
@@ -358,56 +357,37 @@ export default function HarvestScreen() {
   }, [initializePondData, selectedCyclePonds]);
 
   const saveHarvestRecords = useCallback(async (pondsWithData: typeof pondData) => {
-    const harvestId = editingHarvest
-      ? (editReplacementIdRef.current ||= `harvest-${editingHarvest.id}-rev-${Date.now()}`)
-      : Date.now().toString();
-    const newHarvest: HarvestRecord = {
-      id: harvestId,
-      date: harvestDate,
-      cycleId: editingHarvest?.cycleId || formCycle?.id,
-      cycleName: editingHarvest?.cycleName || formCycle?.cycleName,
-      blockId: editingHarvest?.blockId || formCycle?.blockId || formPonds[0]?.blockId,
-      blockName: editingHarvest?.blockName || formCycle?.blockName || formCycle?.blockNames?.[0] || formPonds[0]?.blockName,
-      ponds: pondsWithData.map((pond) => {
-        const savedDraft = stripOrphanAutoFilledHarvestSize(
-          pond,
-          Boolean(autoFilledSizes[pond.pondId]),
-        );
-        return {
-          ...savedDraft,
-          biomass: savedDraft.biomass.trim(),
-          size: savedDraft.size.trim(),
-          price: savedDraft.price.trim(),
-          subBiomass: savedDraft.subBiomass.trim(),
-          subSize: savedDraft.subSize.trim(),
-          subPrice: savedDraft.subPrice.trim(),
-        };
-      }),
-    };
-
     try {
-      const outcome = editingHarvest
-        ? await updateHarvestRecord(editingHarvest.id, newHarvest)
-        : await addHarvestRecord(newHarvest);
-
+      if (!pendingHarvestOperation.current) {
+        const id = createOfflineOperationId('harvest');
+        const records: HarvestRecord[] = groupHarvestEntriesByDate(pondsWithData, today).map((group, index) => ({
+          id: `${id}-${index}`, date: group.date,
+          cycleId: editingHarvest?.cycleId || formCycle?.id,
+          cycleName: editingHarvest?.cycleName || formCycle?.cycleName,
+          blockId: editingHarvest?.blockId || formCycle?.blockId || formPonds[0]?.blockId,
+          blockName: editingHarvest?.blockName || formCycle?.blockName || formCycle?.blockNames?.[0] || formPonds[0]?.blockName,
+          ponds: group.entries.map(({ date: _date, ...pond }) => {
+            const draft = stripOrphanAutoFilledHarvestSize(pond, Boolean(autoFilledSizes[pond.pondId]));
+            return { ...draft, biomass: draft.biomass.trim(), size: draft.size.trim(), price: draft.price.trim(),
+              subBiomass: draft.subBiomass.trim(), subSize: draft.subSize.trim(), subPrice: draft.subPrice.trim() };
+          }),
+        }));
+        pendingHarvestOperation.current = createHarvestOperation(id, records, editingHarvest || undefined);
+      }
+      const outcome = await saveHarvestOperation(pendingHarvestOperation.current);
       if (!outcome || outcome.success === false || outcome.status === 'rejected') {
-        const message = outcome?.error || 'Failed to save harvest record.';
-        Alert.alert(t.messages.error, message);
+        pendingHarvestOperation.current = null;
+        Alert.alert(t.messages.error, outcome?.error || 'Failed to save harvest record.');
         return;
       }
-
-      editReplacementIdRef.current = null;
+      pendingHarvestOperation.current = null;
       resetForm();
       setEditingHarvest(null);
       setIsModalVisible(false);
     } catch (error) {
-      const message = getUserErrorMessage(error, 'Failed to save harvest record.');
-      Alert.alert(t.messages.error, message);
-    } finally {
-      submitLockRef.current = false;
-      setIsSubmitting(false);
-    }
-  }, [addHarvestRecord, autoFilledSizes, editingHarvest, formCycle, formPonds, harvestDate, resetForm, t.messages.error, updateHarvestRecord]);
+      Alert.alert(t.messages.error, getUserErrorMessage(error, 'Failed to save harvest record.'));
+    } finally { submitLockRef.current = false; setIsSubmitting(false); }
+  }, [autoFilledSizes, editingHarvest, formCycle, formPonds, resetForm, saveHarvestOperation, t.messages.error, today]);
 
   const handleSave = () => {
     if (submitLockRef.current) return;
@@ -446,14 +426,14 @@ export default function HarvestScreen() {
 
     const missingSamplingPond = pondsWithData.find((entry) => {
       const pond = formPonds.find((item) => item.id === entry.pondId);
-      return !pond || !getHarvestDateSampling(pond, harvestDate);
+      return !pond || !getHarvestDateSampling(pond, entry.date);
     });
     if (missingSamplingPond) {
       Alert.alert(
         t.harvest.samplingRequired,
         t.harvest.samplingRequiredMessage
           .replace('{{pondName}}', missingSamplingPond.pondName)
-          .replace('{{date}}', harvestDate),
+          .replace('{{date}}', missingSamplingPond.date),
       );
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -505,7 +485,7 @@ export default function HarvestScreen() {
 
     const sizeWarning = pondsWithData.find((entry) => {
       const pond = formPonds.find((item) => item.id === entry.pondId);
-      const sampling = pond ? getHarvestDateSampling(pond, harvestDate) : undefined;
+      const sampling = pond ? getHarvestDateSampling(pond, entry.date) : undefined;
       return harvestSizeDiffersFromSampling(entry.size, sampling)
         || harvestSizeDiffersFromSampling(entry.subSize, sampling);
     });
@@ -532,7 +512,7 @@ export default function HarvestScreen() {
   };
 
   const handleModalClose = () => {
-    editReplacementIdRef.current = null;
+    pendingHarvestOperation.current = null;
     resetForm();
     setEditingHarvest(null);
     submitLockRef.current = false;
@@ -545,11 +525,11 @@ export default function HarvestScreen() {
       Alert.alert(t.harvest.permissionDenied, t.harvest.permissionMessage);
       return;
     }
-    editReplacementIdRef.current = `harvest-${record.id}-rev-${Date.now()}`;
     setEditingHarvest(record);
-    setHarvestDate(record.date);
+    pendingHarvestOperation.current = null;
     setPondData(record.ponds.map((pond) => ({
       ...pond,
+      date: record.date,
       cycleId: pond.cycleId || record.cycleId || '',
       cycleName: pond.cycleName || record.cycleName,
       pondCycleId: pond.pondCycleId || pond.pondId,
@@ -798,7 +778,6 @@ export default function HarvestScreen() {
                 Alert.alert(t.messages.error, t.harvest.startPondCycleFirst);
                 return;
               }
-              setHarvestDate(getFarmDateKey(new Date(), company?.timeZone));
               setEditingHarvest(null);
               submitLockRef.current = false;
               setIsSubmitting(false);
@@ -848,16 +827,7 @@ export default function HarvestScreen() {
                       {editingHarvest?.blockName || formCycle?.blockName || formCycle?.blockNames?.[0] || formPonds[0]?.blockName || t.harvestCycle.blockNotAssigned}
                     </Text>
                   </View>
-                  <View style={styles.harvestDateField}>
-                    <AppDatePicker
-                      label={t.harvestCycle.harvestDate}
-                      value={harvestDate}
-                      maximumDate={new Date()}
-                      onChange={(date) => changeHarvestDate(getFarmDateKey(date, company?.timeZone))}
-                      cancelLabel={t.actions.cancel}
-                      confirmLabel={t.actions.confirm}
-                    />
-                  </View>
+
                 </View>
 
                 <View style={styles.progressCard}>
@@ -882,7 +852,7 @@ export default function HarvestScreen() {
                 {formPonds.map((pond) => {
                   const currentPondData = pondData.find(p => p.pondId === pond.id);
                   if (!currentPondData) return null;
-                  const harvestSampling = getHarvestDateSampling(pond, harvestDate);
+                  const harvestSampling = getHarvestDateSampling(pond, currentPondData.date);
                   const sampledMbw = getSamplingMbw(harvestSampling);
                   const sampledSize = getSamplingSize(harvestSampling);
                   const samplingFeedStatus = samplingFeedStatuses[pond.id] || 'not_recorded';
@@ -926,6 +896,7 @@ export default function HarvestScreen() {
                                 ? t.harvest.inProgress
                                 : t.harvest.notEntered}
                           </Text>
+                          <Text style={styles.harvestContextMeta}>{currentPondData.date}</Text>
                         </View>
                         <Ionicons
                           name={isExpanded ? "chevron-up" : "chevron-down"}
@@ -936,13 +907,16 @@ export default function HarvestScreen() {
 
                       {isExpanded && (
                         <View style={styles.pondFormContent}>
+                          <AppDatePicker label={t.harvestCycle.harvestDate} value={currentPondData.date}
+                            maximumDate={new Date()} onChange={date => changeHarvestDate(pond.id, getFarmDateKey(date, company?.timeZone))}
+                            cancelLabel={t.actions.cancel} confirmLabel={t.actions.confirm} />
 
                       {!harvestSampling ? (
                         <View style={styles.samplingGuardCard}>
                           <View style={styles.samplingGuardHeader}>
                             <Ionicons name="alert-circle-outline" size={17} color="#8A5700" />
                             <Text style={styles.samplingGuardTitle}>{t.harvest.samplingRequired}</Text>
-                            <Text style={styles.samplingGuardDate}>{harvestDate}</Text>
+                            <Text style={styles.samplingGuardDate}>{currentPondData.date}</Text>
                           </View>
                           <View style={styles.compactSamplingRow}>
                             <View style={styles.compactSamplingInputGroup}>
@@ -1195,7 +1169,6 @@ const styles = StyleSheet.create({
   harvestContextCopy: { minWidth: 0 },
   harvestContextValue: { color: '#102F46', fontSize: 16, fontWeight: '900' },
   harvestContextMeta: { marginTop: 3, color: '#78909C', fontSize: 11, fontWeight: '700' },
-  harvestDateField: { minWidth: 0 },
   modalScrollView: { paddingHorizontal: 20 },
   modalScrollContent: { paddingTop: 20, paddingBottom: 12 },
   progressCard: { backgroundColor: '#f4f8fc', borderWidth: 1, borderColor: '#e8f2f9', borderRadius: 14, padding: 14, marginBottom: 14 },
