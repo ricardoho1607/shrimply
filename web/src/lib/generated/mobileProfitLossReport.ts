@@ -108,10 +108,14 @@ const getProfitLossAnalysis = (data: FinancialData, language: PdfLanguage) => {
       : netMargin !== null && netMargin < 10
         ? 'The company was profitable, but net margin is narrow. Small increases in feed, labor, or overhead costs could materially reduce profitability.'
         : 'No immediate net loss risk was detected from the selected period.',
-    cogsShare !== null && cogsShare > 65
+    cogsShare === null
+      ? 'COGS as a share of revenue cannot be assessed because no positive revenue was recorded.'
+      : cogsShare > 65
       ? `COGS represented ${cogsShare.toFixed(2)}% of revenue, indicating pressure on gross margin and production efficiency.`
       : 'COGS did not exceed the high-risk threshold based on the selected period revenue.',
-    opexShare !== null && opexShare > 35
+    opexShare === null
+      ? 'Operating expenses as a share of revenue cannot be assessed because no positive revenue was recorded.'
+      : opexShare > 35
       ? `Operating expenses represented ${opexShare.toFixed(2)}% of revenue. Overhead should be reviewed if this pattern continues.`
       : 'Operating expenses did not exceed the high-risk threshold based on selected period revenue.',
   ];
@@ -231,9 +235,9 @@ export const generateProfitLossHTML = (
   row(`Net ${netProfit >= 0 ? 'Income' : 'Loss'}`, `${money(Math.abs(netProfit))} ${currencyCode}`, 'net');
   title = 'Profit & Loss Analysis';
   newPage();
-  row('Gross Profit Margin:', `${totalRevenue > 0 ? ((grossProfit / totalRevenue) * 100).toFixed(2) : '0.00'}%`);
-  row('Operating Margin:', `${totalRevenue > 0 ? ((operatingIncome / totalRevenue) * 100).toFixed(2) : '0.00'}%`);
-  row('Net Profit Margin:', `${totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(2) : '0.00'}%`);
+  row('Gross Profit Margin:', totalRevenue > 0 ? `${((grossProfit / totalRevenue) * 100).toFixed(2)}%` : 'N/A');
+  row('Operating Margin:', totalRevenue > 0 ? `${((operatingIncome / totalRevenue) * 100).toFixed(2)}%` : 'N/A');
+  row('Net Profit Margin:', totalRevenue > 0 ? `${((netProfit / totalRevenue) * 100).toFixed(2)}%` : 'N/A');
   for (const [heading, items] of [['Executive Summary', reportAnalysis.executiveSummary], ['Risk Assessment', reportAnalysis.riskAssessment]] as const) {
     const firstItemHeight = lines(items[0] || '', 38).length * 24 + 8;
     if (used + 32 + Math.min(firstItemHeight, 448) > 480) newPage();

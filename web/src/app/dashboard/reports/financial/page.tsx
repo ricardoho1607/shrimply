@@ -240,8 +240,8 @@ export default function FinancialReportsPage() {
     try {
       const brandAssets = await loadMobilePdfBrandAssets('portrait');
       const companyName = company?.companyName || company?.id || 'Company';
-      const startDate = dateRange.startDate.toISOString();
-      const endDate = dateRange.endDate.toISOString();
+      const startDate = dateRange.startDateKey || dateRange.startDate.toISOString();
+      const endDate = dateRange.endDateKey;
       const revenueBreakdown: Record<string, number> = {};
       filteredRevenues.filter(revenue => selectedReport !== 'profit-loss' || !NON_OPERATING_INCOME.includes(normalizeCategory(revenue.category))).forEach((revenue) => addBreakdown(revenueBreakdown, revenue.category, revenue.amount));
 

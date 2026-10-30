@@ -19,6 +19,39 @@ const transactions = load(root + '/web/src/lib/generated/mobileTransactionHistor
 const pond = { id: 'p1', pondName: 'P1', cycleId: 'c1', docStart: '2026-08-01', initialPopulation: 100000, initialWeight: 0.5, pondArea: 1000, samplings: [] };
 const base = { cycle: { id: 'c1', cycleName: 'C1', status: 'closed', closedAt: '2026-09-09' }, ponds: [pond], harvestRecords: [], feeds: [], additives: [], expenses: [], assets: [], includeComparison: false };
 const assets = { backgroundBase64: '', logoBase64: '' };
+test('cycle PDF leaves zero-denominator margin, cost shares, and unit economics unavailable', () => {
+  const { generateCycleReportHtml } = load(root + '/web/src/lib/generated/mobileCycleReport.ts');
+  const report = cycle.buildWebCycleReport(base);
+  const html = generateCycleReportHtml({ report, companyName: 'Test', formatCurrency: value => `Rp ${value}`, language: 'en' }, '', '');
+  assert.match(html, /<label>Gross margin<\/label><b>N\/A<\/b>/);
+  for (const label of ['Cost per kg', 'Revenue per kg', 'Profit per kg']) assert.ok(html.includes(`<label>${label}</label><b>N/A</b>`));
+  assert.doesNotMatch(html, /<td>100%<\/td>/);
+  assert.match(html, /<label>Overall actual SR<\/label><b>N\/A<\/b>/);
+  assert.match(html, /<label>Overall survival<\/label><b>N\/A<\/b>/);
+  const finalHarvestReport = { ...report, ponds: report.ponds.map(pond => ({ ...pond, hasFinalHarvest: true })), totals: { ...report.totals, overallActualSurvivalRate: 85, harvestRevenue: 100, grossProfit: -20 } };
+  const finalHarvestHtml = generateCycleReportHtml({ report: finalHarvestReport, companyName: 'Test', formatCurrency: String, language: 'en' }, '', '');
+  assert.match(finalHarvestHtml, /<label>Overall survival<\/label><b>85%<\/b>/);
+  assert.match(finalHarvestHtml, /<label>Gross margin<\/label><b>-20%<\/b><span class="signal bad">Review/);
+});
+test('zero recorded cash flow does not imply positive flow or a liquidity assessment', () => {
+  const { generateCashFlowHTML } = load(root + '/web/src/lib/generated/mobileCashFlowReport.ts');
+  const html = generateCashFlowHTML({ period: 'Test', startDate: '2026-10-01', endDate: '2026-10-29', companyName: 'Test', openingBalance: 0, operatingActivities: { cashFromSales: 0, cashFromCustomers: 0, paymentToSuppliers: 0, paymentForExpenses: 0, otherOperatingCash: 0 }, investingActivities: { purchaseOfAssets: 0, saleOfAssets: 0, purchaseOfInvestments: 0, saleOfInvestments: 0 }, financingActivities: { loansReceived: 0, loanRepayments: 0, capitalContributed: 0, dividendsPaid: 0, ownerWithdrawals: 0 }, currencyCode: 'IDR', currencySymbol: 'Rp' }, assets, 'en');
+  assert.match(html, /net operating cash flow was zero/);
+  assert.match(html, /Liquidity cannot be assessed/);
+  assert.doesNotMatch(html, /generated positive cash flow|largest cash movement driver was/);
+  assert.doesNotMatch(html, /class="section"|class="summary-item highlight"/);
+});
+test('profit and loss does not claim zero margins or safe cost ratios without revenue', () => {
+  const { generateProfitLossHTML } = load(root + '/web/src/lib/generated/mobileProfitLossReport.ts');
+  const data = { period: 'Test', startDate: '2026-10-01', endDate: '2026-10-29', companyName: 'Test', totalRevenue: 0, revenueBreakdown: {}, totalCOGS: 100, cogsBreakdown: { Feed: 100 }, grossProfit: -100, totalOPEX: 0, opexBreakdown: {}, operatingIncome: -100, totalOtherExpenses: 0, otherExpenseBreakdown: {}, netProfit: -100, currencyCode: 'IDR', currencySymbol: 'Rp' };
+  const html = generateProfitLossHTML(data, assets, 'en');
+  assert.equal((html.match(/class="amount">N\/A/g) || []).length, 3);
+  assert.doesNotMatch(html, /did not exceed the high-risk threshold/);
+  assert.match(html, /no positive revenue was recorded/);
+  const withRevenue = generateProfitLossHTML({ ...data, totalRevenue: 1000, grossProfit: 900, operatingIncome: 900, netProfit: 900 }, assets, 'en');
+  assert.match(withRevenue, /90\.00%/);
+  assert.match(withRevenue, /did not exceed the high-risk threshold/);
+});
 test('cycle costs count Finance maintenance once and exclude capital and financing', () => {
   const report = cycle.buildWebCycleReport({ ...base, assets: [{ maintenanceHistory: [{ cycleId: 'c1', cost: 100 }] }], expenses: [{ cycleId: 'c1', category: 'Repairs', amount: 100 }, { cycleId: 'c1', category: 'Equipment', amount: 500 }, { cycleId: 'c1', category: 'Loan Payment', amount: 300 }] });
   assert.equal(report.totals.costs.total, 100);
