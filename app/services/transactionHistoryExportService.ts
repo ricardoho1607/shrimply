@@ -268,7 +268,7 @@ const generateTransactionHistoryHTML = (
         .report-content { position: relative; z-index: 1; height: 100%; padding-bottom: 22px; display: flex; flex-direction: column; }
         .header { position: relative; min-height: 56px; padding-right: 70px; overflow: hidden; }
         .page-logo { position: absolute; top: -5px; right: 0; width: 54px; height: 54px; object-fit: contain; filter: grayscale(1); }
-        .title { font-size: 24px; line-height: 1.1; font-weight: 700; color: #111827; margin-bottom: 3px; }
+        .title { font-size: 24px; line-height: 1.1; font-weight: 700; color: #111827; margin-bottom: 3px; letter-spacing: 0.4px; }
         .company-name { max-width: 100%; white-space: normal; overflow-wrap: anywhere; font-size: 12px; font-weight: 600; margin-bottom: 1px; }
         .subtitle, .date-range { white-space: normal; overflow-wrap: anywhere; font-size: 9px; color: #334155; }
         .divider { flex: 0 0 auto; height: 2px; background: #374151; margin: 7px 0 9px; }

@@ -1,6 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { localizePdfText } from './pdfReportI18n.ts';
+import { localizePdfText, formatPdfDate } from './pdfReportI18n.ts';
+
+test('PDF calendar dates remain on the same day across device time zones', () => {
+  const previous = process.env.TZ;
+  try {
+    for (const zone of ['America/Los_Angeles', 'Australia/Melbourne', 'Asia/Jakarta']) {
+      process.env.TZ = zone;
+      assert.equal(formatPdfDate('2026-10-29', 'en'), '29 Oct 2026');
+    }
+  } finally {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
+  }
+});
 
 const noOverwatchResult = 'No Plankton Overwatch result was available for the selected ponds. Missing observations were not treated as stable.';
 const oneHighRiskPond = '1 pond shows high-risk indicators such as low survival, elevated FCR, flat growth, or high mortality.';

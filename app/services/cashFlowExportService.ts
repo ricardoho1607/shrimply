@@ -184,20 +184,30 @@ const getCashFlowAnalysis = (data: CashFlowData, language: PdfLanguage) => {
 
   const executiveSummary = [
     `Opening cash was ${money(openingBalance)}. Cash inflows totaled ${money(totalInflows)}, cash outflows totaled ${money(totalOutflows)}, and net cash movement was ${netCashChange >= 0 ? money(netCashChange) : `(${money(Math.abs(netCashChange))})`}.`,
-    `Closing cash was ${closingBalance >= 0 ? money(closingBalance) : `(${money(Math.abs(closingBalance))})`}. Liquidity status is ${liquidityStatus}, based on the ending cash position and recorded outflows for the period.`,
-    `The largest cash movement driver was ${mainDriver.label}, which ${mainDriver.value >= 0 ? 'increased' : 'reduced'} cash by ${money(Math.abs(mainDriver.value))}.`,
+    totalInflows === 0 && totalOutflows === 0
+      ? 'No confirmed cash movements were recorded for this period. Liquidity cannot be assessed from these records alone.'
+      : `Closing cash was ${closingBalance >= 0 ? money(closingBalance) : `(${money(Math.abs(closingBalance))})`}. Liquidity status is ${liquidityStatus}, based on the ending cash position and recorded outflows for the period.`,
+    totalInflows === 0 && totalOutflows === 0
+      ? 'There was no recorded cash movement driver for this period.'
+      : `The largest cash movement driver was ${mainDriver.label}, which ${mainDriver.value >= 0 ? 'increased' : 'reduced'} cash by ${money(Math.abs(mainDriver.value))}.`,
   ];
 
   const riskAssessment = [
     netOperatingCash < 0
       ? 'Operating activities consumed cash this period. Supplier payments, operating expenses, and other operating payments should be reviewed before the next operating cycle.'
-      : 'Operating activities generated positive cash flow for the selected period.',
-    closingBalance < 0
+      : netOperatingCash > 0
+        ? 'Operating activities generated positive cash flow for the selected period.'
+        : 'Recorded operating cash inflows and outflows were equal; net operating cash flow was zero.',
+    totalInflows === 0 && totalOutflows === 0
+      ? 'Confirm payment records and reconcile the bank balance before assessing the available cash buffer.'
+      : closingBalance < 0
       ? 'Closing cash is negative, indicating immediate liquidity pressure if the recorded balances are complete.'
       : liquidityStatus === 'tight'
         ? 'Closing cash appears tight relative to recorded outflows. A minimum cash buffer should be maintained before new commitments are made.'
         : 'Closing cash appears adequate against the selected period outflow profile.',
-    ownerFundingShare > 40
+    totalInflows === 0
+      ? 'Funding dependency cannot be assessed because no confirmed cash inflows were recorded.'
+      : ownerFundingShare > 40
       ? `Owner funding or loan proceeds represented ${ownerFundingShare.toFixed(2)}% of recorded inflows. The farm may be dependent on external funding rather than operating receipts.`
       : 'No high dependency on owner funding or loans was detected from the recorded inflow mix.',
   ];
@@ -301,7 +311,7 @@ const generateCashFlowHTML = (
           display: flex;
           flex-direction: column;
         }
-        .header, .section, .summary-box, .note, .analysis-section, .activity-grid, .cash-position-grid {
+        .header, .cash-section, .summary-box, .note, .analysis-section, .activity-grid, .cash-position-grid {
           flex-shrink: 0;
         }
         .header { position: relative; margin-bottom: 10px; padding-right: 82px; min-height: 58px; }
@@ -310,8 +320,8 @@ const generateCashFlowHTML = (
         .subtitle { font-size: 12px; color: #2C3E50; }
         .date-range { font-size: 12px; color: #2C3E50; }
         .divider { height: 3px; background: linear-gradient(to right, #27AE60, #2ECC71); margin: 10px 0 12px; border-radius: 2px; }
-        .section { margin-bottom: 10px; page-break-inside: avoid; break-inside: avoid; }
-        .section-title { font-size: 14px; font-weight: 700; color: #2C3E50; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(240, 249, 244, 0.78); padding: 7px 0; border-left: 4px solid #27AE60; border-radius: 0; }
+        .cash-section { padding: 0; margin-bottom: 10px; page-break-inside: avoid; break-inside: avoid; }
+        .cash-section-title { font-size: 14px; font-weight: 700; color: #2C3E50; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(240, 249, 244, 0.78); padding: 7px 0; border-left: 4px solid #27AE60; border-radius: 0; }
         .line-item { display: flex; justify-content: space-between; padding: 5px 0 5px 18px; border-bottom: 1px solid #ECF0F1; }
         .line-item.main { padding-left: 0; font-weight: 600; color: #34495E; }
         .line-item.indent { padding-left: 26px; color: #7F8C8D; font-size: 12px; }
@@ -327,7 +337,7 @@ const generateCashFlowHTML = (
         .currency { font-size: 12px; color: #2C3E50; display: block; text-align: right; margin-top: 2px; }
         .summary-box { background: rgba(248, 250, 251, 0.72); border-left: 4px solid #27AE60; padding: 10px 12px; margin-top: 8px; border-radius: 0; page-break-inside: avoid; break-inside: avoid; }
         .summary-item { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
-        .summary-item.highlight { font-weight: 700; font-size: 15px; color: #2C3E50; border-top: 1px solid #BDC3C7; margin-top: 6px; padding-top: 7px; }
+        .summary-item.cash-highlight { font-weight: 700; font-size: 15px; color: #2C3E50; border-top: 1px solid #BDC3C7; margin-top: 6px; padding-top: 7px; }
         .footer { margin-top: auto; padding-top: 12px; border-top: 1px solid rgba(15, 76, 117, 0.18); font-size: 10px; color: #2C3E50; display: flex; justify-content: space-between; gap: 12px; }
         .note { background: rgba(255, 249, 230, 0.78); border-left: 4px solid #F39C12; padding: 9px 12px; margin-top: 8px; border-radius: 0; font-size: 11px; color: #856404; page-break-inside: avoid; break-inside: avoid; }
         .activity-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; margin-left: 8px; }
@@ -345,10 +355,10 @@ const generateCashFlowHTML = (
           grid-template-columns: 1fr 1fr;
           gap: 12px;
         }
-        .activity-grid .section, .cash-position-grid .section {
+        .activity-grid .cash-section, .cash-position-grid .cash-section {
           margin-bottom: 0;
         }
-        .activity-grid .section-title {
+        .activity-grid .cash-section-title {
           min-height: 42px;
           font-size: 12px;
           line-height: 1.3;
@@ -423,19 +433,19 @@ const generateCashFlowHTML = (
         }
         body { color: #111827; }
         .page-logo { filter: grayscale(1); }
-        .title, .company-name, .subtitle, .date-range, .section-title,
+        .title, .company-name, .subtitle, .date-range, .cash-section-title,
         .line-item, .line-item.main, .line-item.indent,
         .line-item.subtotal, .line-item.total, .line-item.balance,
         .line-item.closing, .line-item.closing.negative,
         .amount, .amount.positive, .amount.negative, .amount.neutral,
-        .currency, .summary-item, .summary-item.highlight, .note,
+        .currency, .summary-item, .summary-item.cash-highlight, .note,
         .activity-badge, .badge-operating, .badge-investing,
         .badge-financing, .analysis-title,
         .analysis-box.risk .analysis-title, .analysis-list, .footer {
           color: #111827;
         }
         .divider { background: #374151; }
-        .section-title, .line-item.subtotal, .line-item.total,
+        .cash-section-title, .line-item.subtotal, .line-item.total,
         .line-item.balance, .line-item.closing,
         .line-item.closing.negative, .summary-box, .note,
         .activity-badge, .badge-operating, .badge-investing,
@@ -443,7 +453,8 @@ const generateCashFlowHTML = (
           background: #FFFFFF;
           border-color: #6B7280;
         }
-        .section-title {
+        .line-item, .analysis-title { letter-spacing: 0.4px; }
+        .cash-section-title {
           padding-left: 0;
           border-left: 0;
           border-bottom: 1px solid #6B7280;
@@ -479,7 +490,7 @@ const generateCashFlowHTML = (
       <div class="divider"></div>
       
       <!-- OPENING BALANCE -->
-      <div class="section">
+      <div class="cash-section">
         <div class="line-item balance">
           <span>Cash at Beginning of Period</span>
           <div>
@@ -490,8 +501,8 @@ const generateCashFlowHTML = (
       </div>
       
       <!-- OPERATING ACTIVITIES -->
-      <div class="section">
-        <div class="section-title">
+      <div class="cash-section">
+        <div class="cash-section-title">
           Cash Flows from Operating Activities
           <span class="activity-badge badge-operating">Operations</span>
         </div>
@@ -541,8 +552,8 @@ const generateCashFlowHTML = (
 
       <div class="activity-grid">
       <!-- INVESTING ACTIVITIES -->
-      <div class="section">
-        <div class="section-title">
+      <div class="cash-section">
+        <div class="cash-section-title">
           Cash Flows from Investing Activities
           <span class="activity-badge badge-investing">Investments</span>
         </div>
@@ -589,8 +600,8 @@ const generateCashFlowHTML = (
       </div>
 
       <!-- FINANCING ACTIVITIES -->
-      <div class="section">
-        <div class="section-title">
+      <div class="cash-section">
+        <div class="cash-section-title">
           Cash Flows from Financing Activities
           <span class="activity-badge badge-financing">Financing</span>
         </div>
@@ -665,7 +676,7 @@ const generateCashFlowHTML = (
 
       <div class="cash-position-grid">
       <!-- NET CHANGE -->
-      <div class="section">
+      <div class="cash-section">
         <div class="line-item total">
           <span>Net Increase/(Decrease) in Cash</span>
           <div>
@@ -678,7 +689,7 @@ const generateCashFlowHTML = (
       </div>
       
       <!-- CLOSING BALANCE -->
-      <div class="section">
+      <div class="cash-section">
         <div class="line-item closing ${closingBalance < 0 ? 'negative' : ''}">
           <span>Cash at End of Period</span>
           <div>
@@ -703,7 +714,7 @@ const generateCashFlowHTML = (
           <span>Financing Activities:</span>
           <span class="amount ${netFinancingCash >= 0 ? 'positive' : 'negative'}">${netFinancingCash >= 0 ? money(netFinancingCash) : `(${money(Math.abs(netFinancingCash))})`}</span>
         </div>
-        <div class="summary-item highlight">
+        <div class="summary-item cash-highlight">
           <span>Net Change in Cash:</span>
           <span class="amount ${netCashChange >= 0 ? 'positive' : 'negative'}">${netCashChange >= 0 ? money(netCashChange) : `(${money(Math.abs(netCashChange))})`}</span>
         </div>
