@@ -132,7 +132,8 @@ export function useCompanyAdditives<T>() {
 export function useCompanyHarvestRecords<T>(sort: 'asc' | 'desc' = 'desc') {
   const constraints = useMemo(() => [orderBy('date', sort)], [sort]);
   const state = useCompanySubcollection<T>('harvestRecords', constraints);
-  return { ...state, data: state.data.filter(item => !(item as { voided?: boolean }).voided) };
+  const data = useMemo(() => state.data.filter(item => !(item as { voided?: boolean }).voided), [state.data]);
+  return { ...state, data };
 }
 
 export function useCompanyLabReports<T>() {
